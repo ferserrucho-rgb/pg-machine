@@ -106,17 +106,25 @@ def _sla_to_hours(sla_key: str) -> int | None:
         return cfg["dias"] * 24
     return None
 
+def _naive(dt):
+    """Strip timezone info to make datetime naive (for safe arithmetic)."""
+    if dt and hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
+
 def _traffic_light(act):
     """Calcula semáforo para una actividad (formato Supabase)."""
     estado = act.get("estado", "Pendiente")
+    now = datetime.now()
+
     if estado == "Respondida":
         return "🟢", "Respondida"
 
     if estado == "Enviada":
-        enviada_ts = datetime.fromisoformat(act["enviada_ts"]) if act.get("enviada_ts") else datetime.now()
+        enviada_ts = _naive(datetime.fromisoformat(act["enviada_ts"])) if act.get("enviada_ts") else now
         sla_dias = act.get("sla_respuesta_dias", 7)
         deadline = enviada_ts + timedelta(days=sla_dias)
-        remaining = deadline - datetime.now()
+        remaining = deadline - now
         if remaining.total_seconds() <= 0:
             return "🔴", "Bloqueada"
         return "🟣", f"Esp. rpta {remaining.days}d"
@@ -137,9 +145,9 @@ def _traffic_light(act):
     # SLA check
     sla_deadline_str = act.get("sla_deadline")
     if sla_deadline_str:
-        deadline = datetime.fromisoformat(sla_deadline_str) if isinstance(sla_deadline_str, str) else sla_deadline_str
-        created = datetime.fromisoformat(act["created_at"]) if isinstance(act.get("created_at"), str) else (act.get("created_at") or datetime.now())
-        remaining = deadline - datetime.now()
+        deadline = _naive(datetime.fromisoformat(sla_deadline_str)) if isinstance(sla_deadline_str, str) else _naive(sla_deadline_str)
+        created = _naive(datetime.fromisoformat(act["created_at"])) if isinstance(act.get("created_at"), str) else (_naive(act.get("created_at")) or now)
+        remaining = deadline - now
         if remaining.total_seconds() <= 0:
             return "🔴", "Vencida"
         total = deadline - created
@@ -151,12 +159,12 @@ def _traffic_light(act):
 
     # Fallback from sla_key
     sla_cfg = SLA_OPCIONES.get(act.get("sla_key", ""), {})
-    created = datetime.fromisoformat(act["created_at"]) if act.get("created_at") else datetime.now()
+    created = _naive(datetime.fromisoformat(act["created_at"])) if act.get("created_at") else now
     if "horas" in sla_cfg:
         deadline = created + timedelta(hours=sla_cfg["horas"])
     else:
         deadline = created + timedelta(days=sla_cfg.get("dias", 7))
-    remaining = deadline - datetime.now()
+    remaining = deadline - now
     if remaining.total_seconds() <= 0:
         return "🔴", "Vencida"
     total = deadline - created
