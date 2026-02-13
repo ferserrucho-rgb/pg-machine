@@ -243,9 +243,23 @@ if st.session_state.selected_id:
         stage_html = f' <span class="opp-stage">{opp.get("stage","")}</span>' if opp.get("stage") else ""
         st.markdown(f'<div class="cat-header">{opp["categoria"]}{stage_html}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="scorecard"><div class="sc-cuenta">{opp["cuenta"]}</div><div class="sc-proyecto">{opp["proyecto"]}</div><span class="sc-monto">USD {opp["monto"]:,.0f}</span>{opp_id_html}{close_html}</div>', unsafe_allow_html=True)
-        if st.button("⬅️ VOLVER AL TABLERO"):
+        btn_c1, btn_c2 = st.columns(2)
+        if btn_c1.button("⬅️ VOLVER", use_container_width=True):
             st.session_state.selected_id = None
             st.rerun()
+        if btn_c2.button("🗑️ ELIMINAR", key="del_opp", use_container_width=True):
+            st.session_state[f"confirm_del_opp_{opp['id']}"] = True
+        if st.session_state.get(f"confirm_del_opp_{opp['id']}"):
+            st.warning(f"Eliminar **{opp['proyecto']}** y todas sus actividades?")
+            dc1, dc2 = st.columns(2)
+            if dc1.button("Confirmar", key="confirm_del_opp_yes", use_container_width=True):
+                dal.delete_opportunity(opp["id"])
+                st.session_state.selected_id = None
+                st.session_state.pop(f"confirm_del_opp_{opp['id']}", None)
+                st.rerun()
+            if dc2.button("Cancelar", key="confirm_del_opp_no", use_container_width=True):
+                st.session_state.pop(f"confirm_del_opp_{opp['id']}", None)
+                st.rerun()
 
     with r_col:
         st.title(f"🎯 {opp['cuenta']}")
@@ -401,6 +415,19 @@ if st.session_state.selected_id:
                                 "descripcion": ea_desc,
                             })
                             st.rerun()
+                    # Delete activity button (outside form)
+                    if st.button("🗑️ Eliminar actividad", key=f"del_act_{aid}"):
+                        st.session_state[f"confirm_del_act_{aid}"] = True
+                    if st.session_state.get(f"confirm_del_act_{aid}"):
+                        st.warning("Eliminar esta actividad?")
+                        da1, da2 = st.columns(2)
+                        if da1.button("Confirmar", key=f"cdel_act_y_{aid}", use_container_width=True):
+                            dal.delete_activity(aid)
+                            st.session_state.pop(f"confirm_del_act_{aid}", None)
+                            st.rerun()
+                        if da2.button("Cancelar", key=f"cdel_act_n_{aid}", use_container_width=True):
+                            st.session_state.pop(f"confirm_del_act_{aid}", None)
+                            st.rerun()
 
 else:
     # --- VISTAS PRINCIPALES ---
@@ -443,7 +470,22 @@ else:
             """Renders one account group with its opportunity cards."""
             total = sum(o['monto'] for o in opps)
             badge = f'<span class="account-badge">{len(opps)} opp{"s" if len(opps) > 1 else ""}</span>' if len(opps) > 1 else ""
-            st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
+            # Account header with delete button
+            ah1, ah2 = st.columns([0.95, 0.05])
+            ah1.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
+            safe_cuenta = cuenta.replace(" ", "_").replace(".", "")
+            if ah2.button("🗑️", key=f"del_acct_{safe_cuenta}_{opps[0]['id']}", help=f"Eliminar cuenta {cuenta}"):
+                st.session_state[f"confirm_del_acct_{safe_cuenta}"] = True
+            if st.session_state.get(f"confirm_del_acct_{safe_cuenta}"):
+                st.warning(f"Eliminar **{cuenta}** y todas sus {len(opps)} oportunidades?")
+                dac1, dac2 = st.columns(2)
+                if dac1.button("Confirmar", key=f"cdel_acct_y_{safe_cuenta}", use_container_width=True):
+                    dal.delete_opportunities_by_account(team_id, cuenta)
+                    st.session_state.pop(f"confirm_del_acct_{safe_cuenta}", None)
+                    st.rerun()
+                if dac2.button("Cancelar", key=f"cdel_acct_n_{safe_cuenta}", use_container_width=True):
+                    st.session_state.pop(f"confirm_del_acct_{safe_cuenta}", None)
+                    st.rerun()
             for o in opps:
                 opp_acts = all_acts_by_opp.get(o["id"], [])
                 act_lines = ""
@@ -459,11 +501,23 @@ else:
                 opp_id_line = f'<span class="opp-id">ID: {o.get("opp_id","")}</span>' if o.get("opp_id") else ""
                 close_line = f'<span class="opp-id">Cierre: {o.get("close_date","")}</span>' if o.get("close_date") else ""
                 stage_line = f' <span class="opp-stage">{o.get("stage","")}</span>' if o.get("stage") else ""
-                bc1, bc2 = st.columns([0.9, 0.1])
+                bc1, bc2, bc3 = st.columns([0.85, 0.05, 0.1])
                 bc1.markdown(f'<div class="opp-card"><span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}<span class="opp-monto" style="float:right">USD {o["monto"]:,.0f}</span>{opp_id_line}{close_line}{act_lines}</div>', unsafe_allow_html=True)
-                if bc2.button("⚙️", key=f"g_{o['id']}"):
+                if bc2.button("🗑️", key=f"del_opp_t_{o['id']}", help="Eliminar oportunidad"):
+                    st.session_state[f"confirm_del_opp_t_{o['id']}"] = True
+                if bc3.button("⚙️", key=f"g_{o['id']}"):
                     st.session_state.selected_id = o['id']
                     st.rerun()
+                if st.session_state.get(f"confirm_del_opp_t_{o['id']}"):
+                    st.warning(f"Eliminar **{o['proyecto']}**?")
+                    do1, do2 = st.columns(2)
+                    if do1.button("Confirmar", key=f"cdel_opp_y_{o['id']}", use_container_width=True):
+                        dal.delete_opportunity(o["id"])
+                        st.session_state.pop(f"confirm_del_opp_t_{o['id']}", None)
+                        st.rerun()
+                    if do2.button("Cancelar", key=f"cdel_opp_n_{o['id']}", use_container_width=True):
+                        st.session_state.pop(f"confirm_del_opp_t_{o['id']}", None)
+                        st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         if focused:

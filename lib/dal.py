@@ -59,9 +59,14 @@ def update_opportunity(opp_id: str, data: dict) -> dict:
     return resp.data[0] if resp.data else {}
 
 def delete_opportunity(opp_id: str):
-    """Elimina una oportunidad."""
+    """Elimina una oportunidad (cascade borra actividades asociadas)."""
     sb = get_supabase()
     sb.table("opportunities").delete().eq("id", opp_id).execute()
+
+def delete_opportunities_by_account(team_id: str, cuenta: str):
+    """Elimina todas las oportunidades de una cuenta."""
+    sb = get_supabase()
+    sb.table("opportunities").delete().eq("team_id", team_id).eq("cuenta", cuenta).execute()
 
 def bulk_create_opportunities(team_id: str, owner_id: str, items: list[dict]) -> int:
     """Importación masiva de oportunidades. Retorna cantidad creada."""
