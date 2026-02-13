@@ -49,8 +49,22 @@ st.markdown("""
     .opp-monto { color: #16a34a; font-size: 0.95rem; font-weight: 800; }
     .opp-id { color: #94a3b8; font-size: 0.65rem; font-family: monospace; display: block; margin-top: 2px; }
     .opp-stage { color: #8b5cf6; font-size: 0.65rem; font-weight: 600; }
-    /* Compact popover trigger buttons */
-    [data-testid="stPopover"] > button { padding: 2px 8px !important; min-height: 0 !important; font-size: 0.75rem !important; line-height: 1.2 !important; }
+    /* Sleek popover icon buttons */
+    [data-testid="stPopover"] > button {
+        background: #f1f5f9 !important; border: 1px solid #e2e8f0 !important;
+        border-radius: 50% !important; width: 28px !important; height: 28px !important;
+        padding: 0 !important; min-height: 0 !important; min-width: 0 !important;
+        font-size: 0.85rem !important; line-height: 28px !important;
+        color: #64748b !important; display: flex !important; align-items: center !important;
+        justify-content: center !important; transition: all 0.15s !important;
+    }
+    [data-testid="stPopover"] > button:hover {
+        background: #1e293b !important; color: white !important;
+        border-color: #1e293b !important;
+    }
+    /* Hide the dropdown chevron arrow */
+    [data-testid="stPopover"] > button svg { display: none !important; }
+    [data-testid="stPopover"] > button span { pointer-events: none; }
     </style>
     """, unsafe_allow_html=True)
 
