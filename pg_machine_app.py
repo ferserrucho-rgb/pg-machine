@@ -49,8 +49,9 @@ st.markdown("""
     .opp-monto { color: #16a34a; font-size: 0.95rem; font-weight: 800; }
     .opp-id { color: #94a3b8; font-size: 0.65rem; font-family: monospace; display: block; margin-top: 2px; }
     .opp-stage { color: #8b5cf6; font-size: 0.65rem; font-weight: 600; }
-    /* Compact action buttons */
-    .opp-card + div button { font-size: 0.65rem !important; padding: 2px 8px !important; min-height: 0 !important; height: auto !important; line-height: 1.2 !important; }
+    /* Compact radio actions next to cards */
+    [data-testid="stRadio"] > div { flex-direction: row !important; gap: 2px !important; }
+    [data-testid="stRadio"] label { font-size: 0.7rem !important; padding: 1px 4px !important; min-height: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -473,7 +474,11 @@ else:
             total = sum(o['monto'] for o in opps)
             badge = f'<span class="account-badge">{len(opps)} opp{"s" if len(opps) > 1 else ""}</span>' if len(opps) > 1 else ""
             safe_cuenta = cuenta.replace(" ", "_").replace(".", "")
-            st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
+            ag1, ag2 = st.columns([0.95, 0.05])
+            ag1.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
+            if ag2.button("✕", key=f"del_acct_{safe_cuenta}_{opps[0]['id']}", help=f"Eliminar {cuenta}"):
+                st.session_state[f"confirm_del_acct_{safe_cuenta}"] = True
+                st.rerun()
             # Account delete confirmation
             if st.session_state.get(f"confirm_del_acct_{safe_cuenta}"):
                 st.warning(f"Eliminar **{cuenta}** y todas sus {len(opps)} oportunidades?")
@@ -500,29 +505,27 @@ else:
                 opp_id_line = f'<span class="opp-id">ID: {o.get("opp_id","")}</span>' if o.get("opp_id") else ""
                 close_line = f'<span class="opp-id">Cierre: {o.get("close_date","")}</span>' if o.get("close_date") else ""
                 stage_line = f' <span class="opp-stage">{o.get("stage","")}</span>' if o.get("stage") else ""
-                # Card with inline layout
-                st.markdown(f'<div class="opp-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div style="flex:1;min-width:0;"><span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}{opp_id_line}{close_line}{act_lines}</div><div style="text-align:right;white-space:nowrap;padding-left:8px;"><span class="opp-monto">USD {o["monto"]:,.0f}</span></div></div></div>', unsafe_allow_html=True)
-                # Small inline buttons row
-                btn_cols = st.columns([1, 1, 6])
-                if btn_cols[0].button("✎", key=f"g_{o['id']}", help="Editar oportunidad"):
+                bc1, bc2 = st.columns([0.93, 0.07])
+                bc1.markdown(f'<div class="opp-card"><span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}<span class="opp-monto" style="float:right">USD {o["monto"]:,.0f}</span>{opp_id_line}{close_line}{act_lines}</div>', unsafe_allow_html=True)
+                action = bc2.radio("", ["", "✎", "✕"], key=f"act_{o['id']}", label_visibility="collapsed")
+                if action == "✎":
                     st.session_state.selected_id = o['id']
+                    st.session_state[f"act_{o['id']}"] = ""
                     st.rerun()
-                if btn_cols[1].button("✕", key=f"del_opp_t_{o['id']}", help="Eliminar oportunidad"):
+                elif action == "✕":
                     st.session_state[f"confirm_del_opp_t_{o['id']}"] = True
+                    st.session_state[f"act_{o['id']}"] = ""
+                    st.rerun()
                 if st.session_state.get(f"confirm_del_opp_t_{o['id']}"):
                     st.warning(f"Eliminar **{o['proyecto']}**?")
                     do1, do2 = st.columns(2)
-                    if do1.button("Confirmar", key=f"cdel_opp_y_{o['id']}", use_container_width=True):
+                    if do1.button("Si", key=f"cdel_opp_y_{o['id']}", use_container_width=True):
                         dal.delete_opportunity(o["id"])
                         st.session_state.pop(f"confirm_del_opp_t_{o['id']}", None)
                         st.rerun()
-                    if do2.button("Cancelar", key=f"cdel_opp_n_{o['id']}", use_container_width=True):
+                    if do2.button("No", key=f"cdel_opp_n_{o['id']}", use_container_width=True):
                         st.session_state.pop(f"confirm_del_opp_t_{o['id']}", None)
                         st.rerun()
-            # Account-level delete button at bottom
-            if st.button(f"✕ Eliminar cuenta", key=f"del_acct_{safe_cuenta}_{opps[0]['id']}", help=f"Eliminar {cuenta}"):
-                st.session_state[f"confirm_del_acct_{safe_cuenta}"] = True
-                st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         if focused:
