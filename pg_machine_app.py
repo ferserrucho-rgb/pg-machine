@@ -185,8 +185,8 @@ with st.sidebar:
                     parsed = _parse_date(r.get('Close Date', None))
                     items.append({
                         "proyecto": r.get('Proyecto', 'S/N'),
-                        "cuenta": r.get('Cuenta', 'S/N'),
-                        "monto": r.get('Monto', 0),
+                        "cuenta": r.get('Empresa', r.get('Cuenta', 'S/N')),
+                        "monto": r.get('Valor', r.get('Monto', 0)),
                         "categoria": "LEADS",
                         "close_date": str(parsed) if parsed else None,
                     })
@@ -443,7 +443,6 @@ else:
         for i, col in enumerate(cols):
             with col:
                 cat = visible_cats[i]
-                st.markdown(f'<div class="cat-header">{cat}</div>', unsafe_allow_html=True)
                 items = [o for o in all_opps if o['categoria'] == cat]
                 accounts = OrderedDict()
                 for o in sorted(items, key=lambda x: x['monto'], reverse=True):
