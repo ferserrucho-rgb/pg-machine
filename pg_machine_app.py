@@ -69,6 +69,8 @@ st.markdown("""
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
     st.session_state.selected_id = None
+if 'focused_cat' not in st.session_state:
+    st.session_state.focused_cat = None
 
 # Cargar configuración del equipo
 SLA_OPCIONES = dal.get_sla_options(team_id)
@@ -417,10 +419,30 @@ else:
         for act in all_activities:
             all_acts_by_opp.setdefault(act["opportunity_id"], []).append(act)
 
-        cols = st.columns(len(CATEGORIAS))
+        # Category focus: show buttons to toggle
+        focused = st.session_state.focused_cat
+        if focused:
+            visible_cats = [focused]
+        else:
+            visible_cats = CATEGORIAS
+
+        # Category selector buttons
+        btn_cols = st.columns(len(CATEGORIAS))
+        for i, bc in enumerate(btn_cols):
+            cat = CATEGORIAS[i]
+            if focused == cat:
+                if bc.button(f"✕ {cat} — Ver todas", key=f"unfocus_{cat}", use_container_width=True):
+                    st.session_state.focused_cat = None
+                    st.rerun()
+            else:
+                if bc.button(cat, key=f"focus_{cat}", use_container_width=True):
+                    st.session_state.focused_cat = cat
+                    st.rerun()
+
+        cols = st.columns(len(visible_cats))
         for i, col in enumerate(cols):
             with col:
-                cat = CATEGORIAS[i]
+                cat = visible_cats[i]
                 st.markdown(f'<div class="cat-header">{cat}</div>', unsafe_allow_html=True)
                 items = [o for o in all_opps if o['categoria'] == cat]
                 accounts = OrderedDict()
