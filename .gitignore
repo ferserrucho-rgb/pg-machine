@@ -1,2 +1,13 @@
 # Ignore temporary files
 *.swp
+
+# Python
+__pycache__/
+*.pyc
+
+# Secrets (never commit)
+.streamlit/secrets.toml
+
+# IDE
+.vscode/
+.idea/

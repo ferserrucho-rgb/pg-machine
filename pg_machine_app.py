@@ -1,163 +1,726 @@
 import streamlit as st
 import pandas as pd
-import uuid
+import json
+from collections import OrderedDict
 from datetime import datetime, date, timedelta
 
-# --- 1. CONFIGURACIÓN Y ESTILOS ---
-st.set_page_config(page_title="PG Machine | v116 Core", layout="wide", initial_sidebar_state="expanded")
+# --- AUTH GATE (must be before any other UI) ---
+from lib.auth import require_auth, get_current_user, is_admin, logout, get_supabase
+from lib import dal
+from lib import notifications
 
+st.set_page_config(page_title="PG Machine", layout="wide", initial_sidebar_state="expanded")
+
+if not require_auth():
+    st.stop()
+
+# --- Usuario autenticado ---
+user = get_current_user()
+team_id = user["team_id"]
+user_id = user["id"]
+
+# --- 1. ESTILOS ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-
-    /* Force full width on main container - override inline styles */
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
-
-    /* Categorías */
     .cat-header { background: #1e293b; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: 700; margin-bottom: 15px; }
-
-    /* Scorecard */
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .badge { float:right; font-size:0.6rem; font-weight:bold; padding:2px 6px; border-radius:8px; text-transform: uppercase; border: 1.2px solid; }
     .sc-cuenta { color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
     .sc-proyecto { color: #1e293b; font-size: 0.95rem; font-weight: 700; margin: 4px 0; }
     .sc-monto { color: #16a34a; font-size: 1.1rem; font-weight: 800; display: block; }
-
-    /* Panel Derecho */
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
     .hist-card { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; }
+    .hist-card.enviada { border-left: 4px solid #8b5cf6; background: #f5f3ff; }
+    .hist-card.bloqueada { border-left: 4px solid #ef4444; background: #fef2f2; }
+    .estado-enviada { color: #8b5cf6; font-weight: 600; }
+    .estado-bloqueada { color: #ef4444; font-weight: 700; }
     .activity-line { font-size: 0.72rem; color: #475569; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .account-group { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+    .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
+    .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
+    .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
+    .opp-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 6px; }
+    .opp-proyecto { color: #1e293b; font-size: 0.85rem; font-weight: 600; }
+    .opp-monto { color: #16a34a; font-size: 0.95rem; font-weight: 800; }
+    .opp-id { color: #94a3b8; font-size: 0.65rem; font-family: monospace; display: block; margin-top: 2px; }
+    .opp-stage { color: #8b5cf6; font-size: 0.65rem; font-weight: 600; }
     </style>
     """, unsafe_allow_html=True)
 
-# JS to force remove inline max-width set by Streamlit's runtime
 st.markdown("""
     <script>
     const observer = new MutationObserver(() => {
         document.querySelectorAll('section.main > div').forEach(el => {
-            if (el.style.maxWidth) {
-                el.style.maxWidth = '100%';
-                el.style.paddingLeft = '1rem';
-                el.style.paddingRight = '1rem';
-            }
+            if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
         });
     });
     observer.observe(document.body, {childList: true, subtree: true, attributes: true});
     document.querySelectorAll('section.main > div').forEach(el => {
-        el.style.maxWidth = '100%';
-        el.style.paddingLeft = '1rem';
-        el.style.paddingRight = '1rem';
+        el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem';
     });
     </script>
     """, unsafe_allow_html=True)
 
-# --- 2. LÓGICA DE DATOS ---
-if 'db_leads' not in st.session_state: st.session_state.db_leads = []
-if 'selected_id' not in st.session_state: st.session_state.selected_id = None
+# --- 2. DATOS DESDE SUPABASE ---
+if 'selected_id' not in st.session_state:
+    st.session_state.selected_id = None
 
-SLA_OPCIONES = {
-    "🚨 Urgente (2-4h)": {"horas": 4, "color": "#ef4444"},
-    "⚠️ Importante (2d)": {"dias": 2, "color": "#f59e0b"},
-    "☕ No urgente (7d)": {"dias": 7, "color": "#3b82f6"}
-}
+# Cargar configuración del equipo
+SLA_OPCIONES = dal.get_sla_options(team_id)
+SLA_RESPUESTA = dal.get_sla_respuesta(team_id)
+CATEGORIAS = dal.get_categorias(team_id)
+
+# Cargar miembros del equipo para asignaciones
+team_members = dal.get_team_members(team_id)
+RECURSOS_PRESALES = {m["id"]: f'{m["full_name"]} ({m["specialty"]})' if m.get("specialty") else m["full_name"] for m in team_members}
+
+def _parse_date(val):
+    if not val or str(val).strip() in ("", "NaT", "nan", "None"):
+        return None
+    s = str(val).strip()
+    for fmt in ("%Y-%m-%d", "%b %d, %Y", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    try:
+        return pd.to_datetime(s).date()
+    except Exception:
+        return None
+
+def _sla_to_hours(sla_key: str) -> int | None:
+    """Convierte clave SLA a horas totales."""
+    cfg = SLA_OPCIONES.get(sla_key, {})
+    if "horas" in cfg:
+        return cfg["horas"]
+    if "dias" in cfg:
+        return cfg["dias"] * 24
+    return None
 
 def _traffic_light(act):
-    if act["estado"] in ("Completada", "Respondida"):
-        return "🟢", "Completada"
-    sla_cfg = SLA_OPCIONES.get(act["sla"], {})
-    if "horas" in sla_cfg:
-        deadline = datetime.strptime(act["fecha"], "%Y-%m-%d") + timedelta(hours=sla_cfg["horas"])
+    """Calcula semáforo para una actividad (formato Supabase)."""
+    estado = act.get("estado", "Pendiente")
+    if estado == "Respondida":
+        return "🟢", "Respondida"
+
+    if estado == "Enviada":
+        enviada_ts = datetime.fromisoformat(act["enviada_ts"]) if act.get("enviada_ts") else datetime.now()
+        sla_dias = act.get("sla_respuesta_dias", 7)
+        deadline = enviada_ts + timedelta(days=sla_dias)
+        remaining = deadline - datetime.now()
+        if remaining.total_seconds() <= 0:
+            return "🔴", "Bloqueada"
+        return "🟣", f"Esp. rpta {remaining.days}d"
+
+    # Pendiente
+    fecha_str = act.get("fecha", "")
+    if isinstance(fecha_str, date):
+        fecha = fecha_str
     else:
-        deadline = datetime.strptime(act["fecha"], "%Y-%m-%d") + timedelta(days=sla_cfg.get("dias", 7))
+        fecha = _parse_date(fecha_str) or date.today()
+
+    hoy = date.today()
+    if fecha > hoy:
+        return "🟡", f"Pendiente {fecha.strftime('%d/%m')}"
+    if fecha == hoy:
+        return "🟡", "Hoy"
+
+    # SLA check
+    sla_deadline_str = act.get("sla_deadline")
+    if sla_deadline_str:
+        deadline = datetime.fromisoformat(sla_deadline_str) if isinstance(sla_deadline_str, str) else sla_deadline_str
+        created = datetime.fromisoformat(act["created_at"]) if isinstance(act.get("created_at"), str) else (act.get("created_at") or datetime.now())
+        remaining = deadline - datetime.now()
+        if remaining.total_seconds() <= 0:
+            return "🔴", "Vencida"
+        total = deadline - created
+        ratio = remaining / total if total.total_seconds() > 0 else 0
+        hours_left = remaining.total_seconds() / 3600
+        if ratio > 0.5:
+            return ("🟢", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟢", f"{remaining.days}d rest.")
+        return ("🟡", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟡", f"{remaining.days}d rest.")
+
+    # Fallback from sla_key
+    sla_cfg = SLA_OPCIONES.get(act.get("sla_key", ""), {})
+    created = datetime.fromisoformat(act["created_at"]) if act.get("created_at") else datetime.now()
+    if "horas" in sla_cfg:
+        deadline = created + timedelta(hours=sla_cfg["horas"])
+    else:
+        deadline = created + timedelta(days=sla_cfg.get("dias", 7))
     remaining = deadline - datetime.now()
-    total = deadline - datetime.strptime(act["fecha"], "%Y-%m-%d")
     if remaining.total_seconds() <= 0:
         return "🔴", "Vencida"
+    total = deadline - created
     ratio = remaining / total if total.total_seconds() > 0 else 0
+    hours_left = remaining.total_seconds() / 3600
     if ratio > 0.5:
-        return "🟢", f"{remaining.days}d rest."
-    return "🟡", f"{remaining.days}d rest."
+        return ("🟢", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟢", f"{remaining.days}d rest.")
+    return ("🟡", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟡", f"{remaining.days}d rest.")
 
-def add_item(p, e, m, cat, extra=None):
-    item = {"id": str(uuid.uuid4())[:8], "Proyecto": p, "Cuenta": e, "Monto": float(m), "CategoriaRaiz": cat, "actividades": []}
-    if extra: item.update(extra)
-    st.session_state.db_leads.append(item)
 
-# --- 3. SIDEBAR: MOTORES DE CARGA (RESTAURADOS) ---
+# --- 3. SIDEBAR ---
 with st.sidebar:
-    st.title("🚀 PG Machine v116")
-    
+    st.title("🚀 PG Machine")
+    st.caption(f"👤 {user['full_name']} ({user['role']})")
+    if st.button("Cerrar Sesión", key="logout_btn"):
+        logout()
+
+    st.divider()
+
     with st.expander("📥 CARGA MASIVA (EXCEL)", expanded=True):
         perfil = st.radio("Formato:", ["Leads Propios", "Forecast BMC"])
         up = st.file_uploader("Subir Archivo", type=["xlsx"])
         if up and st.button("Ejecutar Importación"):
             df = pd.read_excel(up)
+            items = []
             for _, r in df.iterrows():
                 if perfil == "Leads Propios":
-                    add_item(r.get('Proyecto','S/N'), r.get('Cuenta','S/N'), r.get('Monto',0), "LEADS")
+                    parsed = _parse_date(r.get('Close Date', None))
+                    items.append({
+                        "proyecto": r.get('Proyecto', 'S/N'),
+                        "cuenta": r.get('Cuenta', 'S/N'),
+                        "monto": r.get('Monto', 0),
+                        "categoria": "LEADS",
+                        "close_date": str(parsed) if parsed else None,
+                    })
                 else:
-                    ex = {"ID": r.get('BMC Opportunity Id','-'), "ST": r.get('Stage','-')}
-                    add_item(r.get('Opportunity Name','-'), r.get('Account Name','-'), r.get('Amount USD', 0), "OFFICIAL", ex)
-            st.success("Importación exitosa"); st.rerun()
+                    parsed = _parse_date(r.get('Close Date', None))
+                    items.append({
+                        "proyecto": r.get('Opportunity Name', '-'),
+                        "cuenta": r.get('Account Name', '-'),
+                        "monto": r.get('Amount USD', 0),
+                        "categoria": "OFFICIAL",
+                        "opp_id": str(r.get('BMC Opportunity Id', '')),
+                        "stage": str(r.get('Stage', '')),
+                        "close_date": str(parsed) if parsed else None,
+                    })
+            count = dal.bulk_create_opportunities(team_id, user_id, items)
+            st.success(f"Importación exitosa: {count} oportunidades")
+            st.rerun()
 
     st.divider()
     st.write("✍️ **ALTA MANUAL**")
     with st.form("manual_entry"):
-        nc = st.text_input("Cuenta"); np = st.text_input("Proyecto"); nm = st.number_input("Monto USD", value=0)
-        ncat = st.selectbox("Categoría", ["LEADS", "OFFICIAL", "GTM"])
+        nc = st.text_input("Cuenta")
+        np = st.text_input("Proyecto")
+        nm = st.number_input("Monto USD", value=0)
+        ncat = st.selectbox("Categoría", CATEGORIAS)
+        n_opp_id = st.text_input("Opportunity ID")
+        n_stage = st.text_input("Stage")
+        n_close = st.date_input("Close Date", value=None)
         if st.form_submit_button("Añadir Individual"):
-            if nc and np: add_item(np, nc, nm, ncat); st.rerun()
+            if nc and np:
+                parsed = _parse_date(n_close)
+                dal.create_opportunity(team_id, user_id, {
+                    "proyecto": np, "cuenta": nc, "monto": nm,
+                    "categoria": ncat, "opp_id": n_opp_id,
+                    "stage": n_stage,
+                    "close_date": str(parsed) if parsed else None,
+                })
+                st.rerun()
+
 
 # --- 4. LAYOUT ---
 if st.session_state.selected_id:
+    # --- VISTA DETALLE ---
+    opp = dal.get_opportunity(st.session_state.selected_id)
+    if not opp:
+        st.error("Oportunidad no encontrada.")
+        st.session_state.selected_id = None
+        st.rerun()
+
     l_col, r_col = st.columns([0.25, 0.75])
     with l_col:
-        o = next((it for it in st.session_state.db_leads if it['id'] == st.session_state.selected_id), None)
-        if o:
-            st.markdown(f'<div class="cat-header">{o["CategoriaRaiz"]}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="scorecard"><div class="sc-cuenta">{o["Cuenta"]}</div><div class="sc-proyecto">{o["Proyecto"]}</div><span class="sc-monto">USD {o["Monto"]:,.0f}</span></div>', unsafe_allow_html=True)
-            if st.button("⬅️ VOLVER AL TABLERO"): st.session_state.selected_id = None; st.rerun()
+        opp_id_html = f'<span class="opp-id">ID: {opp.get("opp_id","")}</span>' if opp.get("opp_id") else ""
+        close_html = f'<span class="opp-id">Cierre: {opp.get("close_date","")}</span>' if opp.get("close_date") else ""
+        stage_html = f' <span class="opp-stage">{opp.get("stage","")}</span>' if opp.get("stage") else ""
+        st.markdown(f'<div class="cat-header">{opp["categoria"]}{stage_html}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="scorecard"><div class="sc-cuenta">{opp["cuenta"]}</div><div class="sc-proyecto">{opp["proyecto"]}</div><span class="sc-monto">USD {opp["monto"]:,.0f}</span>{opp_id_html}{close_html}</div>', unsafe_allow_html=True)
+        if st.button("⬅️ VOLVER AL TABLERO"):
+            st.session_state.selected_id = None
+            st.rerun()
+
     with r_col:
-        st.markdown('<div class="action-panel">', unsafe_allow_html=True)
-        st.title(f"🎯 {o['Cuenta']}")
+        st.title(f"🎯 {opp['cuenta']}")
+
+        # Editar oportunidad
+        with st.expander("✏️ Editar Oportunidad"):
+            with st.form("edit_opp"):
+                ed_c1, ed_c2 = st.columns(2)
+                ed_cuenta = ed_c1.text_input("Cuenta", value=opp["cuenta"])
+                ed_proyecto = ed_c2.text_input("Proyecto", value=opp["proyecto"])
+                ed_c3, ed_c4, ed_c5 = st.columns(3)
+                ed_monto = ed_c3.number_input("Monto USD", value=float(opp["monto"]))
+                ed_cat = ed_c4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(opp["categoria"]) if opp["categoria"] in CATEGORIAS else 0)
+                ed_opp_id = ed_c5.text_input("Opportunity ID", value=opp.get("opp_id", ""))
+                ed_c6, ed_c7 = st.columns(2)
+                ed_stage = ed_c6.text_input("Stage", value=opp.get("stage", ""))
+                close_val = _parse_date(opp.get("close_date", ""))
+                ed_close = ed_c7.date_input("Close Date", value=close_val)
+                if st.form_submit_button("💾 Guardar Cambios"):
+                    dal.update_opportunity(opp["id"], {
+                        "cuenta": ed_cuenta, "proyecto": ed_proyecto,
+                        "monto": float(ed_monto), "categoria": ed_cat,
+                        "opp_id": ed_opp_id, "stage": ed_stage,
+                        "close_date": str(ed_close) if ed_close else None,
+                    })
+                    st.rerun()
+
         # Gestión de Actividades
-        with st.form("act_v116"):
-            c1, c2, c3 = st.columns(3)
-            tipo = c1.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
-            sla = c2.selectbox("SLA", list(SLA_OPCIONES.keys()))
-            fecha = c3.date_input("Fecha", value=date.today())
-            destinatario = st.text_input("Destinatario")
+        c_canal, _, _ = st.columns(3)
+        tipo = c_canal.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
+
+        with st.form("act_form"):
+            c1, c2 = st.columns(2)
+            sla_key = c1.selectbox("SLA", list(SLA_OPCIONES.keys()))
+            fecha = c2.date_input("Fecha", value=date.today())
+            objetivo = st.text_input("Objetivo")
+            asignado_a_id = None
+            if tipo == "Asignación":
+                c4, c5, c6 = st.columns(3)
+                destinatario = c4.text_input("Destinatario")
+                recurso_opciones = [""] + list(RECURSOS_PRESALES.values())
+                recurso_ids = [""] + list(RECURSOS_PRESALES.keys())
+                sel_idx = c5.selectbox("Asignado a (Presales)", range(len(recurso_opciones)), format_func=lambda i: recurso_opciones[i])
+                if sel_idx > 0:
+                    asignado_a_id = recurso_ids[sel_idx]
+                sla_rpta = c6.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
+            else:
+                c4, c5 = st.columns(2)
+                destinatario = c4.text_input("Destinatario")
+                sla_rpta = c5.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
             desc = st.text_area("Descripción / Notas")
+
             if st.form_submit_button("Guardar Actividad"):
-                o['actividades'].append({"id_act": str(uuid.uuid4())[:6], "tipo": tipo, "fecha": str(fecha), "desc": desc, "estado": "Pendiente", "sla": sla, "destinatario": destinatario})
+                sla_hours = _sla_to_hours(sla_key)
+                new_act = dal.create_activity(opp["id"], team_id, user_id, {
+                    "tipo": tipo,
+                    "fecha": str(fecha),
+                    "objetivo": objetivo,
+                    "descripcion": desc,
+                    "sla_key": sla_key,
+                    "sla_hours": sla_hours,
+                    "sla_respuesta_dias": SLA_RESPUESTA[sla_rpta],
+                    "destinatario": destinatario,
+                    "assigned_to": asignado_a_id,
+                })
+                # Enviar notificación de asignación
+                if asignado_a_id and new_act:
+                    assignee = dal.get_team_member(asignado_a_id)
+                    if assignee:
+                        notifications.send_assignment_notification(new_act, assignee, opp)
+                        dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
                 st.rerun()
-        
+
+        # Historial
         st.subheader("📜 Historial e Interacción")
-        for a in reversed(o['actividades']):
+        activities = dal.get_activities_for_opportunity(opp["id"])
+        for a in activities:
             with st.container():
                 dest_txt = f' → {a["destinatario"]}' if a.get("destinatario") else ""
-                st.markdown(f'<div class="hist-card"><b>{a["tipo"]}</b>{dest_txt} ({a["fecha"]}) - <i>{a["estado"]}</i><br>{a["desc"]}</div>', unsafe_allow_html=True)
-                b1, b2 = st.columns([1, 4])
-                if b1.button("✅ HECHO", key=f"d_{a['id_act']}"): a['estado'] = "Completada"; st.rerun()
-                if b1.button("📩 RPTA", key=f"r_{a['id_act']}"): a['estado'] = "Respondida"; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+                # Mostrar nombre del asignado
+                assigned_name = ""
+                if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
+                    assigned_name = a["assigned_profile"]["full_name"]
+                elif a.get("assigned_to"):
+                    assigned_name = RECURSOS_PRESALES.get(a["assigned_to"], "")
+
+                light, label = _traffic_light(a)
+                if a["estado"] == "Enviada" and label == "Bloqueada":
+                    card_class = "hist-card bloqueada"
+                    estado_html = '<span class="estado-bloqueada">🔴 BLOQUEADA</span>'
+                elif a["estado"] == "Enviada":
+                    card_class = "hist-card enviada"
+                    estado_html = f'<span class="estado-enviada">🟣 {a["estado"]} — {label}</span>'
+                else:
+                    card_class = "hist-card"
+                    estado_html = f'<i>{a["estado"]}</i>'
+
+                obj_txt = f': {a["objetivo"]}' if a.get("objetivo") else ""
+                asig_txt = f' 👤 <b>{assigned_name}</b>' if assigned_name else ""
+                feedback_html = f'<br><b>Feedback:</b> {a["feedback"]}' if a.get("feedback") else ""
+                fecha_display = str(a.get("fecha", ""))
+
+                st.markdown(f'<div class="{card_class}"><b>{a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} ({fecha_display}) - {estado_html}<br>{a.get("descripcion", "")}{feedback_html}</div>', unsafe_allow_html=True)
+
+                aid = a['id']
+                if a["estado"] == "Pendiente":
+                    if st.button("✅ ENVIADO", key=f"d_{aid}"):
+                        dal.update_activity(aid, {"estado": "Enviada"})
+                        st.rerun()
+                elif a["estado"] == "Enviada":
+                    if st.session_state.get(f"show_fb_{aid}"):
+                        with st.form(f"fb_form_{aid}"):
+                            feedback = st.text_area("Feedback del cliente")
+                            if st.form_submit_button("Confirmar Respuesta"):
+                                dal.update_activity(aid, {"estado": "Respondida", "feedback": feedback})
+                                st.session_state.pop(f"show_fb_{aid}", None)
+                                st.rerun()
+                    else:
+                        b1, b2 = st.columns([1, 1])
+                        if b1.button("📩 RESPONDIDA", key=f"r_{aid}"):
+                            st.session_state[f"show_fb_{aid}"] = True
+                            st.rerun()
+                        if b2.button("🔄 REENVIAR", key=f"re_{aid}"):
+                            dal.update_activity(aid, {"estado": "Pendiente", "enviada_ts": None, "response_deadline": None})
+                            st.rerun()
+
+                # Editar actividad
+                with st.expander("✏️ Editar", expanded=False):
+                    with st.form(f"edit_act_{aid}"):
+                        ea_c1, ea_c2, ea_c3 = st.columns(3)
+                        ea_tipo = ea_c1.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"],
+                            index=["Email", "Llamada", "Reunión", "Asignación"].index(a.get("tipo", "Email")) if a.get("tipo", "Email") in ["Email", "Llamada", "Reunión", "Asignación"] else 0,
+                            key=f"et_{aid}")
+                        sla_keys = list(SLA_OPCIONES.keys())
+                        ea_sla = ea_c2.selectbox("SLA", sla_keys,
+                            index=sla_keys.index(a["sla_key"]) if a.get("sla_key") in sla_keys else 0,
+                            key=f"es_{aid}")
+                        ea_fecha = ea_c3.date_input("Fecha", value=_parse_date(a.get("fecha", "")) or date.today(), key=f"ef_{aid}")
+                        ea_objetivo = st.text_input("Objetivo", value=a.get("objetivo", ""), key=f"eo_{aid}")
+                        ea_c4, ea_c5 = st.columns(2)
+                        ea_dest = ea_c4.text_input("Destinatario", value=a.get("destinatario", ""), key=f"ed_{aid}")
+                        sla_rpta_keys = list(SLA_RESPUESTA.keys())
+                        sla_rpta_vals = list(SLA_RESPUESTA.values())
+                        cur_sla_idx = sla_rpta_vals.index(a.get("sla_respuesta_dias", 7)) if a.get("sla_respuesta_dias", 7) in sla_rpta_vals else 1
+                        ea_sla_rpta = ea_c5.selectbox("SLA Respuesta", sla_rpta_keys, index=cur_sla_idx, key=f"esr_{aid}")
+                        ea_desc = st.text_area("Descripción", value=a.get("descripcion", ""), key=f"edc_{aid}")
+                        if st.form_submit_button("💾 Guardar"):
+                            new_sla_hours = _sla_to_hours(ea_sla)
+                            dal.update_activity(aid, {
+                                "tipo": ea_tipo, "sla_key": ea_sla, "sla_hours": new_sla_hours,
+                                "fecha": str(ea_fecha), "objetivo": ea_objetivo,
+                                "destinatario": ea_dest, "sla_respuesta_dias": SLA_RESPUESTA[ea_sla_rpta],
+                                "descripcion": ea_desc,
+                            })
+                            st.rerun()
 
 else:
-    # TABLERO COMPLETO
-    cats = ["LEADS", "OFFICIAL", "GTM"]
-    cols = st.columns(3)
-    for i, col in enumerate(cols):
-        with col:
-            st.markdown(f'<div class="cat-header">{cats[i]}</div>', unsafe_allow_html=True)
-            items = [it for it in st.session_state.db_leads if it['CategoriaRaiz'] == cats[i]]
-            for o in sorted(items, key=lambda x: x['Monto'], reverse=True):
-                act_lines = ""
-                for a in o.get("actividades", []):
-                    light, label = _traffic_light(a)
-                    dest = f' - {a["destinatario"]}' if a.get("destinatario") else ""
-                    act_lines += f'<div class="activity-line">{light} {a["tipo"]}{dest} - {label}</div>'
-                st.markdown(f'<div class="scorecard"><div class="sc-cuenta">{o["Cuenta"]}</div><div class="sc-proyecto">{o["Proyecto"]}</div><span class="sc-monto">USD {o["Monto"]:,.0f}</span>{act_lines}</div>', unsafe_allow_html=True)
-                if st.button("Gestionar", key=f"g_{o['id']}", use_container_width=True):
-                    st.session_state.selected_id = o['id']; st.rerun()
+    # --- VISTAS PRINCIPALES ---
+    tabs = ["📊 Tablero", "📋 Actividades"]
+    if is_admin():
+        tabs.append("⚙️ Admin")
+
+    selected_tabs = st.tabs(tabs)
+
+    # --- TAB: TABLERO ---
+    with selected_tabs[0]:
+        all_opps = dal.get_opportunities(team_id)
+        # Precargar actividades para todas las oportunidades
+        all_acts_by_opp = {}
+        all_activities = dal.get_all_activities(team_id)
+        for act in all_activities:
+            all_acts_by_opp.setdefault(act["opportunity_id"], []).append(act)
+
+        cols = st.columns(len(CATEGORIAS))
+        for i, col in enumerate(cols):
+            with col:
+                cat = CATEGORIAS[i]
+                st.markdown(f'<div class="cat-header">{cat}</div>', unsafe_allow_html=True)
+                items = [o for o in all_opps if o['categoria'] == cat]
+                accounts = OrderedDict()
+                for o in sorted(items, key=lambda x: x['monto'], reverse=True):
+                    accounts.setdefault(o['cuenta'], []).append(o)
+                for cuenta, opps in accounts.items():
+                    total = sum(o['monto'] for o in opps)
+                    badge = f'<span class="account-badge">{len(opps)} opp{"s" if len(opps) > 1 else ""}</span>' if len(opps) > 1 else ""
+                    st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
+                    for o in opps:
+                        opp_acts = all_acts_by_opp.get(o["id"], [])
+                        act_lines = ""
+                        for a in opp_acts:
+                            light, label = _traffic_light(a)
+                            obj = f': {a["objetivo"]}' if a.get("objetivo") else ""
+                            dest = f' - {a["destinatario"]}' if a.get("destinatario") else ""
+                            asig_name = ""
+                            if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
+                                asig_name = a["assigned_profile"]["full_name"]
+                            asig = f' 👤{asig_name}' if asig_name else ""
+                            act_lines += f'<div class="activity-line">{light} {a["tipo"]}{obj}{dest}{asig} - {label}</div>'
+                        opp_id_line = f'<span class="opp-id">ID: {o.get("opp_id","")}</span>' if o.get("opp_id") else ""
+                        close_line = f'<span class="opp-id">Cierre: {o.get("close_date","")}</span>' if o.get("close_date") else ""
+                        stage_line = f' <span class="opp-stage">{o.get("stage","")}</span>' if o.get("stage") else ""
+                        bc1, bc2 = st.columns([0.9, 0.1])
+                        bc1.markdown(f'<div class="opp-card"><span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}<span class="opp-monto" style="float:right">USD {o["monto"]:,.0f}</span>{opp_id_line}{close_line}{act_lines}</div>', unsafe_allow_html=True)
+                        if bc2.button("⚙️", key=f"g_{o['id']}"):
+                            st.session_state.selected_id = o['id']
+                            st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- TAB: ACTIVIDADES ---
+    with selected_tabs[1]:
+        ALL_COLUMNS = ["Semáforo", "Estado", "Categoría", "Cuenta", "Proyecto", "Monto USD", "Canal", "Objetivo", "Destinatario", "Asignado a", "Fecha", "SLA", "SLA Respuesta (días)", "Estado Interno", "Feedback", "Descripción"]
+        DEFAULT_COLUMNS = ["Semáforo", "Estado", "Categoría", "Cuenta", "Proyecto", "Canal", "Objetivo", "Destinatario", "Fecha", "Estado Interno"]
+
+        all_activities_full = dal.get_all_activities(team_id)
+
+        all_acts_display = []
+        act_refs = []
+        for a in all_activities_full:
+            opp_data = a.get("opportunity", {}) or {}
+            light, label = _traffic_light(a)
+            assigned_name = ""
+            if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
+                assigned_name = a["assigned_profile"]["full_name"]
+
+            all_acts_display.append({
+                "Semáforo": light,
+                "Estado": label,
+                "Categoría": opp_data.get("categoria", ""),
+                "Cuenta": opp_data.get("cuenta", ""),
+                "Proyecto": opp_data.get("proyecto", ""),
+                "Monto USD": opp_data.get("monto", 0),
+                "Canal": a.get("tipo", ""),
+                "Objetivo": a.get("objetivo", ""),
+                "Destinatario": a.get("destinatario", ""),
+                "Asignado a": assigned_name,
+                "Fecha": str(a.get("fecha", "")),
+                "SLA": a.get("sla_key", ""),
+                "SLA Respuesta (días)": a.get("sla_respuesta_dias", ""),
+                "Estado Interno": a.get("estado", ""),
+                "Feedback": a.get("feedback", ""),
+                "Descripción": a.get("descripcion", ""),
+            })
+            act_refs.append(a)
+
+        if not all_acts_display:
+            st.info("No hay actividades registradas aún.")
+        else:
+            if 'act_columns' not in st.session_state:
+                st.session_state.act_columns = DEFAULT_COLUMNS
+            selected_cols = st.multiselect("Columnas visibles", ALL_COLUMNS, default=st.session_state.act_columns, key="col_selector")
+            st.session_state.act_columns = selected_cols
+
+            fc1, fc2, fc3, fc4 = st.columns(4)
+            cats_disponibles = sorted(set(r["Categoría"] for r in all_acts_display))
+            fil_cat = fc1.multiselect("Categoría", cats_disponibles, default=cats_disponibles)
+            estados_disponibles = sorted(set(r["Estado Interno"] for r in all_acts_display))
+            fil_estado = fc2.multiselect("Estado", estados_disponibles, default=estados_disponibles)
+            canales_disponibles = sorted(set(r["Canal"] for r in all_acts_display))
+            fil_canal = fc3.multiselect("Canal", canales_disponibles, default=canales_disponibles)
+            cuentas_disponibles = sorted(set(r["Cuenta"] for r in all_acts_display))
+            fil_cuenta = fc4.multiselect("Cuenta", cuentas_disponibles, default=cuentas_disponibles)
+
+            df_acts = pd.DataFrame(all_acts_display)
+            mask = (
+                (df_acts["Categoría"].isin(fil_cat)) &
+                (df_acts["Estado Interno"].isin(fil_estado)) &
+                (df_acts["Canal"].isin(fil_canal)) &
+                (df_acts["Cuenta"].isin(fil_cuenta))
+            )
+            df_filtered = df_acts[mask]
+
+            st.divider()
+            m1, m2, m3, m4, m5 = st.columns(5)
+            m1.metric("Total", len(df_filtered))
+            m2.metric("Pendientes", len(df_filtered[df_filtered["Estado Interno"] == "Pendiente"]))
+            m3.metric("Enviadas", len(df_filtered[df_filtered["Estado Interno"] == "Enviada"]))
+            m4.metric("Respondidas", len(df_filtered[df_filtered["Estado Interno"] == "Respondida"]))
+            m5.metric("🔴 Bloqueadas/Vencidas", len(df_filtered[df_filtered["Estado"].isin(["Bloqueada", "Vencida"])]))
+
+            st.divider()
+            sorted_indices = df_filtered.sort_values("Fecha", ascending=False).index.tolist() if "Fecha" in df_filtered.columns else df_filtered.index.tolist()
+            display_cols = [c for c in selected_cols if c in df_filtered.columns]
+
+            n_cols = len(display_cols)
+            widths = [1.0 / n_cols] * n_cols + [0.04] if n_cols else [1, 0.04]
+            hdr_cols = st.columns(widths)
+            for j, c in enumerate(display_cols):
+                hdr_cols[j].markdown(f'<div style="font-size:0.7rem; font-weight:700; color:#64748b; text-transform:uppercase;">{c}</div>', unsafe_allow_html=True)
+
+            for row_idx in sorted_indices:
+                row = all_acts_display[row_idx]
+                a_ref = act_refs[row_idx]
+                row_cols = st.columns(widths)
+                for j, c in enumerate(display_cols):
+                    row_cols[j].markdown(f'<div style="font-size:0.8rem; padding:4px 0; border-bottom:1px solid #e2e8f0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{row.get(c, "")}</div>', unsafe_allow_html=True)
+                if row_cols[-1].button("✏️", key=f"eab_{row_idx}"):
+                    st.session_state["edit_act_tab_idx"] = row_idx
+
+                if st.session_state.get("edit_act_tab_idx") == row_idx:
+                    with st.form(f"edit_act_tab_{row_idx}"):
+                        ea_c1, ea_c2, ea_c3 = st.columns(3)
+                        ea_tipo = ea_c1.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"],
+                            index=["Email", "Llamada", "Reunión", "Asignación"].index(a_ref.get("tipo", "Email")) if a_ref.get("tipo") in ["Email", "Llamada", "Reunión", "Asignación"] else 0)
+                        sla_keys = list(SLA_OPCIONES.keys())
+                        ea_sla = ea_c2.selectbox("SLA", sla_keys,
+                            index=sla_keys.index(a_ref["sla_key"]) if a_ref.get("sla_key") in sla_keys else 0)
+                        ea_fecha = ea_c3.date_input("Fecha", value=_parse_date(a_ref.get("fecha", "")) or date.today())
+                        ea_objetivo = st.text_input("Objetivo", value=a_ref.get("objetivo", ""))
+                        ea_c4, ea_c5, ea_c6 = st.columns(3)
+                        ea_dest = ea_c4.text_input("Destinatario", value=a_ref.get("destinatario", ""))
+                        # Asignado selector
+                        recurso_opciones_tab = [""] + list(RECURSOS_PRESALES.values())
+                        recurso_ids_tab = [""] + list(RECURSOS_PRESALES.keys())
+                        current_assigned = a_ref.get("assigned_to", "")
+                        assigned_idx = 0
+                        if current_assigned and current_assigned in recurso_ids_tab:
+                            assigned_idx = recurso_ids_tab.index(current_assigned)
+                        ea_asig_idx = ea_c5.selectbox("Asignado a", range(len(recurso_opciones_tab)), format_func=lambda i: recurso_opciones_tab[i], index=assigned_idx)
+                        sla_rpta_keys = list(SLA_RESPUESTA.keys())
+                        sla_rpta_vals = list(SLA_RESPUESTA.values())
+                        cur_sla_idx = sla_rpta_vals.index(a_ref.get("sla_respuesta_dias", 7)) if a_ref.get("sla_respuesta_dias", 7) in sla_rpta_vals else 1
+                        ea_sla_rpta = ea_c6.selectbox("SLA Respuesta", sla_rpta_keys, index=cur_sla_idx)
+                        ea_estado = st.selectbox("Estado", ["Pendiente", "Enviada", "Respondida"],
+                            index=["Pendiente", "Enviada", "Respondida"].index(a_ref.get("estado", "Pendiente")) if a_ref.get("estado") in ["Pendiente", "Enviada", "Respondida"] else 0)
+                        ea_feedback = st.text_area("Feedback", value=a_ref.get("feedback", ""))
+                        ea_desc = st.text_area("Descripción", value=a_ref.get("descripcion", ""))
+                        if st.form_submit_button("💾 Guardar"):
+                            new_assigned = recurso_ids_tab[ea_asig_idx] if ea_asig_idx > 0 else None
+                            new_sla_hours = _sla_to_hours(ea_sla)
+                            dal.update_activity(a_ref["id"], {
+                                "tipo": ea_tipo, "sla_key": ea_sla, "sla_hours": new_sla_hours,
+                                "fecha": str(ea_fecha), "objetivo": ea_objetivo,
+                                "destinatario": ea_dest, "assigned_to": new_assigned,
+                                "sla_respuesta_dias": SLA_RESPUESTA[ea_sla_rpta],
+                                "estado": ea_estado, "feedback": ea_feedback,
+                                "descripcion": ea_desc,
+                            })
+                            st.session_state.pop("edit_act_tab_idx", None)
+                            st.rerun()
+                    if st.button("❌ Cerrar", key=f"close_eab_{row_idx}"):
+                        st.session_state.pop("edit_act_tab_idx", None)
+                        st.rerun()
+
+    # --- TAB: ADMIN (solo para admins) ---
+    if is_admin():
+        with selected_tabs[2]:
+            admin_tab1, admin_tab2, admin_tab3 = st.tabs(["👥 Equipo", "⚙️ Configuración", "📨 Invitaciones"])
+
+            # --- EQUIPO ---
+            with admin_tab1:
+                st.subheader("Miembros del Equipo")
+                members = dal.get_team_members(team_id, active_only=False)
+
+                # Info del equipo
+                team_info = dal.get_team(team_id)
+                if team_info:
+                    st.caption(f"Equipo: **{team_info['name']}** — ID: `{team_id}`")
+
+                for m in members:
+                    with st.expander(f"{'🟢' if m['active'] else '🔴'} {m['full_name']} — {m['role']} {'(' + m['specialty'] + ')' if m.get('specialty') else ''}"):
+                        with st.form(f"edit_member_{m['id']}"):
+                            mc1, mc2 = st.columns(2)
+                            m_name = mc1.text_input("Nombre", value=m["full_name"], key=f"mn_{m['id']}")
+                            m_email = mc2.text_input("Email", value=m["email"], key=f"me_{m['id']}")
+                            mc3, mc4, mc5 = st.columns(3)
+                            m_role = mc3.selectbox("Rol", ["admin", "manager", "presales"],
+                                index=["admin", "manager", "presales"].index(m["role"]) if m["role"] in ["admin", "manager", "presales"] else 2,
+                                key=f"mr_{m['id']}")
+                            m_specialty = mc4.text_input("Especialidad", value=m.get("specialty", ""), key=f"ms_{m['id']}")
+                            m_phone = mc5.text_input("Teléfono", value=m.get("phone", ""), key=f"mp_{m['id']}")
+                            m_active = st.checkbox("Activo", value=m["active"], key=f"ma_{m['id']}")
+                            if st.form_submit_button("💾 Guardar"):
+                                dal.update_team_member(m["id"], {
+                                    "full_name": m_name, "role": m_role,
+                                    "specialty": m_specialty, "phone": m_phone,
+                                    "active": m_active,
+                                })
+                                st.success("Miembro actualizado.")
+                                st.rerun()
+
+            # --- CONFIGURACIÓN ---
+            with admin_tab2:
+                st.subheader("Configuración del Equipo")
+
+                # SLA Opciones
+                st.write("**Opciones de SLA**")
+                sla_config = dal.get_sla_options(team_id)
+                sla_json = st.text_area("SLA (JSON)", value=json.dumps(sla_config, ensure_ascii=False, indent=2), height=200, key="sla_config_edit")
+                if st.button("Guardar SLA", key="save_sla"):
+                    try:
+                        parsed = json.loads(sla_json)
+                        dal.set_team_config(team_id, "sla_opciones", parsed)
+                        st.success("SLA actualizado.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"JSON inválido: {e}")
+
+                st.divider()
+
+                # SLA Respuesta
+                st.write("**SLA de Respuesta**")
+                sla_rpta_config = dal.get_sla_respuesta(team_id)
+                sla_rpta_json = st.text_area("SLA Respuesta (JSON)", value=json.dumps(sla_rpta_config, ensure_ascii=False, indent=2), height=150, key="sla_rpta_config_edit")
+                if st.button("Guardar SLA Respuesta", key="save_sla_rpta"):
+                    try:
+                        parsed = json.loads(sla_rpta_json)
+                        dal.set_team_config(team_id, "sla_respuesta", parsed)
+                        st.success("SLA Respuesta actualizado.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"JSON inválido: {e}")
+
+                st.divider()
+
+                # Categorías
+                st.write("**Categorías**")
+                cats_config = dal.get_categorias(team_id)
+                cats_json = st.text_area("Categorías (JSON array)", value=json.dumps(cats_config, ensure_ascii=False, indent=2), height=100, key="cats_config_edit")
+                if st.button("Guardar Categorías", key="save_cats"):
+                    try:
+                        parsed = json.loads(cats_json)
+                        if isinstance(parsed, list):
+                            dal.set_team_config(team_id, "categorias", parsed)
+                            st.success("Categorías actualizadas.")
+                            st.rerun()
+                        else:
+                            st.error("Debe ser un array JSON.")
+                    except Exception as e:
+                        st.error(f"JSON inválido: {e}")
+
+            # --- INVITACIONES ---
+            with admin_tab3:
+                st.subheader("Invitar Miembros")
+                st.info(f"Comparte este ID de equipo para que nuevos miembros se unan: `{team_id}`")
+                st.write("Los nuevos miembros pueden registrarse usando la pestaña 'Unirse a Equipo' en la página de login.")
+
+                st.divider()
+                st.write("**Enviar invitación por email**")
+                with st.form("invite_form"):
+                    inv_email = st.text_input("Email del invitado")
+                    inv_name = st.text_input("Nombre (opcional)")
+                    if st.form_submit_button("Enviar Invitación"):
+                        if inv_email:
+                            # Enviar email de invitación via SendGrid
+                            from sendgrid import SendGridAPIClient
+                            from sendgrid.helpers.mail import Mail, Email, To, Content
+                            try:
+                                sg_key = st.secrets.get("SENDGRID_API_KEY", "")
+                                if sg_key and not sg_key.startswith("SG.your"):
+                                    sg = SendGridAPIClient(api_key=sg_key)
+                                    app_url = st.secrets.get("APP_URL", "https://your-app.streamlit.app")
+                                    message = Mail(
+                                        from_email=Email(st.secrets.get("SENDGRID_FROM_EMAIL", "noreply@pgmachine.com"), st.secrets.get("SENDGRID_FROM_NAME", "PG Machine")),
+                                        to_emails=To(inv_email),
+                                        subject=f"Invitación a PG Machine — {team_info['name'] if team_info else 'Equipo'}",
+                                        html_content=Content("text/html", f"""
+                                        <div style="font-family: Inter, sans-serif; max-width: 500px; margin: 0 auto;">
+                                            <div style="background: #1e293b; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+                                                <h2>Invitación a PG Machine</h2>
+                                            </div>
+                                            <div style="background: white; padding: 20px; border: 1px solid #e2e8f0; border-radius: 0 0 8px 8px;">
+                                                <p>Hola{' ' + inv_name if inv_name else ''},</p>
+                                                <p>Te han invitado a unirte al equipo <b>{team_info['name'] if team_info else ''}</b> en PG Machine.</p>
+                                                <p>Para registrarte, ve a la app y selecciona "Unirse a Equipo":</p>
+                                                <p><b>ID del equipo:</b> <code>{team_id}</code></p>
+                                                <div style="text-align: center; margin: 20px 0;">
+                                                    <a href="{app_url}" style="background: #1a73e8; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">Ir a PG Machine</a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        """)
+                                    )
+                                    sg.send(message)
+                                    st.success(f"Invitación enviada a {inv_email}")
+                                else:
+                                    st.warning("SendGrid no configurado. Comparte el ID de equipo manualmente.")
+                            except Exception as e:
+                                st.error(f"Error enviando invitación: {e}")
+                        else:
+                            st.error("Ingresa un email.")
