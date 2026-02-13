@@ -28,6 +28,7 @@ st.markdown("""
     /* Panel Derecho */
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
     .hist-card { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; }
+    .activity-line { font-size: 0.72rem; color: #475569; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -61,6 +62,23 @@ SLA_OPCIONES = {
     "⚠️ Importante (2d)": {"dias": 2, "color": "#f59e0b"},
     "☕ No urgente (7d)": {"dias": 7, "color": "#3b82f6"}
 }
+
+def _traffic_light(act):
+    if act["estado"] in ("Completada", "Respondida"):
+        return "🟢", "Completada"
+    sla_cfg = SLA_OPCIONES.get(act["sla"], {})
+    if "horas" in sla_cfg:
+        deadline = datetime.strptime(act["fecha"], "%Y-%m-%d") + timedelta(hours=sla_cfg["horas"])
+    else:
+        deadline = datetime.strptime(act["fecha"], "%Y-%m-%d") + timedelta(days=sla_cfg.get("dias", 7))
+    remaining = deadline - datetime.now()
+    total = deadline - datetime.strptime(act["fecha"], "%Y-%m-%d")
+    if remaining.total_seconds() <= 0:
+        return "🔴", "Vencida"
+    ratio = remaining / total if total.total_seconds() > 0 else 0
+    if ratio > 0.5:
+        return "🟢", f"{remaining.days}d rest."
+    return "🟡", f"{remaining.days}d rest."
 
 def add_item(p, e, m, cat, extra=None):
     item = {"id": str(uuid.uuid4())[:8], "Proyecto": p, "Cuenta": e, "Monto": float(m), "CategoriaRaiz": cat, "actividades": []}
@@ -110,15 +128,17 @@ if st.session_state.selected_id:
             tipo = c1.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
             sla = c2.selectbox("SLA", list(SLA_OPCIONES.keys()))
             fecha = c3.date_input("Fecha", value=date.today())
+            destinatario = st.text_input("Destinatario")
             desc = st.text_area("Descripción / Notas")
             if st.form_submit_button("Guardar Actividad"):
-                o['actividades'].append({"id_act": str(uuid.uuid4())[:6], "tipo": tipo, "fecha": str(fecha), "desc": desc, "estado": "Pendiente", "sla": sla})
+                o['actividades'].append({"id_act": str(uuid.uuid4())[:6], "tipo": tipo, "fecha": str(fecha), "desc": desc, "estado": "Pendiente", "sla": sla, "destinatario": destinatario})
                 st.rerun()
         
         st.subheader("📜 Historial e Interacción")
         for a in reversed(o['actividades']):
             with st.container():
-                st.markdown(f'<div class="hist-card"><b>{a["tipo"]}</b> ({a["fecha"]}) - <i>{a["estado"]}</i><br>{a["desc"]}</div>', unsafe_allow_html=True)
+                dest_txt = f' → {a["destinatario"]}' if a.get("destinatario") else ""
+                st.markdown(f'<div class="hist-card"><b>{a["tipo"]}</b>{dest_txt} ({a["fecha"]}) - <i>{a["estado"]}</i><br>{a["desc"]}</div>', unsafe_allow_html=True)
                 b1, b2 = st.columns([1, 4])
                 if b1.button("✅ HECHO", key=f"d_{a['id_act']}"): a['estado'] = "Completada"; st.rerun()
                 if b1.button("📩 RPTA", key=f"r_{a['id_act']}"): a['estado'] = "Respondida"; st.rerun()
@@ -133,6 +153,11 @@ else:
             st.markdown(f'<div class="cat-header">{cats[i]}</div>', unsafe_allow_html=True)
             items = [it for it in st.session_state.db_leads if it['CategoriaRaiz'] == cats[i]]
             for o in sorted(items, key=lambda x: x['Monto'], reverse=True):
-                st.markdown(f'<div class="scorecard"><div class="sc-cuenta">{o["Cuenta"]}</div><div class="sc-proyecto">{o["Proyecto"]}</div><span class="sc-monto">USD {o["Monto"]:,.0f}</span></div>', unsafe_allow_html=True)
+                act_lines = ""
+                for a in o.get("actividades", []):
+                    light, label = _traffic_light(a)
+                    dest = f' - {a["destinatario"]}' if a.get("destinatario") else ""
+                    act_lines += f'<div class="activity-line">{light} {a["tipo"]}{dest} - {label}</div>'
+                st.markdown(f'<div class="scorecard"><div class="sc-cuenta">{o["Cuenta"]}</div><div class="sc-proyecto">{o["Proyecto"]}</div><span class="sc-monto">USD {o["Monto"]:,.0f}</span>{act_lines}</div>', unsafe_allow_html=True)
                 if st.button("Gestionar", key=f"g_{o['id']}", use_container_width=True):
                     st.session_state.selected_id = o['id']; st.rerun()
