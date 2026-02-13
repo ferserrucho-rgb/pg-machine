@@ -845,5 +845,3 @@ else:
                                 st.error("Ingresa un email.")
                 else:
                     st.caption("Para enviar invitaciones por email, configura tu clave de SendGrid en los secrets de la app.")
-                        else:
-                            st.error("Ingresa un email.")
