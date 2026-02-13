@@ -816,32 +816,32 @@ else:
 
                 st.divider()
 
-                # SendGrid email (optional)
+                # SendGrid email (optional) — real keys are 69+ chars like SG.xxx.yyy
                 sg_key = st.secrets.get("SENDGRID_API_KEY", "")
-                sg_configured = sg_key and not sg_key.startswith("SG.your")
+                sg_configured = sg_key and len(sg_key) > 50 and sg_key.startswith("SG.")
 
-                if sg_configured:
-                    st.write("**Enviar invitación por email**")
-                    with st.form("invite_form"):
-                        inv_email = st.text_input("Email del invitado")
-                        inv_name = st.text_input("Nombre (opcional)")
-                        if st.form_submit_button("📨 Enviar Invitación"):
-                            if inv_email:
-                                from sendgrid import SendGridAPIClient
-                                from sendgrid.helpers.mail import Mail, Email, To, Content
-                                try:
-                                    sg = SendGridAPIClient(api_key=sg_key)
-                                    message = Mail(
-                                        from_email=Email(st.secrets.get("SENDGRID_FROM_EMAIL", "noreply@pgmachine.com"), st.secrets.get("SENDGRID_FROM_NAME", "PG Machine")),
-                                        to_emails=To(inv_email),
-                                        subject=f"Invitación a PG Machine — {team_name}",
-                                        html_content=Content("text/html", f'<div style="font-family:Inter,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>Invitación a PG Machine</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>Hola{" " + inv_name if inv_name else ""},</p><p>Te han invitado a unirte al equipo <b>{team_name}</b> en PG Machine.</p><p>Para registrarte, abre la app y selecciona "Unirse a Equipo":</p><p><b>ID del equipo:</b> <code>{team_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Ir a PG Machine</a></div></div></div>')
-                                    )
-                                    sg.send(message)
-                                    st.success(f"Invitación enviada a {inv_email}")
-                                except Exception as e:
-                                    st.error(f"Error enviando email: {e}")
-                            else:
-                                st.error("Ingresa un email.")
-                else:
-                    st.caption("Para enviar invitaciones por email, configura tu clave de SendGrid en los secrets de la app.")
+                with st.expander("📨 Enviar invitación por email (opcional)"):
+                    if not sg_configured:
+                        st.warning("SendGrid no está configurado. Para habilitar invitaciones por email, crea una cuenta gratuita en [sendgrid.com](https://sendgrid.com) y agrega tu API key en los secrets de la app.")
+                    else:
+                        with st.form("invite_form"):
+                            inv_email = st.text_input("Email del invitado")
+                            inv_name = st.text_input("Nombre (opcional)")
+                            if st.form_submit_button("📨 Enviar Invitación"):
+                                if inv_email:
+                                    from sendgrid import SendGridAPIClient
+                                    from sendgrid.helpers.mail import Mail, Email, To, Content
+                                    try:
+                                        sg = SendGridAPIClient(api_key=sg_key)
+                                        message = Mail(
+                                            from_email=Email(st.secrets.get("SENDGRID_FROM_EMAIL", "noreply@pgmachine.com"), st.secrets.get("SENDGRID_FROM_NAME", "PG Machine")),
+                                            to_emails=To(inv_email),
+                                            subject=f"Invitación a PG Machine — {team_name}",
+                                            html_content=Content("text/html", f'<div style="font-family:Inter,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>Invitación a PG Machine</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>Hola{" " + inv_name if inv_name else ""},</p><p>Te han invitado a unirte al equipo <b>{team_name}</b> en PG Machine.</p><p>Para registrarte, abre la app y selecciona "Unirse a Equipo":</p><p><b>ID del equipo:</b> <code>{team_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Ir a PG Machine</a></div></div></div>')
+                                        )
+                                        sg.send(message)
+                                        st.success(f"Invitación enviada a {inv_email}")
+                                    except Exception as e:
+                                        st.error(f"Error enviando email: {e}")
+                                else:
+                                    st.error("Ingresa un email.")
