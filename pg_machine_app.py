@@ -9,23 +9,47 @@ st.set_page_config(page_title="PG Machine | v116 Core", layout="wide", initial_s
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    .block-container { padding-top: 1.5rem !important; }
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-    
+
+    /* Force full width on main container - override inline styles */
+    section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
+    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
+
     /* Categorías */
     .cat-header { background: #1e293b; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: 700; margin-bottom: 15px; }
-    
+
     /* Scorecard */
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .badge { float:right; font-size:0.6rem; font-weight:bold; padding:2px 6px; border-radius:8px; text-transform: uppercase; border: 1.2px solid; }
     .sc-cuenta { color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
     .sc-proyecto { color: #1e293b; font-size: 0.95rem; font-weight: 700; margin: 4px 0; }
     .sc-monto { color: #16a34a; font-size: 1.1rem; font-weight: 800; display: block; }
-    
+
     /* Panel Derecho */
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
     .hist-card { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; }
     </style>
+    """, unsafe_allow_html=True)
+
+# JS to force remove inline max-width set by Streamlit's runtime
+st.markdown("""
+    <script>
+    const observer = new MutationObserver(() => {
+        document.querySelectorAll('section.main > div').forEach(el => {
+            if (el.style.maxWidth) {
+                el.style.maxWidth = '100%';
+                el.style.paddingLeft = '1rem';
+                el.style.paddingRight = '1rem';
+            }
+        });
+    });
+    observer.observe(document.body, {childList: true, subtree: true, attributes: true});
+    document.querySelectorAll('section.main > div').forEach(el => {
+        el.style.maxWidth = '100%';
+        el.style.paddingLeft = '1rem';
+        el.style.paddingRight = '1rem';
+    });
+    </script>
     """, unsafe_allow_html=True)
 
 # --- 2. LÓGICA DE DATOS ---
@@ -102,8 +126,8 @@ if st.session_state.selected_id:
 
 else:
     # TABLERO COMPLETO
-    cols = st.columns(3)
     cats = ["LEADS", "OFFICIAL", "GTM"]
+    cols = st.columns(3)
     for i, col in enumerate(cols):
         with col:
             st.markdown(f'<div class="cat-header">{cats[i]}</div>', unsafe_allow_html=True)
