@@ -244,7 +244,7 @@ if st.session_state.selected_id:
         close_html = f'<span class="opp-id">Cierre: {opp.get("close_date","")}</span>' if opp.get("close_date") else ""
         stage_html = f' <span class="opp-stage">{opp.get("stage","")}</span>' if opp.get("stage") else ""
         st.markdown(f'<div class="cat-header">{opp["categoria"]}{stage_html}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="scorecard"><div class="sc-cuenta">{opp["cuenta"]}</div><div class="sc-proyecto">{opp["proyecto"]}</div><span class="sc-monto">USD {opp["monto"]:,.0f}</span>{opp_id_html}{close_html}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="scorecard"><div class="sc-cuenta">{opp["cuenta"]}</div><div class="sc-proyecto">{opp["proyecto"]}</div><span class="sc-monto">USD {float(opp.get("monto") or 0):,.0f}</span>{opp_id_html}{close_html}</div>', unsafe_allow_html=True)
         btn_c1, btn_c2 = st.columns(2)
         if btn_c1.button("⬅️ VOLVER", use_container_width=True):
             st.session_state.selected_id = None
@@ -470,9 +470,10 @@ else:
 
         def _render_account_group(cuenta, opps, all_acts_by_opp):
             """Renders one account group with its opportunity cards."""
-            total = sum(o['monto'] for o in opps)
+            total = sum(float(o.get('monto') or 0) for o in opps)
             badge = f'<span class="account-badge">{len(opps)} opp{"s" if len(opps) > 1 else ""}</span>' if len(opps) > 1 else ""
-            safe_cuenta = cuenta.replace(" ", "_").replace(".", "")
+            import re
+            safe_cuenta = re.sub(r'[^a-zA-Z0-9]', '_', cuenta)
             acct_col, acct_menu = st.columns([0.93, 0.07])
             acct_col.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
             with acct_menu:
@@ -506,7 +507,8 @@ else:
                 close_line = f'<span class="opp-id">Cierre: {o.get("close_date","")}</span>' if o.get("close_date") else ""
                 stage_line = f' <span class="opp-stage">{o.get("stage","")}</span>' if o.get("stage") else ""
                 card_col, menu_col = st.columns([0.93, 0.07])
-                card_col.markdown(f'<div class="opp-card"><span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}<span class="opp-monto" style="float:right">USD {o["monto"]:,.0f}</span>{opp_id_line}{close_line}{act_lines}</div>', unsafe_allow_html=True)
+                monto_val = float(o.get("monto") or 0)
+                card_col.markdown(f'<div class="opp-card"><span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}<span class="opp-monto" style="float:right">USD {monto_val:,.0f}</span>{opp_id_line}{close_line}{act_lines}</div>', unsafe_allow_html=True)
                 with menu_col:
                     with st.popover("⋯"):
                         if st.button("✏️ Editar / Actividades", key=f"g_{o['id']}", use_container_width=True):
@@ -532,7 +534,7 @@ else:
             cat = visible_cats[0]
             items = [o for o in all_opps if o['categoria'] == cat]
             accounts = OrderedDict()
-            for o in sorted(items, key=lambda x: x['monto'], reverse=True):
+            for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
                 accounts.setdefault(o['cuenta'], []).append(o)
             account_list = list(accounts.items())
             col_left, col_right = st.columns(2)
@@ -547,7 +549,7 @@ else:
                     cat = visible_cats[i]
                     items = [o for o in all_opps if o['categoria'] == cat]
                     accounts = OrderedDict()
-                    for o in sorted(items, key=lambda x: x['monto'], reverse=True):
+                    for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
                         accounts.setdefault(o['cuenta'], []).append(o)
                     for cuenta, opps in accounts.items():
                         _render_account_group(cuenta, opps, all_acts_by_opp)
