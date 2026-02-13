@@ -500,19 +500,8 @@ else:
                 opp_id_line = f'<span class="opp-id">ID: {o.get("opp_id","")}</span>' if o.get("opp_id") else ""
                 close_line = f'<span class="opp-id">Cierre: {o.get("close_date","")}</span>' if o.get("close_date") else ""
                 stage_line = f' <span class="opp-stage">{o.get("stage","")}</span>' if o.get("stage") else ""
-                # Card with inline action icons
-                st.markdown(f"""<div class="opp-card">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                        <div style="flex:1; min-width:0;">
-                            <span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}
-                            {opp_id_line}{close_line}
-                            {act_lines}
-                        </div>
-                        <div style="text-align:right; white-space:nowrap; padding-left:8px;">
-                            <span class="opp-monto">USD {o["monto"]:,.0f}</span>
-                        </div>
-                    </div>
-                </div>""", unsafe_allow_html=True)
+                # Card with inline layout
+                st.markdown(f'<div class="opp-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div style="flex:1;min-width:0;"><span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}{opp_id_line}{close_line}{act_lines}</div><div style="text-align:right;white-space:nowrap;padding-left:8px;"><span class="opp-monto">USD {o["monto"]:,.0f}</span></div></div></div>', unsafe_allow_html=True)
                 # Small inline buttons row
                 btn_cols = st.columns([1, 1, 6])
                 if btn_cols[0].button("✎", key=f"g_{o['id']}", help="Editar oportunidad"):
