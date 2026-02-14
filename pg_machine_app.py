@@ -342,8 +342,23 @@ if st.session_state.selected_id:
                     if st.session_state.get(f"show_fb_{aid}"):
                         with st.form(f"fb_form_{aid}"):
                             feedback = st.text_area("Feedback del cliente")
+                            st.divider()
+                            crear_seguimiento = st.checkbox("🔁 Crear actividad de seguimiento", value=False, key=f"seg_{aid}")
+                            seg_fecha = st.date_input("Fecha seguimiento", value=date.today() + timedelta(days=7), key=f"segf_{aid}")
                             if st.form_submit_button("Confirmar Respuesta"):
                                 dal.update_activity(aid, {"estado": "Respondida", "feedback": feedback})
+                                if crear_seguimiento:
+                                    dal.create_activity(a["opportunity_id"], a["team_id"], user_id, {
+                                        "tipo": a.get("tipo", "Email"),
+                                        "fecha": str(seg_fecha),
+                                        "objetivo": a.get("objetivo", ""),
+                                        "descripcion": f'Seguimiento: {feedback}' if feedback else a.get("descripcion", ""),
+                                        "sla_key": a.get("sla_key", ""),
+                                        "sla_hours": a.get("sla_hours"),
+                                        "sla_respuesta_dias": a.get("sla_respuesta_dias", 7),
+                                        "destinatario": a.get("destinatario", ""),
+                                        "assigned_to": a.get("assigned_to"),
+                                    })
                                 st.session_state.pop(f"show_fb_{aid}", None)
                                 st.rerun()
                     else:
