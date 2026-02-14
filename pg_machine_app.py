@@ -285,76 +285,7 @@ if st.session_state.selected_id:
     with r_col:
         st.title(f"🎯 {opp['cuenta']}")
 
-        # Editar oportunidad
-        with st.expander("✏️ Editar Oportunidad"):
-            with st.form("edit_opp"):
-                ed_c1, ed_c2 = st.columns(2)
-                ed_cuenta = ed_c1.text_input("Cuenta", value=opp["cuenta"])
-                ed_proyecto = ed_c2.text_input("Proyecto", value=opp["proyecto"])
-                ed_c3, ed_c4, ed_c5 = st.columns(3)
-                ed_monto = ed_c3.number_input("Monto USD", value=float(opp["monto"]))
-                ed_cat = ed_c4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(opp["categoria"]) if opp["categoria"] in CATEGORIAS else 0)
-                ed_opp_id = ed_c5.text_input("Opportunity ID", value=opp.get("opp_id", ""))
-                ed_c6, ed_c7 = st.columns(2)
-                ed_stage = ed_c6.text_input("Stage", value=opp.get("stage", ""))
-                close_val = _parse_date(opp.get("close_date", ""))
-                ed_close = ed_c7.date_input("Close Date", value=close_val)
-                if st.form_submit_button("💾 Guardar Cambios"):
-                    dal.update_opportunity(opp["id"], {
-                        "cuenta": ed_cuenta, "proyecto": ed_proyecto,
-                        "monto": float(ed_monto), "categoria": ed_cat,
-                        "opp_id": ed_opp_id, "stage": ed_stage,
-                        "close_date": str(ed_close) if ed_close else None,
-                    })
-                    st.rerun()
-
-        # Gestión de Actividades
-        st.subheader("➕ Nueva Actividad")
-        tipo = st.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
-
-        with st.form("act_form"):
-            c1, c2, c3 = st.columns(3)
-            sla_key = c1.selectbox("SLA", list(SLA_OPCIONES.keys()))
-            fecha = c2.date_input("Fecha", value=date.today())
-            objetivo = c3.text_input("Objetivo")
-            asignado_a_id = None
-            if tipo == "Asignación":
-                c4, c5, c6 = st.columns(3)
-                destinatario = c4.text_input("Destinatario")
-                recurso_opciones = [""] + list(RECURSOS_PRESALES.values())
-                recurso_ids = [""] + list(RECURSOS_PRESALES.keys())
-                sel_idx = c5.selectbox("Asignado a (Presales)", range(len(recurso_opciones)), format_func=lambda i: recurso_opciones[i])
-                if sel_idx > 0:
-                    asignado_a_id = recurso_ids[sel_idx]
-                sla_rpta = c6.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
-            else:
-                c4, c5 = st.columns(2)
-                destinatario = c4.text_input("Destinatario")
-                sla_rpta = c5.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
-            desc = st.text_area("Descripción / Notas", height=80)
-
-            if st.form_submit_button("Guardar Actividad"):
-                sla_hours = _sla_to_hours(sla_key)
-                new_act = dal.create_activity(opp["id"], team_id, user_id, {
-                    "tipo": tipo,
-                    "fecha": str(fecha),
-                    "objetivo": objetivo,
-                    "descripcion": desc,
-                    "sla_key": sla_key,
-                    "sla_hours": sla_hours,
-                    "sla_respuesta_dias": SLA_RESPUESTA[sla_rpta],
-                    "destinatario": destinatario,
-                    "assigned_to": asignado_a_id,
-                })
-                # Enviar notificación de asignación
-                if asignado_a_id and new_act:
-                    assignee = dal.get_team_member(asignado_a_id)
-                    if assignee:
-                        notifications.send_assignment_notification(new_act, assignee, opp)
-                        dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
-                st.rerun()
-
-        # Historial
+        # --- HISTORIAL (first) ---
         st.subheader("📜 Historial e Interacción")
         activities = dal.get_activities_for_opportunity(opp["id"])
         for a in activities:
@@ -449,6 +380,70 @@ if st.session_state.selected_id:
                         if da2.button("Cancelar", key=f"cdel_act_n_{aid}", use_container_width=True):
                             st.session_state.pop(f"confirm_del_act_{aid}", None)
                             st.rerun()
+
+        if not activities:
+            st.info("No hay actividades registradas aún.")
+
+        st.divider()
+
+        # --- EDITING SECTION (compressed in expanders) ---
+        with st.expander("✏️ Editar Oportunidad", expanded=False):
+            with st.form("edit_opp"):
+                ed_c1, ed_c2, ed_c3 = st.columns(3)
+                ed_cuenta = ed_c1.text_input("Cuenta", value=opp["cuenta"])
+                ed_proyecto = ed_c2.text_input("Proyecto", value=opp["proyecto"])
+                ed_monto = ed_c3.number_input("Monto USD", value=float(opp.get("monto") or 0))
+                ed_c4, ed_c5, ed_c6 = st.columns(3)
+                ed_cat = ed_c4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(opp["categoria"]) if opp["categoria"] in CATEGORIAS else 0)
+                ed_opp_id = ed_c5.text_input("Opportunity ID", value=opp.get("opp_id", ""))
+                ed_stage = ed_c6.text_input("Stage", value=opp.get("stage", ""))
+                close_val = _parse_date(opp.get("close_date", ""))
+                ed_close = st.date_input("Close Date", value=close_val)
+                if st.form_submit_button("💾 Guardar Cambios"):
+                    dal.update_opportunity(opp["id"], {
+                        "cuenta": ed_cuenta, "proyecto": ed_proyecto,
+                        "monto": float(ed_monto), "categoria": ed_cat,
+                        "opp_id": ed_opp_id, "stage": ed_stage,
+                        "close_date": str(ed_close) if ed_close else None,
+                    })
+                    st.rerun()
+
+        with st.expander("➕ Nueva Actividad", expanded=False):
+            tipo = st.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
+            with st.form("act_form"):
+                c1, c2, c3 = st.columns(3)
+                sla_key = c1.selectbox("SLA", list(SLA_OPCIONES.keys()))
+                fecha = c2.date_input("Fecha", value=date.today())
+                objetivo = c3.text_input("Objetivo")
+                asignado_a_id = None
+                if tipo == "Asignación":
+                    c4, c5, c6 = st.columns(3)
+                    destinatario = c4.text_input("Destinatario")
+                    recurso_opciones = [""] + list(RECURSOS_PRESALES.values())
+                    recurso_ids = [""] + list(RECURSOS_PRESALES.keys())
+                    sel_idx = c5.selectbox("Asignado a", range(len(recurso_opciones)), format_func=lambda i: recurso_opciones[i])
+                    if sel_idx > 0:
+                        asignado_a_id = recurso_ids[sel_idx]
+                    sla_rpta = c6.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
+                else:
+                    c4, c5 = st.columns(2)
+                    destinatario = c4.text_input("Destinatario")
+                    sla_rpta = c5.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
+                desc = st.text_area("Descripción / Notas", height=80)
+                if st.form_submit_button("Guardar Actividad"):
+                    sla_hours = _sla_to_hours(sla_key)
+                    new_act = dal.create_activity(opp["id"], team_id, user_id, {
+                        "tipo": tipo, "fecha": str(fecha), "objetivo": objetivo,
+                        "descripcion": desc, "sla_key": sla_key, "sla_hours": sla_hours,
+                        "sla_respuesta_dias": SLA_RESPUESTA[sla_rpta],
+                        "destinatario": destinatario, "assigned_to": asignado_a_id,
+                    })
+                    if asignado_a_id and new_act:
+                        assignee = dal.get_team_member(asignado_a_id)
+                        if assignee:
+                            notifications.send_assignment_notification(new_act, assignee, opp)
+                            dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
+                    st.rerun()
 
 else:
     # --- VISTAS PRINCIPALES ---
