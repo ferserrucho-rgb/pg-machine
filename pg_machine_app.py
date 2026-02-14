@@ -71,6 +71,12 @@ st.markdown("""
     .card-btn button p:nth-child(2) { font-size: 0.65rem !important; color: #94a3b8 !important; font-family: monospace !important; line-height: 1.3 !important; }
     /* Line 3+: Activity lines (smaller, muted) */
     .card-btn button p:nth-child(n+3) { font-size: 0.62rem !important; color: #64748b !important; line-height: 1.3 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; margin: 0 !important; }
+    /* User identity bar */
+    .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
+    .user-bar .user-role { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
+    /* Initials avatar badge */
+    .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -87,6 +93,18 @@ st.markdown("""
     });
     </script>
     """, unsafe_allow_html=True)
+
+def _get_initials(full_name: str) -> str:
+    """Extrae iniciales: primera letra del nombre + primera del apellido."""
+    parts = (full_name or "").strip().split()
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[-1][0]).upper()
+    elif parts:
+        return parts[0][:2].upper()
+    return "??"
+
+user_initials = _get_initials(user["full_name"])
+user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user["role"]}</span></div>'
 
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
@@ -260,6 +278,7 @@ with st.sidebar:
 # --- 4. LAYOUT ---
 if st.session_state.selected_id:
     # --- VISTA DETALLE ---
+    st.markdown(user_bar_html, unsafe_allow_html=True)
     opp = dal.get_opportunity(st.session_state.selected_id)
     if not opp:
         st.error("Oportunidad no encontrada.")
@@ -321,7 +340,8 @@ if st.session_state.selected_id:
                     estado_html = f'<i>{a["estado"]}</i>'
 
                 obj_txt = f' {a["objetivo"]}' if a.get("objetivo") else ""
-                asig_txt = f' 👤 <b>{assigned_name}</b>' if assigned_name else ""
+                asig_initials = _get_initials(assigned_name) if assigned_name else ""
+                asig_txt = f' <span class="avatar-badge">{asig_initials}</span> <b>{assigned_name}</b>' if assigned_name else ""
                 feedback_html = f'<br><b>Feedback:</b> {a["feedback"]}' if a.get("feedback") else ""
                 fecha_display = str(a.get("fecha", ""))
                 tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
@@ -495,6 +515,7 @@ else:
 
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
+        st.markdown(user_bar_html, unsafe_allow_html=True)
         all_opps = dal.get_opportunities(team_id)
         # Precargar actividades para todas las oportunidades
         all_acts_by_opp = {}
@@ -553,7 +574,8 @@ else:
                     asig_name = ""
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                         asig_name = a["assigned_profile"]["full_name"]
-                    asig = f' 👤{asig_name}' if asig_name else ""
+                    asig_init = _get_initials(asig_name) if asig_name else ""
+                    asig = f' [{asig_init}]' if asig_init else ""
                     act_paragraphs.append(f"{light}{obj}{dest}{asig} — {label}")
                 # Assemble: each \n\n creates a new <p> tag
                 card_label = header
@@ -595,10 +617,22 @@ else:
 
     # --- TAB: ACTIVIDADES ---
     with selected_tabs[1]:
+        st.markdown(user_bar_html, unsafe_allow_html=True)
+
         ALL_COLUMNS = ["Semáforo", "Estado", "Categoría", "Cuenta", "Proyecto", "Monto USD", "Canal", "Objetivo", "Destinatario", "Asignado a", "Fecha", "SLA", "SLA Respuesta (días)", "Estado Interno", "Feedback", "Descripción"]
         DEFAULT_COLUMNS = ["Semáforo", "Estado", "Categoría", "Cuenta", "Proyecto", "Canal", "Objetivo", "Destinatario", "Fecha", "Estado Interno"]
 
+        # Filter: my tasks vs team tasks
+        scope_options = ["📋 Mis tareas", "👥 Tareas del equipo", "🌐 Todas"]
+        act_scope = st.radio("Vista", scope_options, horizontal=True, key="act_scope", index=2)
+
         all_activities_full = dal.get_all_activities(team_id)
+
+        # Apply scope filter
+        if act_scope == "📋 Mis tareas":
+            all_activities_full = [a for a in all_activities_full if a.get("assigned_to") == user_id or a.get("created_by") == user_id]
+        elif act_scope == "👥 Tareas del equipo":
+            all_activities_full = [a for a in all_activities_full if a.get("assigned_to") != user_id and a.get("created_by") != user_id]
 
         all_acts_display = []
         act_refs = []
@@ -731,6 +765,7 @@ else:
     # --- TAB: ADMIN (solo para admins) ---
     if is_admin():
         with selected_tabs[2]:
+            st.markdown(user_bar_html, unsafe_allow_html=True)
             admin_tab1, admin_tab2, admin_tab3 = st.tabs(["👥 Equipo", "⚙️ Configuración", "📨 Invitaciones"])
 
             # --- EQUIPO ---
