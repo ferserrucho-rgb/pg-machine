@@ -57,11 +57,15 @@ st.markdown("""
         box-shadow: 0 3px 12px rgba(26,115,232,0.18) !important;
     }
     .card-btn button div[data-testid="stMarkdownContainer"] { text-align: left !important; }
-    .card-btn button p { text-align: left !important; margin: 0 0 1px 0 !important; line-height: 1.45 !important; }
-    .card-btn button p:first-child { font-size: 0.84rem !important; font-weight: 600 !important; color: #1e293b !important; }
-    .card-btn button p:first-child em { color: #8b5cf6 !important; font-size: 0.65rem !important; font-weight: 600 !important; }
-    .card-btn button p:first-child code { color: #16a34a !important; font-size: 0.92rem !important; font-weight: 800 !important; background: none !important; padding: 0 !important; }
-    .card-btn button p:last-child:not(:first-child) { font-size: 0.7rem !important; color: #64748b !important; line-height: 1.55 !important; }
+    .card-btn button p { text-align: left !important; margin: 0 0 3px 0 !important; line-height: 1.4 !important; }
+    /* Line 1: Project name + stage + amount */
+    .card-btn button p:first-child { font-size: 0.85rem !important; font-weight: 600 !important; color: #1e293b !important; }
+    .card-btn button p:first-child em { color: #8b5cf6 !important; font-size: 0.65rem !important; font-weight: 600 !important; font-style: italic !important; }
+    .card-btn button p:first-child code { color: #16a34a !important; font-size: 0.93rem !important; font-weight: 800 !important; background: none !important; padding: 0 !important; border: none !important; }
+    /* Line 2: ID + Close date (grey monospace) */
+    .card-btn button p:nth-child(2) { font-size: 0.65rem !important; color: #94a3b8 !important; font-family: monospace !important; line-height: 1.3 !important; }
+    /* Line 3+: Activity lines (small, darker) */
+    .card-btn button p:nth-child(n+3) { font-size: 0.72rem !important; color: #475569 !important; line-height: 1.5 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -502,20 +506,20 @@ else:
             for o in opps:
                 opp_acts = all_acts_by_opp.get(o["id"], [])
                 monto_val = float(o.get("monto") or 0)
-                # First line: project, stage, amount
+                # Paragraph 1: project, stage, amount
                 header = f"**{o['proyecto']}**"
                 if o.get("stage"):
                     header += f" *{o['stage']}*"
-                header += f" · `USD {monto_val:,.0f}`"
-                # Details: metadata + activities
-                details_parts = []
-                meta = []
+                header += f" `USD {monto_val:,.0f}`"
+                # Paragraph 2: metadata (ID + close date)
+                meta_parts = []
                 if o.get("opp_id"):
-                    meta.append(f"ID: {o['opp_id']}")
+                    meta_parts.append(f"ID: {o['opp_id']}")
                 if o.get("close_date"):
-                    meta.append(f"Cierre: {o['close_date']}")
-                if meta:
-                    details_parts.append(" · ".join(meta))
+                    meta_parts.append(f"Cierre: {o['close_date']}")
+                meta_line = "  \n".join(meta_parts) if meta_parts else ""
+                # Paragraph 3+: each activity as its own paragraph
+                act_paragraphs = []
                 for a in opp_acts:
                     light, label = _traffic_light(a)
                     obj = f': {a["objetivo"]}' if a.get("objetivo") else ""
@@ -524,10 +528,13 @@ else:
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                         asig_name = a["assigned_profile"]["full_name"]
                     asig = f' 👤{asig_name}' if asig_name else ""
-                    details_parts.append(f"{light} {a['tipo']}{obj}{dest}{asig} — {label}")
+                    act_paragraphs.append(f"{light} {a['tipo']}{obj}{dest}{asig} — {label}")
+                # Assemble: each \n\n creates a new <p> tag
                 card_label = header
-                if details_parts:
-                    card_label += "\n\n" + "  \n".join(details_parts)
+                if meta_line:
+                    card_label += "\n\n" + meta_line
+                for ap in act_paragraphs:
+                    card_label += "\n\n" + ap
                 st.markdown('<div class="card-btn">', unsafe_allow_html=True)
                 if st.button(card_label, key=f"g_{o['id']}", use_container_width=True):
                     st.session_state.selected_id = o['id']
