@@ -24,9 +24,8 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-    section.main > div, section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
-    .block-container, [data-testid="stAppViewBlockContainer"] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
-    [data-testid="stAppViewContainer"] > section > div { max-width: 100% !important; }
+    section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
+    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
     .cat-header { background: #1e293b; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: 700; margin-bottom: 15px; }
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .badge { float:right; font-size:0.6rem; font-weight:bold; padding:2px 6px; border-radius:8px; text-transform: uppercase; border: 1.2px solid; }
@@ -50,28 +49,21 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card — flat bottom merges with button strip below */
-    .pgm-card-wrap { background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: border-color 0.15s, box-shadow 0.15s; }
+    /* Clickable card */
+    .pgm-card-wrap { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
     .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
-    /* Button styled as subtle card bottom via CSS :has() — no JS needed */
+    /* Transparent button overlaps bottom of card — large click area */
+    div:has(> div .pgm-card-wrap) + div,
+    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div,
+    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div {
+        margin-top: -70px !important; position: relative !important; z-index: 2 !important;
+    }
     div:has(> div .pgm-card-wrap) + div button,
     div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div button,
     [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div button {
-        font-size: 0.5rem !important; color: #cbd5e1 !important; padding: 2px 0 !important;
-        min-height: 0 !important; height: auto !important; line-height: 1 !important;
-        border: 1px solid #e2e8f0 !important; border-top: none !important;
-        border-radius: 0 0 8px 8px !important; background: #fafbfc !important;
-        margin-top: -4px !important; margin-bottom: 6px !important; cursor: pointer !important;
-    }
-    div:has(> div .pgm-card-wrap) + div button:hover,
-    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div button:hover,
-    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div button:hover {
-        color: #1a73e8 !important; background: #eff6ff !important; border-color: #1a73e8 !important;
-    }
-    /* Highlight card when hovering button strip */
-    div:has(> div .pgm-card-wrap):has(+ div button:hover) .pgm-card-wrap,
-    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap):has(+ div button:hover) .pgm-card-wrap {
-        border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18);
+        opacity: 0 !important; min-height: 70px !important; height: 70px !important;
+        width: 100% !important; cursor: pointer !important; padding: 0 !important;
+        border: none !important; background: transparent !important; margin-bottom: 6px !important;
     }
     /* Prevent tab label truncation */
     [data-baseweb="tab-list"] { overflow: visible !important; }
@@ -92,18 +84,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown("""
-    <script>
-    function pgmFixLayout() {
-        document.querySelectorAll('section.main > div').forEach(el => {
-            if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
-        });
-    }
-    const observer = new MutationObserver(pgmFixLayout);
-    observer.observe(document.body, {childList: true, subtree: true});
-    pgmFixLayout();
-    </script>
-    """, unsafe_allow_html=True)
 
 
 def _get_initials(full_name: str) -> str:
