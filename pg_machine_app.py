@@ -1095,12 +1095,32 @@ else:
                         else:
                             st.success("Todos los roles cubiertos")
 
-                        # Tabla de miembros
+                        # Tabla de miembros (editable)
                         if t_members:
                             for m in t_members:
                                 m_role_label = ROLE_LABELS.get(m["role"], m["role"])
                                 status_icon = "🟢" if m.get("active", True) else "🔴"
-                                st.markdown(f"{status_icon} **{m['full_name']}** — {m_role_label} {'· ' + m['specialty'] if m.get('specialty') else ''}")
+                                with st.expander(f"{status_icon} {m['full_name']} — {m_role_label} {'(' + m['specialty'] + ')' if m.get('specialty') else ''}"):
+                                    with st.form(f"edit_tm_{t['id']}_{m['id']}"):
+                                        tm_c1, tm_c2 = st.columns(2)
+                                        tm_name = tm_c1.text_input("Nombre", value=m["full_name"], key=f"tmn_{t['id']}_{m['id']}")
+                                        tm_email = tm_c2.text_input("Email", value=m.get("email", ""), key=f"tme_{t['id']}_{m['id']}")
+                                        tm_c3, tm_c4, tm_c5 = st.columns(3)
+                                        tm_role = tm_c3.selectbox("Rol", ALL_ROLES,
+                                            format_func=lambda r: ROLE_LABELS.get(r, r),
+                                            index=ALL_ROLES.index(m["role"]) if m["role"] in ALL_ROLES else len(ALL_ROLES) - 1,
+                                            key=f"tmr_{t['id']}_{m['id']}")
+                                        tm_specialty = tm_c4.text_input("Especialidad", value=m.get("specialty", ""), key=f"tms_{t['id']}_{m['id']}")
+                                        tm_phone = tm_c5.text_input("Teléfono", value=m.get("phone", ""), key=f"tmp_{t['id']}_{m['id']}")
+                                        tm_active = st.checkbox("Activo", value=m.get("active", True), key=f"tma_{t['id']}_{m['id']}")
+                                        if st.form_submit_button("💾 Guardar"):
+                                            dal.update_team_member(m["id"], {
+                                                "full_name": tm_name, "role": tm_role,
+                                                "specialty": tm_specialty, "phone": tm_phone,
+                                                "active": tm_active,
+                                            })
+                                            st.success("Miembro actualizado.")
+                                            st.rerun()
 
                             # Mover miembro a otro equipo
                             if len(all_teams) > 1:
