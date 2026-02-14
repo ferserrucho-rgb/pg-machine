@@ -5,6 +5,25 @@ Login, registro, gestión de sesión con Supabase Auth.
 import streamlit as st
 from supabase import create_client, Client
 
+# --- Roles del sistema ---
+ALL_ROLES = [
+    "admin", "vp", "account_manager", "regional_sales_manager",
+    "partner_manager", "regional_partner_manager", "presales_manager", "presales",
+]
+
+JOINABLE_ROLES = [r for r in ALL_ROLES if r != "admin"]
+
+ROLE_LABELS = {
+    "admin": "Admin",
+    "vp": "VP",
+    "account_manager": "Account Manager",
+    "regional_sales_manager": "Regional Sales Manager",
+    "partner_manager": "Partner Manager",
+    "regional_partner_manager": "Regional Partner Manager",
+    "presales_manager": "Presales Manager",
+    "presales": "Presales",
+}
+
 def _get_supabase() -> Client:
     """Retorna cliente Supabase singleton."""
     if "supabase_client" not in st.session_state:
@@ -129,8 +148,11 @@ def _do_register(email: str, password: str, full_name: str, team_name: str):
             return "Este email ya está registrado."
         return f"Error en registro: {msg}"
 
-def _do_join_team(email: str, password: str, full_name: str, team_id: str):
+def _do_join_team(email: str, password: str, full_name: str, team_id: str, role: str = "presales"):
     """Registra un usuario que se une a un equipo existente."""
+    # Validar rol: nunca permitir admin, solo roles válidos
+    if role not in JOINABLE_ROLES:
+        role = "presales"
     sb = _get_supabase()
     try:
         resp = sb.auth.sign_up({"email": email, "password": password})
@@ -152,7 +174,7 @@ def _do_join_team(email: str, password: str, full_name: str, team_id: str):
             "team_id": team_id,
             "full_name": full_name,
             "email": email,
-            "role": "presales",
+            "role": role,
         }).execute()
 
         login_resp = sb.auth.sign_in_with_password({"email": email, "password": password})
@@ -222,12 +244,19 @@ def show_auth_page():
                 j_email = st.text_input("Email", key="join_email")
                 j_password = st.text_input("Contraseña", type="password", key="join_password")
                 j_team_id = st.text_input("ID del equipo", key="join_team_id")
+                j_role = st.selectbox(
+                    "Rol",
+                    JOINABLE_ROLES,
+                    format_func=lambda r: ROLE_LABELS.get(r, r),
+                    index=JOINABLE_ROLES.index("presales"),
+                    key="join_role",
+                )
                 submitted = st.form_submit_button("Unirse al Equipo", use_container_width=True)
                 if submitted:
                     if not all([j_name, j_email, j_password, j_team_id]):
                         st.error("Completa todos los campos.")
                     else:
-                        err = _do_join_team(j_email, j_password, j_name, j_team_id)
+                        err = _do_join_team(j_email, j_password, j_name, j_team_id, j_role)
                         if err:
                             st.error(err)
                         else:
@@ -254,5 +283,16 @@ def is_admin() -> bool:
     return get_current_user().get("role") == "admin"
 
 def is_manager_or_admin() -> bool:
-    """Retorna True si el usuario actual es admin o manager."""
-    return get_current_user().get("role") in ("admin", "manager")
+    """Retorna True si el usuario actual es admin o manager (legacy)."""
+    return get_current_user().get("role") in ("admin", "manager", "account_manager")
+
+def has_control_access() -> bool:
+    """Retorna True si el usuario tiene acceso al Panel de Control."""
+    return get_current_user().get("role") in (
+        "admin", "vp", "account_manager", "regional_sales_manager",
+        "partner_manager", "regional_partner_manager", "presales_manager",
+    )
+
+def can_see_all_opportunities() -> bool:
+    """Retorna True si el usuario puede ver todas las oportunidades del equipo."""
+    return get_current_user().get("role") in ("admin", "vp")

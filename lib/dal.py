@@ -22,6 +22,39 @@ def get_opportunities(team_id: str) -> list[dict]:
         .execute()
     return resp.data or []
 
+def get_opportunities_for_user(team_id: str, user_id: str, role: str) -> list[dict]:
+    """Obtiene oportunidades según el rol del usuario.
+    Admin/VP ven todas; otros ven las que poseen o tienen actividades asignadas."""
+    if role in ("admin", "vp"):
+        return get_opportunities(team_id)
+    sb = get_supabase()
+    # Oportunidades propias
+    own_resp = sb.table("opportunities") \
+        .select("*") \
+        .eq("team_id", team_id) \
+        .eq("owner_id", user_id) \
+        .order("monto", desc=True) \
+        .execute()
+    own_opps = own_resp.data or []
+    own_ids = {o["id"] for o in own_opps}
+    # Oportunidades con actividades asignadas al usuario
+    act_resp = sb.table("activities") \
+        .select("opportunity_id") \
+        .eq("team_id", team_id) \
+        .eq("assigned_to", user_id) \
+        .execute()
+    assigned_opp_ids = {a["opportunity_id"] for a in (act_resp.data or [])} - own_ids
+    extra_opps = []
+    if assigned_opp_ids:
+        extra_resp = sb.table("opportunities") \
+            .select("*") \
+            .in_("id", list(assigned_opp_ids)) \
+            .order("monto", desc=True) \
+            .execute()
+        extra_opps = extra_resp.data or []
+    return own_opps + extra_opps
+
+
 def get_opportunity(opp_id: str) -> dict | None:
     """Obtiene una oportunidad por ID."""
     sb = get_supabase()
@@ -112,6 +145,51 @@ def get_all_activities(team_id: str) -> list[dict]:
         .order("fecha", desc=True) \
         .execute()
     return resp.data or []
+
+def get_all_activities_for_user(team_id: str, user_id: str, role: str) -> list[dict]:
+    """Obtiene actividades según el rol del usuario.
+    Admin/VP ven todas; otros ven actividades de oportunidades propias + asignadas/creadas por ellos."""
+    if role in ("admin", "vp"):
+        return get_all_activities(team_id)
+    sb = get_supabase()
+    # IDs de oportunidades propias
+    own_resp = sb.table("opportunities") \
+        .select("id") \
+        .eq("team_id", team_id) \
+        .eq("owner_id", user_id) \
+        .execute()
+    own_opp_ids = [o["id"] for o in (own_resp.data or [])]
+    # Actividades de oportunidades propias
+    own_acts = []
+    if own_opp_ids:
+        own_acts_resp = sb.table("activities") \
+            .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)") \
+            .in_("opportunity_id", own_opp_ids) \
+            .order("fecha", desc=True) \
+            .execute()
+        own_acts = own_acts_resp.data or []
+    own_act_ids = {a["id"] for a in own_acts}
+    # Actividades asignadas a o creadas por el usuario (que no estén ya incluidas)
+    assigned_resp = sb.table("activities") \
+        .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)") \
+        .eq("team_id", team_id) \
+        .eq("assigned_to", user_id) \
+        .order("fecha", desc=True) \
+        .execute()
+    created_resp = sb.table("activities") \
+        .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)") \
+        .eq("team_id", team_id) \
+        .eq("created_by", user_id) \
+        .order("fecha", desc=True) \
+        .execute()
+    extra_acts = []
+    seen = set(own_act_ids)
+    for a in (assigned_resp.data or []) + (created_resp.data or []):
+        if a["id"] not in seen:
+            extra_acts.append(a)
+            seen.add(a["id"])
+    return own_acts + extra_acts
+
 
 def create_activity(opp_id: str, team_id: str, created_by: str, data: dict) -> dict:
     """Crea una nueva actividad."""
@@ -307,6 +385,17 @@ def mark_notification_sent(notif_id: str):
 # TEAM INFO
 # ============================================================
 
+def _get_admin_supabase():
+    """Retorna cliente Supabase con service key para bypass de RLS."""
+    from supabase import create_client
+    try:
+        return create_client(
+            st.secrets["SUPABASE_URL"],
+            st.secrets["SUPABASE_SERVICE_KEY"]
+        )
+    except Exception:
+        return get_supabase()
+
 def get_team(team_id: str) -> dict | None:
     """Obtiene info del equipo."""
     sb = get_supabase()
@@ -316,3 +405,51 @@ def get_team(team_id: str) -> dict | None:
         .maybe_single() \
         .execute()
     return resp.data
+
+def get_all_teams() -> list[dict]:
+    """Obtiene todos los equipos (requiere service key para bypass RLS)."""
+    sb = _get_admin_supabase()
+    resp = sb.table("teams") \
+        .select("*") \
+        .order("name") \
+        .execute()
+    return resp.data or []
+
+def create_team(name: str) -> dict:
+    """Crea un nuevo equipo."""
+    sb = _get_admin_supabase()
+    resp = sb.table("teams").insert({"name": name}).execute()
+    return resp.data[0] if resp.data else {}
+
+def update_team(team_id: str, data: dict) -> dict:
+    """Actualiza info de un equipo."""
+    sb = _get_admin_supabase()
+    resp = sb.table("teams") \
+        .update(data) \
+        .eq("id", team_id) \
+        .execute()
+    return resp.data[0] if resp.data else {}
+
+def delete_team(team_id: str):
+    """Elimina un equipo y todos sus datos (cascade)."""
+    sb = _get_admin_supabase()
+    sb.table("teams").delete().eq("id", team_id).execute()
+
+def get_all_members_for_team(team_id: str) -> list[dict]:
+    """Obtiene todos los miembros de un equipo específico (bypass RLS)."""
+    sb = _get_admin_supabase()
+    resp = sb.table("profiles") \
+        .select("*") \
+        .eq("team_id", team_id) \
+        .order("full_name") \
+        .execute()
+    return resp.data or []
+
+def move_member_to_team(profile_id: str, new_team_id: str) -> dict:
+    """Mueve un miembro a otro equipo."""
+    sb = _get_admin_supabase()
+    resp = sb.table("profiles") \
+        .update({"team_id": new_team_id}) \
+        .eq("id", profile_id) \
+        .execute()
+    return resp.data[0] if resp.data else {}

@@ -5,7 +5,7 @@ from collections import OrderedDict
 from datetime import datetime, date, timedelta
 
 # --- AUTH GATE (must be before any other UI) ---
-from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_admin, logout, get_supabase
+from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_admin, has_control_access, can_see_all_opportunities, logout, get_supabase, ALL_ROLES, ROLE_LABELS
 from lib import dal
 from lib import notifications
 
@@ -68,6 +68,29 @@ st.markdown("""
     .user-bar .user-role { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
+    /* --- Mobile responsive --- */
+    @media (max-width: 768px) {
+        .block-container { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+        section.main > div[style] { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+        [data-testid="column"] { width: 100% !important; flex: 100% !important; min-width: 100% !important; }
+        button { min-height: 48px !important; font-size: 0.9rem !important; }
+        input, select, textarea { font-size: 16px !important; }
+        .pgm-card-wrap { padding: 8px 10px; }
+        .pgm-card-wrap .opp-header { font-size: 0.8rem; }
+        .pgm-card-wrap .amount { font-size: 0.85rem; }
+        .account-group { padding: 8px; margin-bottom: 8px; }
+        .user-bar { font-size: 0.7rem; padding: 5px 10px; }
+        .hist-card { padding: 10px; }
+        .cat-header { font-size: 0.85rem; padding: 8px; }
+    }
+    @media (max-width: 480px) {
+        .pgm-card-wrap .opp-header { font-size: 0.75rem; }
+        .pgm-card-wrap .amount { font-size: 0.8rem; }
+        .pgm-card-wrap .act-line { font-size: 0.55rem; }
+        .account-name { font-size: 0.75rem; }
+        .account-total { font-size: 0.7rem; }
+        .user-bar { font-size: 0.65rem; }
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -89,8 +112,20 @@ st.markdown("""
     const observer = new MutationObserver(pgmFixLayout);
     observer.observe(document.body, {childList: true, subtree: true, attributes: true});
     pgmFixLayout();
+    // Mobile detection — set _mob query param
+    (function() {
+        if (window.innerWidth <= 768) {
+            const params = new URLSearchParams(window.location.search);
+            if (!params.has('_mob')) {
+                params.set('_mob', '1');
+                window.history.replaceState({}, '', '?' + params.toString());
+            }
+        }
+    })();
     </script>
     """, unsafe_allow_html=True)
+
+is_mobile = st.query_params.get("_mob") == "1"
 
 def _get_initials(full_name: str) -> str:
     """Extrae iniciales: primera letra del nombre + primera del apellido."""
@@ -102,7 +137,8 @@ def _get_initials(full_name: str) -> str:
     return "??"
 
 user_initials = _get_initials(user["full_name"])
-user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user["role"]}</span></div>'
+user_role_label = ROLE_LABELS.get(user["role"], user["role"])
+user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span></div>'
 
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
@@ -214,7 +250,7 @@ def _traffic_light(act):
 # --- 3. SIDEBAR ---
 with st.sidebar:
     st.title("🚀 PG Machine")
-    st.caption(f"👤 {user['full_name']} ({user['role']})")
+    st.caption(f"👤 {user['full_name']} ({user_role_label})")
     if st.button("Cerrar Sesión", key="logout_btn"):
         logout()
 
@@ -283,7 +319,7 @@ if st.session_state.selected_id:
         st.session_state.selected_id = None
         st.rerun()
 
-    l_col, r_col = st.columns([0.25, 0.75])
+    l_col, r_col = st.columns([1, 1] if is_mobile else [0.25, 0.75])
     with l_col:
         opp_id_html = f'<span class="opp-id">ID: {opp.get("opp_id","")}</span>' if opp.get("opp_id") else ""
         close_html = f'<span class="opp-id">Cierre: {opp.get("close_date","")}</span>' if opp.get("close_date") else ""
@@ -506,7 +542,7 @@ if st.session_state.selected_id:
 else:
     # --- VISTAS PRINCIPALES ---
     tabs = ["📊 Tablero", "📋 Actividades"]
-    if is_manager_or_admin():
+    if has_control_access():
         tabs.append("📈 Control")
     tabs.append("👥 Equipo")
 
@@ -515,10 +551,16 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        all_opps = dal.get_opportunities(team_id)
+        if can_see_all_opportunities():
+            all_opps = dal.get_opportunities(team_id)
+        else:
+            all_opps = dal.get_opportunities_for_user(team_id, user_id, user["role"])
         # Precargar actividades para todas las oportunidades
         all_acts_by_opp = {}
-        all_activities = dal.get_all_activities(team_id)
+        if can_see_all_opportunities():
+            all_activities = dal.get_all_activities(team_id)
+        else:
+            all_activities = dal.get_all_activities_for_user(team_id, user_id, user["role"])
         for act in all_activities:
             all_acts_by_opp.setdefault(act["opportunity_id"], []).append(act)
 
@@ -584,29 +626,45 @@ else:
             st.markdown('</div>', unsafe_allow_html=True)
 
         if focused:
-            # Focused mode: single category in 2 columns
+            # Focused mode: single category
             cat = visible_cats[0]
             items = [o for o in all_opps if o['categoria'] == cat]
             accounts = OrderedDict()
             for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
                 accounts.setdefault(o['cuenta'], []).append(o)
             account_list = list(accounts.items())
-            col_left, col_right = st.columns(2)
-            for idx, (cuenta, opps) in enumerate(account_list):
-                with col_left if idx % 2 == 0 else col_right:
+            if is_mobile:
+                for cuenta, opps in account_list:
                     _render_account_group(cuenta, opps, all_acts_by_opp)
-        else:
-            # Normal mode: one column per category
-            cols = st.columns(len(visible_cats))
-            for i, col in enumerate(cols):
-                with col:
-                    cat = visible_cats[i]
-                    items = [o for o in all_opps if o['categoria'] == cat]
-                    accounts = OrderedDict()
-                    for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
-                        accounts.setdefault(o['cuenta'], []).append(o)
-                    for cuenta, opps in accounts.items():
+            else:
+                col_left, col_right = st.columns(2)
+                for idx, (cuenta, opps) in enumerate(account_list):
+                    with col_left if idx % 2 == 0 else col_right:
                         _render_account_group(cuenta, opps, all_acts_by_opp)
+        else:
+            if is_mobile:
+                # Mobile: single column, categories stacked
+                for cat in visible_cats:
+                    items = [o for o in all_opps if o['categoria'] == cat]
+                    if items:
+                        st.markdown(f'<div class="cat-header">{cat}</div>', unsafe_allow_html=True)
+                        accounts = OrderedDict()
+                        for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
+                            accounts.setdefault(o['cuenta'], []).append(o)
+                        for cuenta, opps in accounts.items():
+                            _render_account_group(cuenta, opps, all_acts_by_opp)
+            else:
+                # Desktop: one column per category
+                cols = st.columns(len(visible_cats))
+                for i, col in enumerate(cols):
+                    with col:
+                        cat = visible_cats[i]
+                        items = [o for o in all_opps if o['categoria'] == cat]
+                        accounts = OrderedDict()
+                        for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
+                            accounts.setdefault(o['cuenta'], []).append(o)
+                        for cuenta, opps in accounts.items():
+                            _render_account_group(cuenta, opps, all_acts_by_opp)
 
     # --- TAB: ACTIVIDADES ---
     with selected_tabs[1]:
@@ -619,7 +677,10 @@ else:
         scope_options = ["📋 Mis tareas", "👥 Tareas del equipo", "🌐 Todas"]
         act_scope = st.radio("Vista", scope_options, horizontal=True, key="act_scope", index=2)
 
-        all_activities_full = dal.get_all_activities(team_id)
+        if can_see_all_opportunities():
+            all_activities_full = dal.get_all_activities(team_id)
+        else:
+            all_activities_full = dal.get_all_activities_for_user(team_id, user_id, user["role"])
 
         # Apply scope filter
         if act_scope == "📋 Mis tareas":
@@ -755,8 +816,8 @@ else:
                         st.session_state.pop("edit_act_tab_idx", None)
                         st.rerun()
 
-    # --- TAB: CONTROL (managers y admins) ---
-    if is_manager_or_admin():
+    # --- TAB: CONTROL (admin, vp, y managers) ---
+    if has_control_access():
         with selected_tabs[2]:
             st.markdown(user_bar_html, unsafe_allow_html=True)
             st.markdown("### 📈 Panel de Control — RSM")
@@ -923,17 +984,15 @@ else:
                     st.bar_chart(df_resp_chart.set_index("Miembro"), color=["#16a34a"])
 
     # --- TAB: EQUIPO (todos los roles) ---
-    equipo_tab_idx = 3 if is_manager_or_admin() else 2
+    equipo_tab_idx = 3 if has_control_access() else 2
     with selected_tabs[equipo_tab_idx]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
         team_info = dal.get_team(team_id)
 
         # Sub-tabs según rol
         if is_admin():
-            equipo_subtabs = st.tabs(["👥 Miembros", "⚙️ Configuración", "📨 Invitaciones"])
-        elif is_manager_or_admin():  # manager
-            equipo_subtabs = st.tabs(["👥 Miembros", "📨 Invitaciones"])
-        else:  # presales
+            equipo_subtabs = st.tabs(["👥 Miembros", "🏢 Equipos", "⚙️ Configuración", "📨 Invitaciones"])
+        else:
             equipo_subtabs = st.tabs(["👥 Miembros", "📨 Invitaciones"])
 
         # --- MIEMBROS ---
@@ -944,17 +1003,19 @@ else:
             if team_info:
                 st.caption(f"Equipo: **{team_info['name']}** — ID: `{team_id}`")
 
-            if is_manager_or_admin():
-                # Admin y Manager: edición completa
+            if is_admin():
+                # Admin: edición completa con todos los roles
                 for m in members:
-                    with st.expander(f"{'🟢' if m['active'] else '🔴'} {m['full_name']} — {m['role']} {'(' + m['specialty'] + ')' if m.get('specialty') else ''}"):
+                    m_role_label = ROLE_LABELS.get(m['role'], m['role'])
+                    with st.expander(f"{'🟢' if m['active'] else '🔴'} {m['full_name']} — {m_role_label} {'(' + m['specialty'] + ')' if m.get('specialty') else ''}"):
                         with st.form(f"edit_member_{m['id']}"):
                             mc1, mc2 = st.columns(2)
                             m_name = mc1.text_input("Nombre", value=m["full_name"], key=f"mn_{m['id']}")
                             m_email = mc2.text_input("Email", value=m["email"], key=f"me_{m['id']}")
                             mc3, mc4, mc5 = st.columns(3)
-                            m_role = mc3.selectbox("Rol", ["admin", "manager", "presales"],
-                                index=["admin", "manager", "presales"].index(m["role"]) if m["role"] in ["admin", "manager", "presales"] else 2,
+                            m_role = mc3.selectbox("Rol", ALL_ROLES,
+                                format_func=lambda r: ROLE_LABELS.get(r, r),
+                                index=ALL_ROLES.index(m["role"]) if m["role"] in ALL_ROLES else len(ALL_ROLES) - 1,
                                 key=f"mr_{m['id']}")
                             m_specialty = mc4.text_input("Especialidad", value=m.get("specialty", ""), key=f"ms_{m['id']}")
                             m_phone = mc5.text_input("Teléfono", value=m.get("phone", ""), key=f"mp_{m['id']}")
@@ -968,16 +1029,120 @@ else:
                                 st.success("Miembro actualizado.")
                                 st.rerun()
             else:
-                # Presales: vista de solo lectura
+                # Otros roles: vista de solo lectura
                 active_members = [m for m in members if m["active"]]
+                role_emojis = {"admin": "🔑", "vp": "🏛️", "account_manager": "📊", "regional_sales_manager": "🌎", "partner_manager": "🤝", "regional_partner_manager": "🌐", "presales_manager": "📋", "presales": "💼"}
                 for m in active_members:
-                    role_emoji = {"admin": "🔑", "manager": "📊", "presales": "💼"}.get(m["role"], "👤")
+                    role_emoji = role_emojis.get(m["role"], "👤")
+                    m_role_label = ROLE_LABELS.get(m['role'], m['role'])
                     specialty_txt = f" · {m['specialty']}" if m.get("specialty") else ""
-                    st.markdown(f"{role_emoji} **{m['full_name']}** — {m['role']}{specialty_txt}")
+                    st.markdown(f"{role_emoji} **{m['full_name']}** — {m_role_label}{specialty_txt}")
+
+        # --- EQUIPOS (solo admin) ---
+        if is_admin():
+            with equipo_subtabs[1]:
+                st.subheader("Gestión de Equipos")
+
+                # --- Editar equipo actual ---
+                st.markdown("#### Equipo Actual")
+                with st.form("edit_team_form"):
+                    et_name = st.text_input("Nombre del equipo", value=team_info["name"] if team_info else "", key="edit_team_name")
+                    if st.form_submit_button("💾 Guardar Nombre"):
+                        if et_name.strip():
+                            dal.update_team(team_id, {"name": et_name.strip()})
+                            st.success("Nombre del equipo actualizado.")
+                            st.rerun()
+                        else:
+                            st.error("El nombre no puede estar vacío.")
+
+                st.divider()
+
+                # --- Crear nuevo equipo ---
+                st.markdown("#### Crear Nuevo Equipo")
+                with st.form("create_team_form"):
+                    new_team_name = st.text_input("Nombre del nuevo equipo", key="new_team_name")
+                    if st.form_submit_button("➕ Crear Equipo"):
+                        if new_team_name.strip():
+                            new_team = dal.create_team(new_team_name.strip())
+                            if new_team:
+                                st.success(f"Equipo **{new_team_name}** creado. ID: `{new_team['id']}`")
+                                st.rerun()
+                            else:
+                                st.error("No se pudo crear el equipo.")
+                        else:
+                            st.error("Ingresa un nombre para el equipo.")
+
+                st.divider()
+
+                # --- Lista de todos los equipos con cobertura de roles ---
+                st.markdown("#### Todos los Equipos")
+                all_teams = dal.get_all_teams()
+                for t in all_teams:
+                    is_current = t["id"] == team_id
+                    team_label = f"{'🔹 ' if is_current else ''}{t['name']}"
+                    t_members = dal.get_all_members_for_team(t["id"])
+                    active_members = [m for m in t_members if m.get("active", True)]
+                    filled_roles = {m["role"] for m in active_members}
+                    missing_roles = [r for r in ALL_ROLES if r not in filled_roles]
+
+                    with st.expander(f"{team_label} — {len(active_members)} miembros" + (" (actual)" if is_current else "")):
+                        st.caption(f"ID: `{t['id']}`")
+
+                        # Cobertura de roles
+                        if missing_roles:
+                            missing_labels = ", ".join(ROLE_LABELS.get(r, r) for r in missing_roles)
+                            st.warning(f"Roles sin cubrir: {missing_labels}")
+                        else:
+                            st.success("Todos los roles cubiertos")
+
+                        # Tabla de miembros
+                        if t_members:
+                            for m in t_members:
+                                m_role_label = ROLE_LABELS.get(m["role"], m["role"])
+                                status_icon = "🟢" if m.get("active", True) else "🔴"
+                                st.markdown(f"{status_icon} **{m['full_name']}** — {m_role_label} {'· ' + m['specialty'] if m.get('specialty') else ''}")
+
+                            # Mover miembro a otro equipo
+                            if len(all_teams) > 1:
+                                st.markdown("---")
+                                st.markdown("**Mover miembro a otro equipo:**")
+                                member_options = {m["id"]: m["full_name"] for m in t_members}
+                                other_teams = {ot["id"]: ot["name"] for ot in all_teams if ot["id"] != t["id"]}
+                                with st.form(f"move_member_{t['id']}"):
+                                    mm_c1, mm_c2 = st.columns(2)
+                                    member_ids = list(member_options.keys())
+                                    member_names = list(member_options.values())
+                                    sel_member = mm_c1.selectbox("Miembro", member_ids, format_func=lambda mid: member_options[mid], key=f"sel_mm_{t['id']}")
+                                    dest_team_ids = list(other_teams.keys())
+                                    sel_dest = mm_c2.selectbox("Equipo destino", dest_team_ids, format_func=lambda tid: other_teams[tid], key=f"sel_dt_{t['id']}")
+                                    if st.form_submit_button("🔀 Mover"):
+                                        dal.move_member_to_team(sel_member, sel_dest)
+                                        st.success(f"Miembro movido a **{other_teams[sel_dest]}**.")
+                                        st.rerun()
+                        else:
+                            st.info("Sin miembros.")
+
+                        # Eliminar equipo (solo si no es el actual y no tiene miembros)
+                        if not is_current:
+                            if not t_members:
+                                if st.button(f"🗑️ Eliminar equipo", key=f"del_team_{t['id']}"):
+                                    st.session_state[f"confirm_del_team_{t['id']}"] = True
+                                if st.session_state.get(f"confirm_del_team_{t['id']}"):
+                                    st.warning(f"Eliminar el equipo **{t['name']}**?")
+                                    dtc1, dtc2 = st.columns(2)
+                                    if dtc1.button("Confirmar", key=f"cdel_team_y_{t['id']}", use_container_width=True):
+                                        dal.delete_team(t["id"])
+                                        st.session_state.pop(f"confirm_del_team_{t['id']}", None)
+                                        st.rerun()
+                                    if dtc2.button("Cancelar", key=f"cdel_team_n_{t['id']}", use_container_width=True):
+                                        st.session_state.pop(f"confirm_del_team_{t['id']}", None)
+                                        st.rerun()
+                            else:
+                                st.caption("Para eliminar este equipo, primero mueve o elimina todos sus miembros.")
 
         # --- CONFIGURACIÓN (solo admin) ---
         if is_admin():
-            with equipo_subtabs[1]:
+            with equipo_subtabs[2]:
                 st.subheader("Configuración del Equipo")
 
                 # SLA Opciones
@@ -1027,15 +1192,15 @@ else:
                         st.error(f"JSON inválido: {e}")
 
         # --- INVITACIONES ---
-        inv_subtab_idx = 2 if is_admin() else 1
+        inv_subtab_idx = 3 if is_admin() else 1
         with equipo_subtabs[inv_subtab_idx]:
             st.subheader("Invitar Miembros")
 
             app_url = st.secrets.get("APP_URL", "https://your-app.streamlit.app")
             team_name = team_info['name'] if team_info else 'Equipo'
 
-            if not is_manager_or_admin():
-                st.info("Puedes invitar a otros miembros presales a unirse al equipo.")
+            if not has_control_access():
+                st.info("Puedes invitar a otros miembros a unirse al equipo.")
 
             st.markdown(f"""
 **Pasos para invitar a un nuevo miembro:**
