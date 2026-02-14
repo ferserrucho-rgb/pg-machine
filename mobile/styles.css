@@ -235,3 +235,92 @@ body {
 }
 .loading-overlay.visible { display: flex; }
 .loading-overlay .spinner { border-color: rgba(26,115,232,0.3); border-top-color: var(--primary); width: 36px; height: 36px; }
+
+/* ============ CONTROL BUTTON ============ */
+.btn-control {
+  background: var(--primary); border: none; color: white;
+  padding: 6px 12px; border-radius: 6px; font-size: 0.7rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+
+/* ============ CONTROL SCREEN ============ */
+.ctrl-title-bar {
+  background: var(--primary); color: white; text-align: center;
+  padding: 10px 16px; font-size: 0.85rem; font-weight: 700;
+}
+.ctrl-content { padding: 12px; overflow-y: auto; flex: 1; padding-bottom: 80px; }
+
+.ctrl-metrics {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;
+}
+.ctrl-metric {
+  background: white; border-radius: 10px; padding: 14px 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06); text-align: center;
+}
+.ctrl-metric .metric-value {
+  font-size: 1.6rem; font-weight: 800; color: var(--text);
+}
+.ctrl-metric .metric-label {
+  font-size: 0.68rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;
+  margin-top: 2px;
+}
+.ctrl-metric .metric-delta {
+  font-size: 0.65rem; font-weight: 600; margin-top: 2px;
+}
+.ctrl-metric .metric-delta.positive { color: var(--green); }
+.ctrl-metric .metric-delta.negative { color: var(--red); }
+.ctrl-metric.alert { border: 2px solid var(--red); background: #fef2f2; }
+.ctrl-metric.alert .metric-value { color: var(--red); }
+
+.ctrl-section {
+  background: white; border-radius: 10px; padding: 14px;
+  margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.ctrl-section h3 {
+  font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.04em; margin-bottom: 10px; font-weight: 700;
+}
+
+/* Mini bar chart */
+.ctrl-bar-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 0.72rem;
+}
+.ctrl-bar-label { width: 55px; color: var(--text-muted); font-weight: 600; text-align: right; flex-shrink: 0; }
+.ctrl-bar-track { flex: 1; height: 18px; background: #f1f5f9; border-radius: 4px; overflow: hidden; display: flex; }
+.ctrl-bar-fill { height: 100%; border-radius: 4px 0 0 4px; transition: width 0.3s; }
+.ctrl-bar-fill.scheduled { background: var(--yellow); }
+.ctrl-bar-fill.sent { background: var(--purple); }
+.ctrl-bar-fill.completed { background: var(--green); }
+.ctrl-bar-count { width: 24px; font-weight: 700; color: var(--text); text-align: right; }
+
+/* Legend */
+.ctrl-legend { display: flex; gap: 12px; margin-bottom: 8px; font-size: 0.65rem; color: var(--text-muted); }
+.ctrl-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.ctrl-legend .leg-scheduled::before { background: var(--yellow); }
+.ctrl-legend .leg-sent::before { background: var(--purple); }
+.ctrl-legend .leg-completed::before { background: var(--green); }
+
+/* Progress bar */
+.ctrl-progress { height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; margin: 6px 0; }
+.ctrl-progress-fill { height: 100%; background: var(--green); border-radius: 4px; transition: width 0.3s; }
+
+/* Member table */
+.ctrl-member { border-bottom: 1px solid var(--border); padding: 10px 0; }
+.ctrl-member:last-child { border-bottom: none; }
+.ctrl-member-name {
+  font-size: 0.82rem; font-weight: 700; color: var(--text); margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.ctrl-member-name .initials-badge {
+  width: 24px; height: 24px; border-radius: 50%; background: var(--primary);
+  color: white; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.6rem; font-weight: 700;
+}
+.ctrl-member-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+}
+.ctrl-member-stat {
+  text-align: center; font-size: 0.65rem;
+}
+.ctrl-member-stat .stat-val { font-weight: 800; font-size: 0.9rem; }
+.ctrl-member-stat .stat-lbl { color: var(--text-muted); }

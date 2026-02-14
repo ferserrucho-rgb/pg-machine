@@ -5,7 +5,7 @@ from collections import OrderedDict
 from datetime import datetime, date, timedelta
 
 # --- AUTH GATE (must be before any other UI) ---
-from lib.auth import require_auth, get_current_user, is_admin, logout, get_supabase
+from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_admin, logout, get_supabase
 from lib import dal
 from lib import notifications
 
@@ -506,6 +506,8 @@ if st.session_state.selected_id:
 else:
     # --- VISTAS PRINCIPALES ---
     tabs = ["📊 Tablero", "📋 Actividades"]
+    if is_manager_or_admin():
+        tabs.append("📈 Control")
     if is_admin():
         tabs.append("⚙️ Admin")
 
@@ -754,9 +756,177 @@ else:
                         st.session_state.pop("edit_act_tab_idx", None)
                         st.rerun()
 
-    # --- TAB: ADMIN (solo para admins) ---
-    if is_admin():
+    # --- TAB: CONTROL (managers y admins) ---
+    if is_manager_or_admin():
         with selected_tabs[2]:
+            st.markdown(user_bar_html, unsafe_allow_html=True)
+            st.markdown("### 📈 Panel de Control — RSM")
+
+            # Fetch all activities for the team
+            ctrl_activities = dal.get_all_activities(team_id)
+            today = date.today()
+            now = datetime.now()
+
+            # --- Helpers ---
+            def _act_date(a):
+                """Parse activity date to date object."""
+                f = a.get("fecha")
+                if isinstance(f, date):
+                    return f
+                return _parse_date(f) or today
+
+            def _completed_ts(a):
+                """Get the timestamp when activity was marked Respondida (updated_at)."""
+                ts = a.get("updated_at") or a.get("created_at")
+                if isinstance(ts, str):
+                    try:
+                        return datetime.fromisoformat(ts).date()
+                    except Exception:
+                        return None
+                if isinstance(ts, datetime):
+                    return ts.date()
+                return None
+
+            # Classify activities
+            pendientes = [a for a in ctrl_activities if a.get("estado") == "Pendiente"]
+            enviadas = [a for a in ctrl_activities if a.get("estado") == "Enviada"]
+            respondidas = [a for a in ctrl_activities if a.get("estado") == "Respondida"]
+            bloqueadas = [a for a in ctrl_activities if a.get("estado") == "Enviada" and _traffic_light(a)[1] == "Bloqueada"]
+
+            # --- Section 1: Overview Metrics ---
+            st.markdown("#### Resumen General")
+            ov1, ov2, ov3, ov4 = st.columns(4)
+            ov1.metric("Total Actividades", len(ctrl_activities))
+            ov2.metric("Pendientes", len(pendientes))
+            ov3.metric("Enviadas (Esp. rpta)", len(enviadas))
+            ov4.metric("Respondidas", len(respondidas))
+
+            if bloqueadas:
+                st.error(f"🟥 **{len(bloqueadas)} actividades BLOQUEADAS** — respuesta vencida")
+
+            st.divider()
+
+            # --- Section 2: Activity by Day ---
+            st.markdown("#### Actividad por Día")
+
+            # Group activities by fecha for recent days
+            day_range = [today - timedelta(days=i) for i in range(7)]
+            day_labels = []
+            day_created = []
+            day_completed = []
+            day_enviadas = []
+
+            for d in reversed(day_range):
+                day_labels.append(d.strftime("%a %d/%m"))
+                day_created.append(len([a for a in ctrl_activities if _act_date(a) == d]))
+                day_completed.append(len([a for a in respondidas if _completed_ts(a) == d]))
+                day_enviadas.append(len([a for a in enviadas if _act_date(a) == d]))
+
+            df_daily = pd.DataFrame({
+                "Día": day_labels,
+                "Programadas": day_created,
+                "Enviadas": day_enviadas,
+                "Respondidas": day_completed,
+            })
+            st.bar_chart(df_daily.set_index("Día"), color=["#f59e0b", "#8b5cf6", "#16a34a"])
+
+            # Day metrics
+            acts_today = [a for a in ctrl_activities if _act_date(a) == today]
+            acts_yesterday = [a for a in ctrl_activities if _act_date(a) == today - timedelta(days=1)]
+            d1, d2, d3, d4 = st.columns(4)
+            d1.metric("Hoy — Programadas", len(acts_today))
+            d2.metric("Hoy — Respondidas", len([a for a in respondidas if _completed_ts(a) == today]))
+            d3.metric("Ayer — Programadas", len(acts_yesterday))
+            d4.metric("Ayer — Respondidas", len([a for a in respondidas if _completed_ts(a) == today - timedelta(days=1)]))
+
+            st.divider()
+
+            # --- Section 3: Weekly Summary ---
+            st.markdown("#### Resumen Semanal")
+
+            # Current week (Mon-Sun)
+            week_start = today - timedelta(days=today.weekday())
+            last_week_start = week_start - timedelta(days=7)
+
+            this_week = [a for a in ctrl_activities if week_start <= _act_date(a) <= today]
+            last_week = [a for a in ctrl_activities if last_week_start <= _act_date(a) < week_start]
+            this_week_resp = [a for a in respondidas if _completed_ts(a) and week_start <= _completed_ts(a) <= today]
+            last_week_resp = [a for a in respondidas if _completed_ts(a) and last_week_start <= _completed_ts(a) < week_start]
+
+            w1, w2, w3, w4 = st.columns(4)
+            w1.metric("Esta semana — Programadas", len(this_week),
+                       delta=f"{len(this_week) - len(last_week):+d} vs semana anterior")
+            w2.metric("Esta semana — Respondidas", len(this_week_resp),
+                       delta=f"{len(this_week_resp) - len(last_week_resp):+d} vs semana anterior")
+            w3.metric("Semana anterior — Programadas", len(last_week))
+            w4.metric("Semana anterior — Respondidas", len(last_week_resp))
+
+            # Completion rate
+            if this_week:
+                this_rate = len(this_week_resp) / len(this_week) * 100
+                st.progress(min(this_rate / 100, 1.0), text=f"Tasa de cierre esta semana: **{this_rate:.0f}%** ({len(this_week_resp)}/{len(this_week)})")
+
+            st.divider()
+
+            # --- Section 4: Upcoming Schedule ---
+            st.markdown("#### Próximas Actividades Programadas")
+
+            upcoming_7 = [a for a in pendientes if today < _act_date(a) <= today + timedelta(days=7)]
+            upcoming_14 = [a for a in pendientes if today < _act_date(a) <= today + timedelta(days=14)]
+            upcoming_30 = [a for a in pendientes if today < _act_date(a) <= today + timedelta(days=30)]
+            overdue = [a for a in pendientes if _act_date(a) < today]
+
+            u1, u2, u3, u4 = st.columns(4)
+            u1.metric("Próx. 7 días", len(upcoming_7))
+            u2.metric("Próx. 14 días", len(upcoming_14))
+            u3.metric("Próx. 30 días", len(upcoming_30))
+            u4.metric("⚠️ Vencidas (sin enviar)", len(overdue), delta=f"-{len(overdue)}" if overdue else "0", delta_color="inverse")
+
+            st.divider()
+
+            # --- Section 5: Team Member Breakdown ---
+            st.markdown("#### Rendimiento por Miembro")
+
+            member_stats = {}
+            for m in team_members:
+                mid = m["id"]
+                mname = m["full_name"]
+                m_acts = [a for a in ctrl_activities if a.get("assigned_to") == mid or a.get("created_by") == mid]
+                m_pend = len([a for a in m_acts if a.get("estado") == "Pendiente"])
+                m_env = len([a for a in m_acts if a.get("estado") == "Enviada"])
+                m_resp = len([a for a in m_acts if a.get("estado") == "Respondida"])
+                m_bloq = len([a for a in m_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] == "Bloqueada"])
+                m_overdue = len([a for a in m_acts if a.get("estado") == "Pendiente" and _act_date(a) < today])
+                m_upcoming = len([a for a in m_acts if a.get("estado") == "Pendiente" and today <= _act_date(a) <= today + timedelta(days=7)])
+                total = len(m_acts)
+                rate = (m_resp / total * 100) if total > 0 else 0
+                member_stats[mname] = {
+                    "Total": total,
+                    "Pendientes": m_pend,
+                    "Enviadas": m_env,
+                    "Respondidas": m_resp,
+                    "Bloqueadas": m_bloq,
+                    "Vencidas": m_overdue,
+                    "Próx. 7d": m_upcoming,
+                    "% Cierre": f"{rate:.0f}%",
+                }
+
+            if member_stats:
+                df_members = pd.DataFrame(member_stats).T
+                df_members.index.name = "Miembro"
+                st.dataframe(df_members, use_container_width=True)
+
+                # Bar chart: respondidas by member
+                resp_by_member = {name: stats["Respondidas"] for name, stats in member_stats.items() if stats["Total"] > 0}
+                if resp_by_member:
+                    st.markdown("##### Actividades Respondidas por Miembro")
+                    df_resp_chart = pd.DataFrame({"Miembro": list(resp_by_member.keys()), "Respondidas": list(resp_by_member.values())})
+                    st.bar_chart(df_resp_chart.set_index("Miembro"), color=["#16a34a"])
+
+    # --- TAB: ADMIN (solo para admins) ---
+    admin_tab_idx = 3 if is_manager_or_admin() else 2
+    if is_admin():
+        with selected_tabs[admin_tab_idx]:
             st.markdown(user_bar_html, unsafe_allow_html=True)
             admin_tab1, admin_tab2, admin_tab3 = st.tabs(["👥 Equipo", "⚙️ Configuración", "📨 Invitaciones"])
 

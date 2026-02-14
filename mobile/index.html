@@ -33,6 +33,7 @@
     <div class="avatar" id="header-avatar"></div>
     <span class="user-name" id="header-name"></span>
     <span class="user-role" id="header-role"></span>
+    <button class="btn-control" id="btn-control" style="display:none;">Control</button>
     <button class="btn-logout" id="btn-logout">Salir</button>
   </div>
   <div class="filter-bar">
@@ -41,6 +42,19 @@
   </div>
   <div class="pull-indicator" id="pull-indicator">Actualizando...</div>
   <div class="activity-list-content" id="activity-list"></div>
+</div>
+
+<!-- ============ CONTROL SCREEN ============ -->
+<div id="screen-control" class="screen">
+  <div class="app-header">
+    <div class="avatar" id="ctrl-header-avatar"></div>
+    <span class="user-name" id="ctrl-header-name"></span>
+    <span class="user-role" id="ctrl-header-role"></span>
+    <button class="btn-logout" id="btn-back-list" style="margin-right:4px;">Actividades</button>
+    <button class="btn-logout" id="btn-ctrl-logout">Salir</button>
+  </div>
+  <div class="ctrl-title-bar">Panel de Control — RSM</div>
+  <div class="ctrl-content" id="ctrl-content"></div>
 </div>
 
 <!-- ============ DETAIL SCREEN ============ -->
@@ -250,6 +264,8 @@ function renderHeader() {
   $('header-avatar').textContent = getInitials(state.user.full_name)
   $('header-name').textContent = state.user.full_name
   $('header-role').textContent = state.user.role
+  // Show Control button for managers and admins
+  $('btn-control').style.display = isManagerOrAdmin() ? 'block' : 'none'
 }
 
 function renderList() {
@@ -470,6 +486,207 @@ function attachDetailHandlers(act) {
   }
 }
 
+// ---- CONTROL PANEL ----
+function isManagerOrAdmin() {
+  return state.user && (state.user.role === 'admin' || state.user.role === 'manager')
+}
+
+async function fetchAllActivities() {
+  // Fetch ALL team activities (not filtered by user)
+  const { data, error } = await supabase.from('activities')
+    .select('*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)')
+    .eq('team_id', state.user.team_id)
+    .order('fecha', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+async function fetchTeamMembers() {
+  const { data, error } = await supabase.from('profiles')
+    .select('id, full_name, role, specialty')
+    .eq('team_id', state.user.team_id)
+    .eq('active', true)
+  if (error) throw error
+  return data || []
+}
+
+function toDateStr(d) {
+  return d.toISOString().split('T')[0]
+}
+
+function parseActDate(act) {
+  const f = act.fecha || ''
+  if (!f) return new Date()
+  const d = new Date(f + 'T00:00:00')
+  return isNaN(d.getTime()) ? new Date() : d
+}
+
+function getCompletedDate(act) {
+  const ts = act.updated_at || act.created_at
+  if (!ts) return null
+  const d = new Date(ts)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function dayLabel(d) {
+  const days = ['Dom','Lun','Mar','Mie','Jue','Vie','Sab']
+  return `${days[d.getDay()]} ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
+}
+
+async function renderControl() {
+  const container = $('ctrl-content')
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Cargando datos...</div>'
+
+  // Update control screen header
+  $('ctrl-header-avatar').textContent = getInitials(state.user.full_name)
+  $('ctrl-header-name').textContent = state.user.full_name
+  $('ctrl-header-role').textContent = state.user.role
+
+  try {
+    const [allActs, members] = await Promise.all([fetchAllActivities(), fetchTeamMembers()])
+
+    const today = new Date(); today.setHours(0,0,0,0)
+    const todayStr = toDateStr(today)
+
+    const pendientes = allActs.filter(a => a.estado === 'Pendiente')
+    const enviadas = allActs.filter(a => a.estado === 'Enviada')
+    const respondidas = allActs.filter(a => a.estado === 'Respondida')
+    const bloqueadas = allActs.filter(a => a.estado === 'Enviada' && trafficLight(a).label === 'Bloqueada')
+
+    let html = ''
+
+    // --- Overview Metrics ---
+    html += '<div class="ctrl-metrics">'
+    html += `<div class="ctrl-metric"><div class="metric-value">${allActs.length}</div><div class="metric-label">Total</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${pendientes.length}</div><div class="metric-label">Pendientes</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${enviadas.length}</div><div class="metric-label">Enviadas</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${respondidas.length}</div><div class="metric-label">Respondidas</div></div>`
+    if (bloqueadas.length > 0) {
+      html += `<div class="ctrl-metric alert" style="grid-column: span 2;"><div class="metric-value">${bloqueadas.length}</div><div class="metric-label">Bloqueadas — respuesta vencida</div></div>`
+    }
+    html += '</div>'
+
+    // --- Daily Chart (last 7 days) ---
+    html += '<div class="ctrl-section"><h3>Actividad ultimos 7 dias</h3>'
+    html += '<div class="ctrl-legend"><span class="leg-scheduled">Programadas</span><span class="leg-sent">Enviadas</span><span class="leg-completed">Respondidas</span></div>'
+
+    const dayData = []
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today); d.setDate(d.getDate() - i)
+      const dStr = toDateStr(d)
+      const scheduled = allActs.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return toDateStr(ad) === dStr }).length
+      const sent = enviadas.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return toDateStr(ad) === dStr }).length
+      const completed = respondidas.filter(a => { const cd = getCompletedDate(a); return cd && toDateStr(cd) === dStr }).length
+      dayData.push({ label: dayLabel(d), scheduled, sent, completed })
+    }
+    const maxDay = Math.max(1, ...dayData.map(d => Math.max(d.scheduled, d.sent, d.completed)))
+
+    for (const d of dayData) {
+      const sPct = (d.scheduled / maxDay * 100).toFixed(0)
+      const ePct = (d.sent / maxDay * 100).toFixed(0)
+      const cPct = (d.completed / maxDay * 100).toFixed(0)
+      html += `<div class="ctrl-bar-row">
+        <span class="ctrl-bar-label">${d.label}</span>
+        <div class="ctrl-bar-track">
+          <div class="ctrl-bar-fill scheduled" style="width:${sPct}%"></div>
+        </div><span class="ctrl-bar-count">${d.scheduled}</span>
+        <div class="ctrl-bar-track">
+          <div class="ctrl-bar-fill sent" style="width:${ePct}%"></div>
+        </div><span class="ctrl-bar-count">${d.sent}</span>
+        <div class="ctrl-bar-track">
+          <div class="ctrl-bar-fill completed" style="width:${cPct}%"></div>
+        </div><span class="ctrl-bar-count">${d.completed}</span>
+      </div>`
+    }
+    html += '</div>'
+
+    // --- Today / Yesterday ---
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = toDateStr(yesterday)
+    const todayScheduled = allActs.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return toDateStr(ad) === todayStr }).length
+    const todayCompleted = respondidas.filter(a => { const cd = getCompletedDate(a); return cd && toDateStr(cd) === todayStr }).length
+    const yestScheduled = allActs.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return toDateStr(ad) === yesterdayStr }).length
+    const yestCompleted = respondidas.filter(a => { const cd = getCompletedDate(a); return cd && toDateStr(cd) === yesterdayStr }).length
+
+    html += '<div class="ctrl-metrics">'
+    html += `<div class="ctrl-metric"><div class="metric-value">${todayScheduled}</div><div class="metric-label">Hoy progr.</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${todayCompleted}</div><div class="metric-label">Hoy respond.</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${yestScheduled}</div><div class="metric-label">Ayer progr.</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${yestCompleted}</div><div class="metric-label">Ayer respond.</div></div>`
+    html += '</div>'
+
+    // --- Weekly Summary ---
+    const weekStart = new Date(today); weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1) // Monday
+    if (weekStart > today) weekStart.setDate(weekStart.getDate() - 7)
+    const lastWeekStart = new Date(weekStart); lastWeekStart.setDate(lastWeekStart.getDate() - 7)
+
+    const thisWeek = allActs.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return ad >= weekStart && ad <= today })
+    const lastWeek = allActs.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return ad >= lastWeekStart && ad < weekStart })
+    const thisWeekResp = respondidas.filter(a => { const cd = getCompletedDate(a); if (!cd) return false; const d = new Date(cd); d.setHours(0,0,0,0); return d >= weekStart && d <= today })
+    const lastWeekResp = respondidas.filter(a => { const cd = getCompletedDate(a); if (!cd) return false; const d = new Date(cd); d.setHours(0,0,0,0); return d >= lastWeekStart && d < weekStart })
+
+    const weekDelta = thisWeek.length - lastWeek.length
+    const weekRespDelta = thisWeekResp.length - lastWeekResp.length
+    const weekRate = thisWeek.length > 0 ? (thisWeekResp.length / thisWeek.length * 100) : 0
+
+    html += '<div class="ctrl-section"><h3>Resumen semanal</h3>'
+    html += '<div class="ctrl-metrics" style="margin-bottom:8px;">'
+    html += `<div class="ctrl-metric"><div class="metric-value">${thisWeek.length}</div><div class="metric-label">Esta sem. progr.</div><div class="metric-delta ${weekDelta >= 0 ? 'positive' : 'negative'}">${weekDelta >= 0 ? '+' : ''}${weekDelta} vs anterior</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${thisWeekResp.length}</div><div class="metric-label">Esta sem. respond.</div><div class="metric-delta ${weekRespDelta >= 0 ? 'positive' : 'negative'}">${weekRespDelta >= 0 ? '+' : ''}${weekRespDelta} vs anterior</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${lastWeek.length}</div><div class="metric-label">Sem. anterior progr.</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${lastWeekResp.length}</div><div class="metric-label">Sem. anterior resp.</div></div>`
+    html += '</div>'
+    html += `<div style="font-size:0.75rem; font-weight:600; color:var(--text-light); margin-bottom:4px;">Tasa de cierre: ${weekRate.toFixed(0)}%</div>`
+    html += `<div class="ctrl-progress"><div class="ctrl-progress-fill" style="width:${Math.min(weekRate, 100)}%"></div></div>`
+    html += '</div>'
+
+    // --- Upcoming ---
+    const in7 = pendientes.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return ad > today && ad <= new Date(today.getTime() + 7*86400000) }).length
+    const in14 = pendientes.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return ad > today && ad <= new Date(today.getTime() + 14*86400000) }).length
+    const in30 = pendientes.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return ad > today && ad <= new Date(today.getTime() + 30*86400000) }).length
+    const overdue = pendientes.filter(a => { const ad = parseActDate(a); ad.setHours(0,0,0,0); return ad < today }).length
+
+    html += '<div class="ctrl-section"><h3>Proximas actividades</h3>'
+    html += '<div class="ctrl-metrics" style="margin-bottom:0;">'
+    html += `<div class="ctrl-metric"><div class="metric-value">${in7}</div><div class="metric-label">Prox. 7 dias</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${in14}</div><div class="metric-label">Prox. 14 dias</div></div>`
+    html += `<div class="ctrl-metric"><div class="metric-value">${in30}</div><div class="metric-label">Prox. 30 dias</div></div>`
+    html += `<div class="ctrl-metric ${overdue > 0 ? 'alert' : ''}"><div class="metric-value">${overdue}</div><div class="metric-label">Vencidas sin enviar</div></div>`
+    html += '</div></div>'
+
+    // --- Team Member Breakdown ---
+    html += '<div class="ctrl-section"><h3>Rendimiento por miembro</h3>'
+    for (const m of members) {
+      const mActs = allActs.filter(a => a.assigned_to === m.id || a.created_by === m.id)
+      if (mActs.length === 0) continue
+      const mPend = mActs.filter(a => a.estado === 'Pendiente').length
+      const mEnv = mActs.filter(a => a.estado === 'Enviada').length
+      const mResp = mActs.filter(a => a.estado === 'Respondida').length
+      const mBloq = mActs.filter(a => a.estado === 'Enviada' && trafficLight(a).label === 'Bloqueada').length
+      const rate = mActs.length > 0 ? (mResp / mActs.length * 100).toFixed(0) : 0
+
+      html += `<div class="ctrl-member">
+        <div class="ctrl-member-name">
+          <span class="initials-badge">${getInitials(m.full_name)}</span>
+          ${m.full_name}
+          <span style="font-size:0.65rem; color:var(--text-muted); font-weight:400;">${rate}% cierre</span>
+        </div>
+        <div class="ctrl-member-stats">
+          <div class="ctrl-member-stat"><div class="stat-val">${mPend}</div><div class="stat-lbl">Pend.</div></div>
+          <div class="ctrl-member-stat"><div class="stat-val">${mEnv}</div><div class="stat-lbl">Env.</div></div>
+          <div class="ctrl-member-stat"><div class="stat-val" style="color:var(--green);">${mResp}</div><div class="stat-lbl">Resp.</div></div>
+          <div class="ctrl-member-stat"><div class="stat-val" style="color:${mBloq > 0 ? 'var(--red)' : 'var(--text)'};">${mBloq}</div><div class="stat-lbl">Bloq.</div></div>
+        </div>
+      </div>`
+    }
+    html += '</div>'
+
+    container.innerHTML = html
+  } catch(e) {
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red);">Error: ${e.message}</div>`
+  }
+}
+
 // ---- EVENT HANDLERS ----
 
 // Login form
@@ -494,6 +711,22 @@ $('login-form').addEventListener('submit', async (e) => {
 
 // Logout
 $('btn-logout').addEventListener('click', logout)
+$('btn-ctrl-logout').addEventListener('click', logout)
+
+// Control panel navigation
+$('btn-control').addEventListener('click', async () => {
+  showLoading()
+  show('screen-control')
+  await renderControl()
+  hideLoading()
+})
+$('btn-back-list').addEventListener('click', async () => {
+  showLoading()
+  await fetchActivities()
+  renderList()
+  hideLoading()
+  show('screen-list')
+})
 
 // Back button
 $('btn-back').addEventListener('click', async () => {
