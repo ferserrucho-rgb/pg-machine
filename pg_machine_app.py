@@ -49,30 +49,24 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card — flat bottom merges with invisible button below */
-    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+    /* Clickable card */
+    .pgm-card-wrap { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
     .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
-    /* Pure CSS: hide the abrir button, style it as thin card bottom strip */
+    /* Transparent button overlaps bottom of card — large click area */
+    div:has(> div .pgm-card-wrap) + div,
+    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div,
+    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div {
+        margin-top: -70px !important; position: relative !important; z-index: 2 !important;
+    }
     div:has(> div .pgm-card-wrap) + div button,
     div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div button,
     [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div button {
-        font-size: 0 !important; color: transparent !important; padding: 3px 0 !important;
-        min-height: 0 !important; height: auto !important; line-height: 0 !important;
-        border: 1px solid #e2e8f0 !important; border-top: none !important;
-        border-radius: 0 0 8px 8px !important; background: #fafbfc !important;
-        margin-bottom: 6px !important; cursor: pointer !important;
+        opacity: 0 !important; min-height: 70px !important; height: 70px !important;
+        width: 100% !important; cursor: pointer !important; padding: 0 !important;
+        border: none !important; background: transparent !important; margin-bottom: 6px !important;
     }
-    div:has(> div .pgm-card-wrap) + div button:hover,
-    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div button:hover,
-    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div button:hover {
-        background: #eff6ff !important; border-color: #1a73e8 !important;
-    }
-    /* Highlight card when hovering the button strip below it */
-    div:has(> div .pgm-card-wrap):has(+ div button:hover) .pgm-card-wrap,
-    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap):has(+ div button:hover) .pgm-card-wrap,
-    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap):has(+ div button:hover) .pgm-card-wrap {
-        border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18);
-    }
+    /* Prevent tab label truncation */
+    button[data-baseweb="tab"] { font-size: 0.78rem !important; white-space: nowrap !important; }
     .pgm-card-wrap .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
     .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
     .pgm-card-wrap .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
