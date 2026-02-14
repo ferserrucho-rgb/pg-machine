@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e293b">
+  <title>PG Machine</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="screen-login" class="screen login-screen active">
+  <div class="login-box">
+    <h1>PG Machine</h1>
+    <p class="subtitle">Acceso mobile</p>
+    <form id="login-form">
+      <input type="email" id="login-email" placeholder="Email" required autocomplete="email">
+      <input type="password" id="login-password" placeholder="Contrasena" required autocomplete="current-password">
+      <button type="submit" class="btn-login" id="btn-login">Iniciar Sesion</button>
+    </form>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ============ ACTIVITY LIST SCREEN ============ -->
+<div id="screen-list" class="screen">
+  <div class="app-header">
+    <div class="avatar" id="header-avatar"></div>
+    <span class="user-name" id="header-name"></span>
+    <span class="user-role" id="header-role"></span>
+    <button class="btn-logout" id="btn-logout">Salir</button>
+  </div>
+  <div class="filter-bar">
+    <button class="active" data-filter="mine">Mis tareas</button>
+    <button data-filter="all">Todas</button>
+  </div>
+  <div class="pull-indicator" id="pull-indicator">Actualizando...</div>
+  <div class="activity-list-content" id="activity-list"></div>
+</div>
+
+<!-- ============ DETAIL SCREEN ============ -->
+<div id="screen-detail" class="screen detail-screen">
+  <div class="detail-header">
+    <button class="btn-back" id="btn-back">&#8592;</button>
+    <span class="detail-title" id="detail-title"></span>
+    <span class="traffic-large" id="detail-traffic"></span>
+  </div>
+  <div class="detail-content" id="detail-content"></div>
+</div>
+
+<!-- ============ TOAST ============ -->
+<div class="toast" id="toast"></div>
+
+<!-- ============ LOADING ============ -->
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {})
+  })
+}
+</script>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+
+// ---- CONFIG ----
+const SUPABASE_URL = 'https://ztjohwmwgrpirbtpvivt.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0am9od213Z3JwaXJidHB2aXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5OTQ4ODAsImV4cCI6MjA4NjU3MDg4MH0.nFLjxeBWTij_XtwvwaHjeb6Rg5LqRbp8epRZb4IG3Do'
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+// ---- STATE ----
+let state = {
+  user: null,       // { id, email, full_name, team_id, role, specialty }
+  activities: [],
+  filter: 'mine',   // 'mine' | 'all'
+  selectedId: null
+}
+
+// ---- HELPERS ----
+function $(id) { return document.getElementById(id) }
+function show(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'))
+  $(screenId).classList.add('active')
+}
+function showLoading() { $('loading').classList.add('visible') }
+function hideLoading() { $('loading').classList.remove('visible') }
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('visible')
+  setTimeout(() => t.classList.remove('visible'), 2000)
+}
+function getInitials(name) {
+  const parts = (name || '').trim().split(/\s+/)
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length-1][0]).toUpperCase()
+  if (parts.length === 1 && parts[0]) return parts[0].substring(0,2).toUpperCase()
+  return '??'
+}
+const TIPO_ICONS = { 'Email': '\u{1F4E7}', 'Llamada': '\u{1F4DE}', 'Reunion': '\u{1F91D}', 'Asignacion': '\u{1F464}' }
+function tipoIcon(tipo) { return TIPO_ICONS[tipo] || '\u{1F4CB}' }
+
+// ---- TRAFFIC LIGHT (ported from Python _traffic_light) ----
+function trafficLight(act) {
+  const estado = act.estado || 'Pendiente'
+  const now = new Date()
+
+  if (estado === 'Respondida') return { emoji: '\u{1F7E9}', label: 'Respondida' }
+
+  if (estado === 'Enviada') {
+    const enviadaTs = act.enviada_ts ? new Date(act.enviada_ts) : now
+    const slaDias = act.sla_respuesta_dias || 7
+    const deadline = new Date(enviadaTs.getTime() + slaDias * 86400000)
+    const remaining = deadline - now
+    if (remaining <= 0) return { emoji: '\u{1F7E5}', label: 'Bloqueada' }
+    const days = Math.ceil(remaining / 86400000)
+    return { emoji: '\u{1F7EA}', label: `Esp. rpta ${days}d` }
+  }
+
+  // Pendiente
+  const fechaStr = act.fecha || ''
+  const fecha = fechaStr ? new Date(fechaStr + 'T00:00:00') : new Date()
+  const today = new Date(); today.setHours(0,0,0,0)
+  const fechaDay = new Date(fecha); fechaDay.setHours(0,0,0,0)
+
+  if (fechaDay > today) {
+    const dd = String(fechaDay.getDate()).padStart(2,'0')
+    const mm = String(fechaDay.getMonth()+1).padStart(2,'0')
+    return { emoji: '\u{1F7E8}', label: `Pendiente ${dd}/${mm}` }
+  }
+  if (fechaDay.getTime() === today.getTime()) return { emoji: '\u{1F7E8}', label: 'Hoy' }
+
+  // SLA check
+  if (act.sla_deadline) {
+    const deadline = new Date(act.sla_deadline)
+    const created = act.created_at ? new Date(act.created_at) : now
+    const remaining = deadline - now
+    if (remaining <= 0) return { emoji: '\u{1F7E5}', label: 'Vencida' }
+    const total = deadline - created
+    const ratio = total > 0 ? remaining / total : 0
+    const hoursLeft = remaining / 3600000
+    const label = hoursLeft < 24 ? `${Math.round(hoursLeft)}h rest.` : `${Math.ceil(hoursLeft/24)}d rest.`
+    return { emoji: ratio > 0.5 ? '\u{1F7E9}' : '\u{1F7E8}', label }
+  }
+
+  // Fallback — no SLA info
+  return { emoji: '\u{1F7E8}', label: 'Pendiente' }
+}
+
+function cardClass(act) {
+  const tl = trafficLight(act)
+  if (tl.label === 'Bloqueada') return 'estado-bloqueada'
+  if (act.estado === 'Enviada') return 'estado-enviada'
+  if (act.estado === 'Respondida') return 'estado-respondida'
+  return 'estado-pendiente'
+}
+
+// ---- AUTH ----
+async function login(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) throw error
+  const { data: profile, error: pErr } = await supabase
+    .from('profiles').select('*').eq('id', data.user.id).single()
+  if (pErr) throw pErr
+  state.user = {
+    id: profile.id, email: profile.email, full_name: profile.full_name,
+    team_id: profile.team_id, role: profile.role, specialty: profile.specialty || ''
+  }
+  localStorage.setItem('pgm_user', JSON.stringify(state.user))
+}
+
+async function restoreSession() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session) {
+    const stored = localStorage.getItem('pgm_user')
+    if (stored) {
+      state.user = JSON.parse(stored)
+      return true
+    }
+    // Session exists but no cached profile — fetch it
+    const { data: profile } = await supabase
+      .from('profiles').select('*').eq('id', session.user.id).single()
+    if (profile) {
+      state.user = {
+        id: profile.id, email: profile.email, full_name: profile.full_name,
+        team_id: profile.team_id, role: profile.role, specialty: profile.specialty || ''
+      }
+      localStorage.setItem('pgm_user', JSON.stringify(state.user))
+      return true
+    }
+  }
+  return false
+}
+
+async function logout() {
+  await supabase.auth.signOut()
+  localStorage.removeItem('pgm_user')
+  state.user = null; state.activities = []
+  show('screen-login')
+}
+
+// ---- DATA ----
+async function fetchActivities() {
+  const uid = state.user.id
+  let query = supabase.from('activities')
+    .select('*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)')
+    .eq('team_id', state.user.team_id)
+    .order('fecha', { ascending: false })
+
+  if (state.filter === 'mine') {
+    query = query.or(`assigned_to.eq.${uid},created_by.eq.${uid}`)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  state.activities = data || []
+}
+
+async function updateActivity(actId, updates) {
+  const { error } = await supabase.from('activities').update(updates).eq('id', actId)
+  if (error) throw error
+}
+
+async function createFollowUp(act, fecha) {
+  const { error } = await supabase.from('activities').insert({
+    opportunity_id: act.opportunity_id,
+    team_id: act.team_id,
+    created_by: state.user.id,
+    assigned_to: act.assigned_to,
+    tipo: act.tipo,
+    fecha: fecha,
+    objetivo: act.objetivo || '',
+    descripcion: `Seguimiento: ${act.feedback || act.descripcion || ''}`,
+    estado: 'Pendiente',
+    sla_key: act.sla_key || '',
+    sla_hours: act.sla_hours,
+    sla_respuesta_dias: act.sla_respuesta_dias || 7,
+    destinatario: act.destinatario || ''
+  })
+  if (error) throw error
+}
+
+// ---- RENDER: LIST ----
+function renderHeader() {
+  $('header-avatar').textContent = getInitials(state.user.full_name)
+  $('header-name').textContent = state.user.full_name
+  $('header-role').textContent = state.user.role
+}
+
+function renderList() {
+  const container = $('activity-list')
+  if (!state.activities.length) {
+    container.innerHTML = '<div class="empty-state"><div class="emoji">&#x1F4ED;</div><p>No hay actividades</p></div>'
+    return
+  }
+  let html = ''
+  for (const act of state.activities) {
+    const tl = trafficLight(act)
+    const opp = act.opportunity || {}
+    const asig = act.assigned_profile || {}
+    const asigInitials = asig.full_name ? getInitials(asig.full_name) : ''
+    const dest = act.destinatario ? `&#x2192; ${act.destinatario}` : ''
+
+    html += `
+      <div class="card ${cardClass(act)}" data-id="${act.id}">
+        <div class="card-top">
+          <span class="traffic">${tl.emoji}</span>
+          <span class="status-label">${tl.label}</span>
+          <span class="tipo-icon">${tipoIcon(act.tipo)}</span>
+        </div>
+        <div class="card-body">
+          <div class="objetivo">${act.objetivo || act.tipo || 'Sin objetivo'}</div>
+          <div class="proyecto">${opp.proyecto || ''}</div>
+          <div class="cuenta">${opp.cuenta || ''}</div>
+        </div>
+        <div class="card-footer">
+          <span class="dest">${dest}</span>
+          ${asigInitials ? `<span class="initials-badge">${asigInitials}</span>` : ''}
+          <span class="fecha">${act.fecha || ''}</span>
+        </div>
+      </div>`
+  }
+  container.innerHTML = html
+  // Attach card click handlers
+  container.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('click', () => openDetail(card.dataset.id))
+  })
+}
+
+// ---- RENDER: DETAIL ----
+function openDetail(actId) {
+  state.selectedId = actId
+  const act = state.activities.find(a => a.id === actId)
+  if (!act) return
+
+  const tl = trafficLight(act)
+  const opp = act.opportunity || {}
+  const asig = act.assigned_profile || {}
+
+  $('detail-title').textContent = act.tipo + (act.objetivo ? ` - ${act.objetivo}` : '')
+  $('detail-traffic').textContent = tl.emoji
+
+  let html = ''
+
+  // Status section
+  html += `<div class="detail-section">
+    <h3>Estado</h3>
+    <div style="font-size:1.5rem; margin-bottom:4px;">${tl.emoji} <b>${tl.label}</b></div>
+    <div style="font-size:0.8rem; color:var(--text-muted);">${act.estado}</div>
+  </div>`
+
+  // Activity info
+  html += `<div class="detail-section">
+    <h3>Actividad</h3>
+    <div class="field"><span class="field-label">Canal</span><div class="field-value">${tipoIcon(act.tipo)} ${act.tipo}</div></div>
+    <div class="field"><span class="field-label">Objetivo</span><div class="field-value">${act.objetivo || '-'}</div></div>
+    <div class="field"><span class="field-label">Descripcion</span><div class="field-value">${act.descripcion || '-'}</div></div>
+    <div class="field"><span class="field-label">Destinatario</span><div class="field-value">${act.destinatario || '-'}</div></div>
+    <div class="field"><span class="field-label">Asignado a</span><div class="field-value">${asig.full_name || '-'}${asig.specialty ? ' (' + asig.specialty + ')' : ''}</div></div>
+    <div class="field"><span class="field-label">Fecha</span><div class="field-value">${act.fecha || '-'}</div></div>
+    <div class="field"><span class="field-label">SLA</span><div class="field-value">${act.sla_key || '-'}</div></div>
+  </div>`
+
+  // Opportunity context
+  html += `<div class="detail-section">
+    <h3>Oportunidad</h3>
+    <div class="field"><div class="field-value" style="font-weight:700;">${opp.proyecto || '-'}</div></div>
+    <div class="field"><div class="cuenta" style="margin-bottom:4px;">${opp.cuenta || '-'}</div></div>
+    <div class="field"><span class="monto">USD ${(opp.monto || 0).toLocaleString('en-US', {maximumFractionDigits:0})}</span></div>
+    ${opp.categoria ? `<span class="categoria-badge">${opp.categoria}</span>` : ''}
+  </div>`
+
+  // Feedback (if responded)
+  if (act.estado === 'Respondida' && act.feedback) {
+    html += `<div class="detail-section">
+      <h3>Feedback del cliente</h3>
+      <div class="feedback-box">${act.feedback}</div>
+    </div>`
+  }
+
+  // Actions
+  html += '<div class="actions">'
+  if (act.estado === 'Pendiente') {
+    html += '<button class="btn-action btn-enviada" id="action-enviada">Marcar como Enviada</button>'
+  }
+  if (act.estado === 'Enviada') {
+    html += '<button class="btn-action btn-respondida" id="action-respondida">Respondida</button>'
+    html += '<button class="btn-action btn-reenviar" id="action-reenviar">Reenviar</button>'
+  }
+  if (act.estado === 'Respondida') {
+    html += '<button class="btn-action btn-seguimiento" id="action-seguimiento">Crear seguimiento</button>'
+  }
+  html += '</div>'
+
+  // Feedback form (hidden by default)
+  const nextWeek = new Date(Date.now() + 7*86400000).toISOString().split('T')[0]
+  html += `<div class="feedback-form" id="feedback-form">
+    <textarea id="feedback-input" placeholder="Feedback del cliente..."></textarea>
+    <div class="seguimiento-row">
+      <label><input type="checkbox" id="chk-seguimiento"> Crear seguimiento</label>
+      <input type="date" id="seg-fecha" value="${nextWeek}">
+    </div>
+    <button class="btn-submit" id="btn-submit-feedback">Confirmar Respuesta</button>
+  </div>`
+
+  // Seguimiento form (for Respondida)
+  html += `<div class="feedback-form" id="seguimiento-form">
+    <div class="seguimiento-row">
+      <span style="font-size:0.85rem; font-weight:600;">Fecha seguimiento:</span>
+      <input type="date" id="seg-fecha2" value="${nextWeek}">
+    </div>
+    <button class="btn-submit" id="btn-submit-seg" style="background:var(--purple);">Crear Seguimiento</button>
+  </div>`
+
+  $('detail-content').innerHTML = html
+  attachDetailHandlers(act)
+  show('screen-detail')
+}
+
+function attachDetailHandlers(act) {
+  const btnEnviada = document.getElementById('action-enviada')
+  const btnRespondida = document.getElementById('action-respondida')
+  const btnReenviar = document.getElementById('action-reenviar')
+  const btnSeguimiento = document.getElementById('action-seguimiento')
+
+  if (btnEnviada) {
+    btnEnviada.addEventListener('click', async () => {
+      showLoading()
+      try {
+        const now = new Date().toISOString()
+        const slaDias = act.sla_respuesta_dias || 7
+        const responseDeadline = new Date(Date.now() + slaDias * 86400000).toISOString()
+        await updateActivity(act.id, { estado: 'Enviada', enviada_ts: now, response_deadline: responseDeadline })
+        act.estado = 'Enviada'; act.enviada_ts = now; act.response_deadline = responseDeadline
+        toast('Marcada como Enviada')
+        openDetail(act.id) // Re-render detail
+      } catch(e) { toast('Error: ' + e.message) }
+      hideLoading()
+    })
+  }
+
+  if (btnRespondida) {
+    btnRespondida.addEventListener('click', () => {
+      document.getElementById('feedback-form').classList.add('visible')
+    })
+  }
+
+  const btnSubmitFb = document.getElementById('btn-submit-feedback')
+  if (btnSubmitFb) {
+    btnSubmitFb.addEventListener('click', async () => {
+      showLoading()
+      try {
+        const feedback = document.getElementById('feedback-input').value
+        await updateActivity(act.id, { estado: 'Respondida', feedback })
+        act.estado = 'Respondida'; act.feedback = feedback
+
+        // Follow-up if checked
+        const chk = document.getElementById('chk-seguimiento')
+        if (chk && chk.checked) {
+          const segFecha = document.getElementById('seg-fecha').value
+          await createFollowUp({...act, feedback}, segFecha)
+          toast('Respondida + seguimiento creado')
+        } else {
+          toast('Marcada como Respondida')
+        }
+        await fetchActivities()
+        openDetail(act.id)
+      } catch(e) { toast('Error: ' + e.message) }
+      hideLoading()
+    })
+  }
+
+  if (btnReenviar) {
+    btnReenviar.addEventListener('click', async () => {
+      showLoading()
+      try {
+        await updateActivity(act.id, { estado: 'Pendiente', enviada_ts: null, response_deadline: null })
+        act.estado = 'Pendiente'; act.enviada_ts = null; act.response_deadline = null
+        toast('Actividad reenviada')
+        openDetail(act.id)
+      } catch(e) { toast('Error: ' + e.message) }
+      hideLoading()
+    })
+  }
+
+  if (btnSeguimiento) {
+    btnSeguimiento.addEventListener('click', () => {
+      document.getElementById('seguimiento-form').classList.add('visible')
+    })
+  }
+
+  const btnSubmitSeg = document.getElementById('btn-submit-seg')
+  if (btnSubmitSeg) {
+    btnSubmitSeg.addEventListener('click', async () => {
+      showLoading()
+      try {
+        const segFecha = document.getElementById('seg-fecha2').value
+        await createFollowUp(act, segFecha)
+        await fetchActivities()
+        toast('Seguimiento creado')
+        openDetail(act.id)
+      } catch(e) { toast('Error: ' + e.message) }
+      hideLoading()
+    })
+  }
+}
+
+// ---- EVENT HANDLERS ----
+
+// Login form
+$('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const btn = $('btn-login')
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'
+  $('login-error').textContent = ''
+  try {
+    await login($('login-email').value, $('login-password').value)
+    renderHeader()
+    showLoading()
+    await fetchActivities()
+    hideLoading()
+    renderList()
+    show('screen-list')
+  } catch(err) {
+    $('login-error').textContent = 'Email o contrasena incorrectos'
+  }
+  btn.disabled = false; btn.textContent = 'Iniciar Sesion'
+})
+
+// Logout
+$('btn-logout').addEventListener('click', logout)
+
+// Back button
+$('btn-back').addEventListener('click', async () => {
+  showLoading()
+  await fetchActivities()
+  renderList()
+  hideLoading()
+  show('screen-list')
+})
+
+// Filter toggle
+document.querySelectorAll('.filter-bar button').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    document.querySelectorAll('.filter-bar button').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    state.filter = btn.dataset.filter
+    showLoading()
+    await fetchActivities()
+    renderList()
+    hideLoading()
+  })
+})
+
+// Pull-to-refresh
+let pullStartY = 0
+const listEl = $('activity-list')
+listEl.addEventListener('touchstart', (e) => {
+  if (listEl.scrollTop === 0) pullStartY = e.touches[0].clientY
+}, { passive: true })
+listEl.addEventListener('touchmove', (e) => {
+  if (pullStartY > 0 && e.touches[0].clientY - pullStartY > 60) {
+    $('pull-indicator').classList.add('visible')
+  }
+}, { passive: true })
+listEl.addEventListener('touchend', async () => {
+  if ($('pull-indicator').classList.contains('visible')) {
+    await fetchActivities()
+    renderList()
+    toast('Actualizado')
+  }
+  $('pull-indicator').classList.remove('visible')
+  pullStartY = 0
+})
+
+// ---- INIT ----
+async function init() {
+  showLoading()
+  try {
+    const restored = await restoreSession()
+    if (restored) {
+      renderHeader()
+      await fetchActivities()
+      renderList()
+      show('screen-list')
+    } else {
+      show('screen-login')
+    }
+  } catch(e) {
+    console.error('Init error:', e)
+    show('screen-login')
+  }
+  hideLoading()
+}
+
+init()
+</script>
+
+</body>
+</html>
