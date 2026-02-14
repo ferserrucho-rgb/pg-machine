@@ -1246,7 +1246,8 @@ else:
 """)
             inv_c1, inv_c2 = st.columns(2)
             inv_c1.text_input("Enlace de la app", value=app_url, disabled=True, key="invite_url")
-            inv_c2.text_input("ID de equipo", value=invite_target_id, disabled=True, key="invite_tid")
+            inv_c2.markdown(f"**ID de equipo**")
+            inv_c2.code(invite_target_id)
 
             st.divider()
 
