@@ -24,8 +24,9 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-    section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
-    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
+    section.main > div, section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
+    .block-container, [data-testid="stAppViewBlockContainer"] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
+    [data-testid="stAppViewContainer"] > section > div { max-width: 100% !important; }
     .cat-header { background: #1e293b; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: 700; margin-bottom: 15px; }
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .badge { float:right; font-size:0.6rem; font-weight:bold; padding:2px 6px; border-radius:8px; text-transform: uppercase; border: 1.2px solid; }
@@ -83,18 +84,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown("""
-    <script>
-    function pgmFixLayout() {
-        document.querySelectorAll('section.main > div').forEach(el => {
-            if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
-        });
-    }
-    const observer = new MutationObserver(pgmFixLayout);
-    observer.observe(document.body, {childList: true, subtree: true});
-    pgmFixLayout();
-    </script>
-    """, unsafe_allow_html=True)
 
 
 def _get_initials(full_name: str) -> str:
