@@ -49,30 +49,19 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card buttons — styled via JS class .pgm-card */
-    .pgm-card {
-        background: white !important; border: 1px solid #e2e8f0 !important;
-        border-radius: 8px !important; padding: 10px 12px !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
-        transition: all 0.2s !important; min-height: 0 !important; cursor: pointer !important;
-        display: block !important; text-align: left !important;
-    }
-    .pgm-card:hover {
-        border-color: #1a73e8 !important; border-width: 2px !important;
-        box-shadow: 0 3px 12px rgba(26,115,232,0.18) !important;
-    }
-    .pgm-card > div,
-    .pgm-card div[data-testid="stMarkdownContainer"] { text-align: left !important; width: 100% !important; display: block !important; }
-    .pgm-card p { text-align: left !important; margin: 0 0 2px 0 !important; line-height: 1.4 !important; width: 100% !important; display: block !important; }
-    /* Line 1: Project name + stage badge + amount */
-    .pgm-card p:first-child { font-size: 0.85rem !important; font-weight: 600 !important; color: #1e293b !important; margin-bottom: 5px !important; }
-    .pgm-card p:first-child em { color: white !important; font-size: 0.58rem !important; font-weight: 600 !important; font-style: normal !important; background: #8b5cf6 !important; padding: 2px 7px !important; border-radius: 10px !important; font-family: Georgia, serif !important; letter-spacing: 0.03em !important; vertical-align: middle !important; }
-    .pgm-card p:first-child code { color: #16a34a !important; font-size: 0.93rem !important; font-weight: 800 !important; background: none !important; padding: 0 !important; border: none !important; }
-    /* Line 2: Metadata — opp ID in monospace box + close date */
-    .pgm-card p:nth-child(2) { font-size: 0.62rem !important; color: #64748b !important; line-height: 1.2 !important; margin-bottom: 6px !important; background: none !important; }
-    .pgm-card p:nth-child(2) code { font-family: 'Courier New', monospace !important; font-size: 0.6rem !important; font-weight: 700 !important; color: #334155 !important; background: #f1f5f9 !important; border: 1px solid #cbd5e1 !important; padding: 2px 6px !important; border-radius: 4px !important; }
-    /* Line 3+: Activity lines — compact, left-aligned with border accent */
-    .pgm-card p:nth-child(n+3) { font-size: 0.6rem !important; color: #475569 !important; line-height: 1.35 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; margin: 0 0 1px 0 !important; padding: 2px 0 2px 8px !important; border-left: 2px solid #cbd5e1 !important; }
+    /* Clickable card — rendered as HTML + invisible button overlay */
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
+    .pgm-card-wrap:hover { border-color: #1a73e8; border-width: 2px; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
+    .pgm-card-wrap .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
+    .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
+    .pgm-card-wrap .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
+    .pgm-card-wrap .opp-meta { font-size: 0.62rem; color: #64748b; margin: 4px 0 0 0; }
+    .pgm-card-wrap .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.6rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; }
+    .pgm-card-wrap .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
+    .pgm-card-wrap .act-line { font-size: 0.6rem; color: #475569; font-style: italic; line-height: 1.4; padding: 1px 0 1px 8px; border-left: 2px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Card open button — styled via JS class .pgm-open-btn */
+    .pgm-open-btn { font-size: 0.55rem !important; padding: 2px 0 !important; min-height: 0 !important; height: auto !important; color: #94a3b8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 8px 8px !important; background: #fafbfc !important; margin-top: -4px !important; margin-bottom: 6px !important; }
+    .pgm-open-btn:hover { color: #1a73e8 !important; background: #eff6ff !important; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -89,11 +78,11 @@ st.markdown("""
         document.querySelectorAll('section.main > div').forEach(el => {
             if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
         });
-        // Card buttons: find buttons with 3+ paragraphs and add pgm-card class
-        document.querySelectorAll('button[kind="secondary"]').forEach(btn => {
-            const ps = btn.querySelectorAll('div[data-testid="stMarkdownContainer"] p');
-            if (ps.length >= 2 && !btn.classList.contains('pgm-card')) {
-                btn.classList.add('pgm-card');
+        // Style "abrir" buttons that follow card HTML
+        document.querySelectorAll('button').forEach(btn => {
+            const txt = (btn.textContent || '').trim();
+            if (txt === '▸ abrir' && !btn.classList.contains('pgm-open-btn')) {
+                btn.classList.add('pgm-open-btn');
             }
         });
     }
@@ -562,20 +551,17 @@ else:
             for o in opps:
                 opp_acts = all_acts_by_opp.get(o["id"], [])
                 monto_val = float(o.get("monto") or 0)
-                # Paragraph 1: project, stage, amount
-                header = f"**{o['proyecto']}**"
-                if o.get("stage"):
-                    header += f" *{o['stage']}*"
-                header += f" `USD {monto_val:,.0f}`"
-                # Paragraph 2: metadata (ID in code box + close date)
+                # Build HTML card
+                stage_html = f' <span class="stage-badge">{o["stage"]}</span>' if o.get("stage") else ""
+                header_html = f'<div class="opp-header">{o["proyecto"]}{stage_html} <span class="amount">USD {monto_val:,.0f}</span></div>'
                 meta_parts = []
                 if o.get("opp_id"):
-                    meta_parts.append(f"`{o['opp_id']}`")
+                    meta_parts.append(f'<span class="opp-id-box">{o["opp_id"]}</span>')
                 if o.get("close_date"):
-                    meta_parts.append(f"Cierre: {o['close_date']}")
-                meta_line = "  ".join(meta_parts) if meta_parts else ""
-                # Paragraph 3+: each activity as its own paragraph
-                act_paragraphs = []
+                    meta_parts.append(f'Cierre: {o["close_date"]}')
+                meta_html = f'<div class="opp-meta">{" &nbsp; ".join(meta_parts)}</div>' if meta_parts else ""
+                # Activities
+                act_lines = []
                 for a in opp_acts:
                     light, label = _traffic_light(a)
                     obj = f' {a["objetivo"]}' if a.get("objetivo") else ""
@@ -585,14 +571,13 @@ else:
                         asig_name = a["assigned_profile"]["full_name"]
                     asig_init = _get_initials(asig_name) if asig_name else ""
                     asig = f' [{asig_init}]' if asig_init else ""
-                    act_paragraphs.append(f"{light}{obj}{dest}{asig} — {label}")
-                # Assemble: each \n\n creates a new <p> tag
-                card_label = header
-                if meta_line:
-                    card_label += "\n\n" + meta_line
-                for ap in act_paragraphs:
-                    card_label += "\n\n" + ap
-                if st.button(card_label, key=f"g_{o['id']}", use_container_width=True):
+                    act_lines.append(f'<div class="act-line">{light}{obj}{dest}{asig} — {label}</div>')
+                acts_html = ""
+                if act_lines:
+                    acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
+                card_html = f'<div class="pgm-card-wrap">{header_html}{meta_html}{acts_html}</div>'
+                st.markdown(card_html, unsafe_allow_html=True)
+                if st.button("▸ abrir", key=f"g_{o['id']}", use_container_width=True):
                     st.session_state.selected_id = o['id']
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
