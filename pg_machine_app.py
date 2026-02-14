@@ -33,9 +33,14 @@ st.markdown("""
     .sc-proyecto { color: #1e293b; font-size: 0.95rem; font-weight: 700; margin: 4px 0; }
     .sc-monto { color: #16a34a; font-size: 1.1rem; font-weight: 800; display: block; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
-    .hist-card { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; }
-    .hist-card.enviada { border-left: 4px solid #8b5cf6; background: #f5f3ff; }
-    .hist-card.bloqueada { border-left: 4px solid #ef4444; background: #fef2f2; }
+    .hist-card { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; border-left: 4px solid #94a3b8; }
+    .hist-card.tipo-email { border-left-color: #3b82f6; }
+    .hist-card.tipo-llamada { border-left-color: #f59e0b; }
+    .hist-card.tipo-reunion { border-left-color: #10b981; }
+    .hist-card.tipo-asignacion { border-left-color: #8b5cf6; }
+    .hist-card.enviada { background: #f5f3ff; border-left-color: #8b5cf6; }
+    .hist-card.bloqueada { background: #fef2f2; border-left-color: #ef4444; }
+    .hist-card.respondida { background: #f0fdf4; border-left-color: #16a34a; }
     .estado-enviada { color: #8b5cf6; font-weight: 600; }
     .estado-bloqueada { color: #ef4444; font-weight: 700; }
     .activity-line { font-size: 0.72rem; color: #475569; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -301,22 +306,28 @@ if st.session_state.selected_id:
                     assigned_name = RECURSOS_PRESALES.get(a["assigned_to"], "")
 
                 light, label = _traffic_light(a)
+                tipo_class = f'tipo-{a.get("tipo", "").lower().replace("ó", "o")}' if a.get("tipo") else ""
                 if a["estado"] == "Enviada" and label == "Bloqueada":
-                    card_class = "hist-card bloqueada"
+                    card_class = f"hist-card bloqueada"
                     estado_html = '<span class="estado-bloqueada">🔴 BLOQUEADA</span>'
                 elif a["estado"] == "Enviada":
-                    card_class = "hist-card enviada"
+                    card_class = f"hist-card enviada"
                     estado_html = f'<span class="estado-enviada">🟣 {a["estado"]} — {label}</span>'
+                elif a["estado"] == "Respondida":
+                    card_class = f"hist-card respondida"
+                    estado_html = f'<span style="color:#16a34a; font-weight:600;">🟢 Respondida</span>'
                 else:
-                    card_class = "hist-card"
+                    card_class = f"hist-card {tipo_class}"
                     estado_html = f'<i>{a["estado"]}</i>'
 
-                obj_txt = f': {a["objetivo"]}' if a.get("objetivo") else ""
+                obj_txt = f' {a["objetivo"]}' if a.get("objetivo") else ""
                 asig_txt = f' 👤 <b>{assigned_name}</b>' if assigned_name else ""
                 feedback_html = f'<br><b>Feedback:</b> {a["feedback"]}' if a.get("feedback") else ""
                 fecha_display = str(a.get("fecha", ""))
+                tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
+                tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
 
-                st.markdown(f'<div class="{card_class}"><b>{a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} ({fecha_display}) - {estado_html}<br>{a.get("descripcion", "")}{feedback_html}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="{card_class}"><b>{tipo_icon} {a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} <span style="color:#94a3b8; font-size:0.8rem;">({fecha_display})</span> {estado_html}<br><span style="color:#64748b; font-size:0.85rem;">{a.get("descripcion", "")}</span>{feedback_html}</div>', unsafe_allow_html=True)
 
                 aid = a['id']
                 if a["estado"] == "Pendiente":
@@ -522,7 +533,7 @@ else:
                 act_paragraphs = []
                 for a in opp_acts:
                     light, label = _traffic_light(a)
-                    obj = f': {a["objetivo"]}' if a.get("objetivo") else ""
+                    obj = f' {a["objetivo"]}' if a.get("objetivo") else ""
                     dest = f' - {a["destinatario"]}' if a.get("destinatario") else ""
                     asig_name = ""
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
