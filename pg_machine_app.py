@@ -508,8 +508,7 @@ else:
     tabs = ["📊 Tablero", "📋 Actividades"]
     if is_manager_or_admin():
         tabs.append("📈 Control")
-    if is_admin():
-        tabs.append("⚙️ Admin")
+    tabs.append("👥 Equipo")
 
     selected_tabs = st.tabs(tabs)
 
@@ -923,23 +922,30 @@ else:
                     df_resp_chart = pd.DataFrame({"Miembro": list(resp_by_member.keys()), "Respondidas": list(resp_by_member.values())})
                     st.bar_chart(df_resp_chart.set_index("Miembro"), color=["#16a34a"])
 
-    # --- TAB: ADMIN (solo para admins) ---
-    admin_tab_idx = 3 if is_manager_or_admin() else 2
-    if is_admin():
-        with selected_tabs[admin_tab_idx]:
-            st.markdown(user_bar_html, unsafe_allow_html=True)
-            admin_tab1, admin_tab2, admin_tab3 = st.tabs(["👥 Equipo", "⚙️ Configuración", "📨 Invitaciones"])
+    # --- TAB: EQUIPO (todos los roles) ---
+    equipo_tab_idx = 3 if is_manager_or_admin() else 2
+    with selected_tabs[equipo_tab_idx]:
+        st.markdown(user_bar_html, unsafe_allow_html=True)
+        team_info = dal.get_team(team_id)
 
-            # --- EQUIPO ---
-            with admin_tab1:
-                st.subheader("Miembros del Equipo")
-                members = dal.get_team_members(team_id, active_only=False)
+        # Sub-tabs según rol
+        if is_admin():
+            equipo_subtabs = st.tabs(["👥 Miembros", "⚙️ Configuración", "📨 Invitaciones"])
+        elif is_manager_or_admin():  # manager
+            equipo_subtabs = st.tabs(["👥 Miembros", "📨 Invitaciones"])
+        else:  # presales
+            equipo_subtabs = st.tabs(["👥 Miembros", "📨 Invitaciones"])
 
-                # Info del equipo
-                team_info = dal.get_team(team_id)
-                if team_info:
-                    st.caption(f"Equipo: **{team_info['name']}** — ID: `{team_id}`")
+        # --- MIEMBROS ---
+        with equipo_subtabs[0]:
+            st.subheader("Miembros del Equipo")
+            members = dal.get_team_members(team_id, active_only=False)
 
+            if team_info:
+                st.caption(f"Equipo: **{team_info['name']}** — ID: `{team_id}`")
+
+            if is_manager_or_admin():
+                # Admin y Manager: edición completa
                 for m in members:
                     with st.expander(f"{'🟢' if m['active'] else '🔴'} {m['full_name']} — {m['role']} {'(' + m['specialty'] + ')' if m.get('specialty') else ''}"):
                         with st.form(f"edit_member_{m['id']}"):
@@ -961,9 +967,17 @@ else:
                                 })
                                 st.success("Miembro actualizado.")
                                 st.rerun()
+            else:
+                # Presales: vista de solo lectura
+                active_members = [m for m in members if m["active"]]
+                for m in active_members:
+                    role_emoji = {"admin": "🔑", "manager": "📊", "presales": "💼"}.get(m["role"], "👤")
+                    specialty_txt = f" · {m['specialty']}" if m.get("specialty") else ""
+                    st.markdown(f"{role_emoji} **{m['full_name']}** — {m['role']}{specialty_txt}")
 
-            # --- CONFIGURACIÓN ---
-            with admin_tab2:
+        # --- CONFIGURACIÓN (solo admin) ---
+        if is_admin():
+            with equipo_subtabs[1]:
                 st.subheader("Configuración del Equipo")
 
                 # SLA Opciones
@@ -1012,50 +1026,54 @@ else:
                     except Exception as e:
                         st.error(f"JSON inválido: {e}")
 
-            # --- INVITACIONES ---
-            with admin_tab3:
-                st.subheader("Invitar Miembros")
+        # --- INVITACIONES ---
+        inv_subtab_idx = 2 if is_admin() else 1
+        with equipo_subtabs[inv_subtab_idx]:
+            st.subheader("Invitar Miembros")
 
-                app_url = st.secrets.get("APP_URL", "https://your-app.streamlit.app")
-                team_name = team_info['name'] if team_info else 'Equipo'
+            app_url = st.secrets.get("APP_URL", "https://your-app.streamlit.app")
+            team_name = team_info['name'] if team_info else 'Equipo'
 
-                st.markdown(f"""
+            if not is_manager_or_admin():
+                st.info("Puedes invitar a otros miembros presales a unirse al equipo.")
+
+            st.markdown(f"""
 **Pasos para invitar a un nuevo miembro:**
 1. Comparte el siguiente enlace y datos con el invitado
 2. El invitado abre el enlace, selecciona **"Unirse a Equipo"** y se registra con el ID de equipo
 """)
-                inv_c1, inv_c2 = st.columns(2)
-                inv_c1.text_input("Enlace de la app", value=app_url, disabled=True, key="invite_url")
-                inv_c2.text_input("ID de equipo", value=team_id, disabled=True, key="invite_tid")
+            inv_c1, inv_c2 = st.columns(2)
+            inv_c1.text_input("Enlace de la app", value=app_url, disabled=True, key="invite_url")
+            inv_c2.text_input("ID de equipo", value=team_id, disabled=True, key="invite_tid")
 
-                st.divider()
+            st.divider()
 
-                # SendGrid email (optional) — real keys are 69+ chars like SG.xxx.yyy
-                sg_key = st.secrets.get("SENDGRID_API_KEY", "")
-                sg_configured = sg_key and len(sg_key) > 50 and sg_key.startswith("SG.")
+            # SendGrid email (optional) — real keys are 69+ chars like SG.xxx.yyy
+            sg_key = st.secrets.get("SENDGRID_API_KEY", "")
+            sg_configured = sg_key and len(sg_key) > 50 and sg_key.startswith("SG.")
 
-                with st.expander("📨 Enviar invitación por email (opcional)"):
-                    if not sg_configured:
-                        st.warning("SendGrid no está configurado. Para habilitar invitaciones por email, crea una cuenta gratuita en [sendgrid.com](https://sendgrid.com) y agrega tu API key en los secrets de la app.")
-                    else:
-                        with st.form("invite_form"):
-                            inv_email = st.text_input("Email del invitado")
-                            inv_name = st.text_input("Nombre (opcional)")
-                            if st.form_submit_button("📨 Enviar Invitación"):
-                                if inv_email:
-                                    from sendgrid import SendGridAPIClient
-                                    from sendgrid.helpers.mail import Mail, Email, To, Content
-                                    try:
-                                        sg = SendGridAPIClient(api_key=sg_key)
-                                        message = Mail(
-                                            from_email=Email(st.secrets.get("SENDGRID_FROM_EMAIL", "noreply@pgmachine.com"), st.secrets.get("SENDGRID_FROM_NAME", "PG Machine")),
-                                            to_emails=To(inv_email),
-                                            subject=f"Invitación a PG Machine — {team_name}",
-                                            html_content=Content("text/html", f'<div style="font-family:Inter,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>Invitación a PG Machine</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>Hola{" " + inv_name if inv_name else ""},</p><p>Te han invitado a unirte al equipo <b>{team_name}</b> en PG Machine.</p><p>Para registrarte, abre la app y selecciona "Unirse a Equipo":</p><p><b>ID del equipo:</b> <code>{team_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Ir a PG Machine</a></div></div></div>')
-                                        )
-                                        sg.send(message)
-                                        st.success(f"Invitación enviada a {inv_email}")
-                                    except Exception as e:
-                                        st.error(f"Error enviando email: {e}")
-                                else:
-                                    st.error("Ingresa un email.")
+            with st.expander("📨 Enviar invitación por email (opcional)"):
+                if not sg_configured:
+                    st.warning("SendGrid no está configurado. Para habilitar invitaciones por email, crea una cuenta gratuita en [sendgrid.com](https://sendgrid.com) y agrega tu API key en los secrets de la app.")
+                else:
+                    with st.form("invite_form"):
+                        inv_email = st.text_input("Email del invitado")
+                        inv_name = st.text_input("Nombre (opcional)")
+                        if st.form_submit_button("📨 Enviar Invitación"):
+                            if inv_email:
+                                from sendgrid import SendGridAPIClient
+                                from sendgrid.helpers.mail import Mail, Email, To, Content
+                                try:
+                                    sg = SendGridAPIClient(api_key=sg_key)
+                                    message = Mail(
+                                        from_email=Email(st.secrets.get("SENDGRID_FROM_EMAIL", "noreply@pgmachine.com"), st.secrets.get("SENDGRID_FROM_NAME", "PG Machine")),
+                                        to_emails=To(inv_email),
+                                        subject=f"Invitación a PG Machine — {team_name}",
+                                        html_content=Content("text/html", f'<div style="font-family:Inter,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>Invitación a PG Machine</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>Hola{" " + inv_name if inv_name else ""},</p><p>Te han invitado a unirte al equipo <b>{team_name}</b> en PG Machine.</p><p>Para registrarte, abre la app y selecciona "Unirse a Equipo":</p><p><b>ID del equipo:</b> <code>{team_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Ir a PG Machine</a></div></div></div>')
+                                    )
+                                    sg.send(message)
+                                    st.success(f"Invitación enviada a {inv_email}")
+                                except Exception as e:
+                                    st.error(f"Error enviando email: {e}")
+                            else:
+                                st.error("Ingresa un email.")
