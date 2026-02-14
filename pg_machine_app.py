@@ -309,14 +309,14 @@ if st.session_state.selected_id:
                     st.rerun()
 
         # Gestión de Actividades
-        c_canal, _, _ = st.columns(3)
-        tipo = c_canal.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
+        st.subheader("➕ Nueva Actividad")
+        tipo = st.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
 
         with st.form("act_form"):
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             sla_key = c1.selectbox("SLA", list(SLA_OPCIONES.keys()))
             fecha = c2.date_input("Fecha", value=date.today())
-            objetivo = st.text_input("Objetivo")
+            objetivo = c3.text_input("Objetivo")
             asignado_a_id = None
             if tipo == "Asignación":
                 c4, c5, c6 = st.columns(3)
@@ -331,7 +331,7 @@ if st.session_state.selected_id:
                 c4, c5 = st.columns(2)
                 destinatario = c4.text_input("Destinatario")
                 sla_rpta = c5.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
-            desc = st.text_area("Descripción / Notas")
+            desc = st.text_area("Descripción / Notas", height=80)
 
             if st.form_submit_button("Guardar Actividad"):
                 sla_hours = _sla_to_hours(sla_key)
