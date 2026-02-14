@@ -49,25 +49,12 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card */
-    .pgm-card-wrap { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
-    .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
-    /* Transparent button overlaps bottom of card — large click area */
-    div:has(> div .pgm-card-wrap) + div,
-    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div,
-    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div {
-        margin-top: -70px !important; position: relative !important; z-index: 2 !important;
-    }
-    div:has(> div .pgm-card-wrap) + div button,
-    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div button,
-    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div button {
-        opacity: 0 !important; min-height: 70px !important; height: 70px !important;
-        width: 100% !important; cursor: pointer !important; padding: 0 !important;
-        border: none !important; background: transparent !important; margin-bottom: 6px !important;
-    }
-    /* Prevent tab label truncation */
-    [data-baseweb="tab-list"] { overflow: visible !important; }
-    button[data-baseweb="tab"] { font-size: 0.75rem !important; white-space: nowrap !important; padding: 8px 10px !important; }
+    /* Clickable card — rendered as HTML + invisible button overlay */
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
+    .pgm-card-wrap:hover { border-color: #1a73e8; border-width: 2px; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
+    /* Card open button — styled via JS class .pgm-open-btn */
+    .pgm-open-btn { font-size: 0.55rem !important; padding: 2px 0 !important; min-height: 0 !important; height: auto !important; color: #94a3b8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 8px 8px !important; background: #fafbfc !important; margin-top: -4px !important; margin-bottom: 6px !important; }
+    .pgm-open-btn:hover { color: #1a73e8 !important; background: #eff6ff !important; }
     .pgm-card-wrap .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
     .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
     .pgm-card-wrap .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
@@ -84,7 +71,26 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-
+st.markdown("""
+    <script>
+    function pgmFixLayout() {
+        // Full-width layout
+        document.querySelectorAll('section.main > div').forEach(el => {
+            if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
+        });
+        // Style card buttons that follow card HTML
+        document.querySelectorAll('button').forEach(btn => {
+            const txt = (btn.textContent || '').trim();
+            if (txt === '▸' && !btn.classList.contains('pgm-open-btn')) {
+                btn.classList.add('pgm-open-btn');
+            }
+        });
+    }
+    const observer = new MutationObserver(pgmFixLayout);
+    observer.observe(document.body, {childList: true, subtree: true, attributes: true});
+    pgmFixLayout();
+    </script>
+    """, unsafe_allow_html=True)
 
 def _get_initials(full_name: str) -> str:
     """Extrae iniciales: primera letra del nombre + primera del apellido."""
@@ -572,7 +578,7 @@ else:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
                 card_html = f'<div class="pgm-card-wrap">{header_html}{meta_html}{acts_html}</div>'
                 st.markdown(card_html, unsafe_allow_html=True)
-                if st.button("▸ abrir", key=f"g_{o['id']}", use_container_width=True):
+                if st.button("▸", key=f"g_{o['id']}", use_container_width=True):
                     st.session_state.selected_id = o['id']
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
