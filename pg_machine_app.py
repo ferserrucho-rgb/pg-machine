@@ -56,21 +56,23 @@ st.markdown("""
         border-radius: 8px !important; padding: 10px 12px !important;
         text-align: left !important; box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
         transition: all 0.2s !important; min-height: 0 !important; cursor: pointer !important;
+        display: flex !important; flex-direction: column !important; align-items: flex-start !important;
     }
     .card-btn button:hover {
         border-color: #1a73e8 !important; border-width: 2px !important;
         box-shadow: 0 3px 12px rgba(26,115,232,0.18) !important;
     }
-    .card-btn button div[data-testid="stMarkdownContainer"] { text-align: left !important; }
-    .card-btn button p { text-align: left !important; margin: 0 0 3px 0 !important; line-height: 1.4 !important; }
+    .card-btn button div[data-testid="stMarkdownContainer"] { text-align: left !important; width: 100% !important; }
+    .card-btn button div[data-testid="stMarkdownContainer"] > * { text-align: left !important; }
+    .card-btn button p { text-align: left !important; margin: 0 0 3px 0 !important; line-height: 1.4 !important; padding-left: 0 !important; }
     /* Line 1: Project name + stage + amount */
-    .card-btn button p:first-child { font-size: 0.85rem !important; font-weight: 600 !important; color: #1e293b !important; }
+    .card-btn button p:first-child { font-size: 0.85rem !important; font-weight: 600 !important; color: #1e293b !important; text-align: left !important; }
     .card-btn button p:first-child em { color: #8b5cf6 !important; font-size: 0.65rem !important; font-weight: 600 !important; font-style: italic !important; }
     .card-btn button p:first-child code { color: #16a34a !important; font-size: 0.93rem !important; font-weight: 800 !important; background: none !important; padding: 0 !important; border: none !important; }
     /* Line 2: ID + Close date (grey monospace) */
-    .card-btn button p:nth-child(2) { font-size: 0.65rem !important; color: #94a3b8 !important; font-family: monospace !important; line-height: 1.3 !important; }
-    /* Line 3+: Activity lines (smaller, muted) */
-    .card-btn button p:nth-child(n+3) { font-size: 0.62rem !important; color: #64748b !important; line-height: 1.3 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; margin: 0 !important; }
+    .card-btn button p:nth-child(2) { font-size: 0.65rem !important; color: #94a3b8 !important; font-family: monospace !important; line-height: 1.3 !important; text-align: left !important; }
+    /* Line 3+: Activity lines (smaller, muted, left-aligned) */
+    .card-btn button p:nth-child(n+3) { font-size: 0.62rem !important; color: #64748b !important; line-height: 1.3 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; margin: 0 !important; text-align: left !important; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -156,7 +158,7 @@ def _traffic_light(act):
     now = datetime.now()
 
     if estado == "Respondida":
-        return "🟢", "Respondida"
+        return "🟩", "Respondida"
 
     if estado == "Enviada":
         enviada_ts = _naive(datetime.fromisoformat(act["enviada_ts"])) if act.get("enviada_ts") else now
@@ -164,8 +166,8 @@ def _traffic_light(act):
         deadline = enviada_ts + timedelta(days=sla_dias)
         remaining = deadline - now
         if remaining.total_seconds() <= 0:
-            return "🔴", "Bloqueada"
-        return "🟣", f"Esp. rpta {remaining.days}d"
+            return "🟥", "Bloqueada"
+        return "🟪", f"Esp. rpta {remaining.days}d"
 
     # Pendiente
     fecha_str = act.get("fecha", "")
@@ -176,9 +178,9 @@ def _traffic_light(act):
 
     hoy = date.today()
     if fecha > hoy:
-        return "🟡", f"Pendiente {fecha.strftime('%d/%m')}"
+        return "🟨", f"Pendiente {fecha.strftime('%d/%m')}"
     if fecha == hoy:
-        return "🟡", "Hoy"
+        return "🟨", "Hoy"
 
     # SLA check
     sla_deadline_str = act.get("sla_deadline")
@@ -187,13 +189,13 @@ def _traffic_light(act):
         created = _naive(datetime.fromisoformat(act["created_at"])) if isinstance(act.get("created_at"), str) else (_naive(act.get("created_at")) or now)
         remaining = deadline - now
         if remaining.total_seconds() <= 0:
-            return "🔴", "Vencida"
+            return "🟥", "Vencida"
         total = deadline - created
         ratio = remaining / total if total.total_seconds() > 0 else 0
         hours_left = remaining.total_seconds() / 3600
         if ratio > 0.5:
-            return ("🟢", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟢", f"{remaining.days}d rest.")
-        return ("🟡", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟡", f"{remaining.days}d rest.")
+            return ("🟩", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟩", f"{remaining.days}d rest.")
+        return ("🟨", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟨", f"{remaining.days}d rest.")
 
     # Fallback from sla_key
     sla_cfg = SLA_OPCIONES.get(act.get("sla_key", ""), {})
@@ -204,13 +206,13 @@ def _traffic_light(act):
         deadline = created + timedelta(days=sla_cfg.get("dias", 7))
     remaining = deadline - now
     if remaining.total_seconds() <= 0:
-        return "🔴", "Vencida"
+        return "🟥", "Vencida"
     total = deadline - created
     ratio = remaining / total if total.total_seconds() > 0 else 0
     hours_left = remaining.total_seconds() / 3600
     if ratio > 0.5:
-        return ("🟢", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟢", f"{remaining.days}d rest.")
-    return ("🟡", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟡", f"{remaining.days}d rest.")
+        return ("🟩", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟩", f"{remaining.days}d rest.")
+    return ("🟨", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟨", f"{remaining.days}d rest.")
 
 
 # --- 3. SIDEBAR ---
@@ -328,13 +330,13 @@ if st.session_state.selected_id:
                 tipo_class = f'tipo-{a.get("tipo", "").lower().replace("ó", "o")}' if a.get("tipo") else ""
                 if a["estado"] == "Enviada" and label == "Bloqueada":
                     card_class = f"hist-card bloqueada"
-                    estado_html = '<span class="estado-bloqueada">🔴 BLOQUEADA</span>'
+                    estado_html = '<span class="estado-bloqueada">🟥 BLOQUEADA</span>'
                 elif a["estado"] == "Enviada":
                     card_class = f"hist-card enviada"
-                    estado_html = f'<span class="estado-enviada">🟣 {a["estado"]} — {label}</span>'
+                    estado_html = f'<span class="estado-enviada">🟪 {a["estado"]} — {label}</span>'
                 elif a["estado"] == "Respondida":
                     card_class = f"hist-card respondida"
-                    estado_html = f'<span style="color:#16a34a; font-weight:600;">🟢 Respondida</span>'
+                    estado_html = f'<span style="color:#16a34a; font-weight:600;">🟩 Respondida</span>'
                 else:
                     card_class = f"hist-card {tipo_class}"
                     estado_html = f'<i>{a["estado"]}</i>'
@@ -696,7 +698,7 @@ else:
             m2.metric("Pendientes", len(df_filtered[df_filtered["Estado Interno"] == "Pendiente"]))
             m3.metric("Enviadas", len(df_filtered[df_filtered["Estado Interno"] == "Enviada"]))
             m4.metric("Respondidas", len(df_filtered[df_filtered["Estado Interno"] == "Respondida"]))
-            m5.metric("🔴 Bloqueadas/Vencidas", len(df_filtered[df_filtered["Estado"].isin(["Bloqueada", "Vencida"])]))
+            m5.metric("🟥 Bloqueadas/Vencidas", len(df_filtered[df_filtered["Estado"].isin(["Bloqueada", "Vencida"])]))
 
             st.divider()
             sorted_indices = df_filtered.sort_values("Fecha", ascending=False).index.tolist() if "Fecha" in df_filtered.columns else df_filtered.index.tolist()
