@@ -49,14 +49,18 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card inner styles (outer card uses inline styles on <a>) */
-    .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
-    .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
-    .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
-    .opp-meta { font-size: 0.62rem; color: #64748b; margin: 4px 0 0 0; }
-    .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.6rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; }
-    .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
-    .act-line { font-size: 0.6rem; color: #475569; font-style: italic; line-height: 1.4; padding: 1px 0 1px 8px; border-left: 2px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Clickable card — rendered as HTML + button as card bottom */
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .pgm-card-wrap .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
+    .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
+    .pgm-card-wrap .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
+    .pgm-card-wrap .opp-meta { font-size: 0.62rem; color: #64748b; margin: 4px 0 0 0; }
+    .pgm-card-wrap .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.6rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; }
+    .pgm-card-wrap .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
+    .pgm-card-wrap .act-line { font-size: 0.6rem; color: #475569; font-style: italic; line-height: 1.4; padding: 1px 0 1px 8px; border-left: 2px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Card open button — styled as card bottom via JS */
+    .pgm-open-btn { font-size: 0.55rem !important; padding: 2px 0 !important; min-height: 0 !important; height: auto !important; color: #94a3b8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 8px 8px !important; background: #fafbfc !important; margin-top: -4px !important; margin-bottom: 6px !important; }
+    .pgm-open-btn:hover { color: #1a73e8 !important; background: #eff6ff !important; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -73,7 +77,13 @@ st.markdown("""
         document.querySelectorAll('section.main > div').forEach(el => {
             if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
         });
-        // (card click handled via <a> links, no JS needed)
+        // Style "abrir" buttons that follow card HTML
+        document.querySelectorAll('button').forEach(btn => {
+            const txt = (btn.textContent || '').trim();
+            if (txt === '▸ abrir' && !btn.classList.contains('pgm-open-btn')) {
+                btn.classList.add('pgm-open-btn');
+            }
+        });
     }
     const observer = new MutationObserver(pgmFixLayout);
     observer.observe(document.body, {childList: true, subtree: true, attributes: true});
@@ -96,12 +106,6 @@ user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
     st.session_state.selected_id = None
-# Read selected opp from query params (card click navigation)
-_sel_param = st.query_params.get("sel")
-if _sel_param and st.session_state.selected_id != _sel_param:
-    st.session_state.selected_id = _sel_param
-    st.query_params.pop("sel", None)
-    st.rerun()
 if 'focused_cat' not in st.session_state:
     st.session_state.focused_cat = None
 
@@ -571,7 +575,11 @@ else:
                 acts_html = ""
                 if act_lines:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
-                st.markdown(f'<a href="?sel={o["id"]}" style="display:block;text-decoration:none;color:inherit;background:white;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.04);cursor:pointer;">{header_html}{meta_html}{acts_html}</a>', unsafe_allow_html=True)
+                card_html = f'<div class="pgm-card-wrap">{header_html}{meta_html}{acts_html}</div>'
+                st.markdown(card_html, unsafe_allow_html=True)
+                if st.button("▸ abrir", key=f"g_{o['id']}", use_container_width=True):
+                    st.session_state.selected_id = o['id']
+                    st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         if focused:
