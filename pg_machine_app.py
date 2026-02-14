@@ -1028,6 +1028,20 @@ else:
                                 })
                                 st.success("Miembro actualizado.")
                                 st.rerun()
+                        # Eliminar miembro (no puede eliminarse a sí mismo)
+                        if m["id"] != user_id:
+                            if st.button("🗑️ Eliminar miembro", key=f"del_member_{m['id']}"):
+                                st.session_state[f"confirm_del_member_{m['id']}"] = True
+                            if st.session_state.get(f"confirm_del_member_{m['id']}"):
+                                st.warning(f"Eliminar a **{m['full_name']}**? Se eliminará su perfil y cuenta.")
+                                dm1, dm2 = st.columns(2)
+                                if dm1.button("Confirmar", key=f"cdel_m_y_{m['id']}", use_container_width=True):
+                                    dal.delete_team_member(m["id"])
+                                    st.session_state.pop(f"confirm_del_member_{m['id']}", None)
+                                    st.rerun()
+                                if dm2.button("Cancelar", key=f"cdel_m_n_{m['id']}", use_container_width=True):
+                                    st.session_state.pop(f"confirm_del_member_{m['id']}", None)
+                                    st.rerun()
             else:
                 # Otros roles: vista de solo lectura
                 active_members = [m for m in members if m["active"]]
@@ -1121,6 +1135,20 @@ else:
                                             })
                                             st.success("Miembro actualizado.")
                                             st.rerun()
+                                    # Eliminar miembro (no puede eliminarse a sí mismo)
+                                    if m["id"] != user_id:
+                                        if st.button("🗑️ Eliminar", key=f"del_tm_{t['id']}_{m['id']}"):
+                                            st.session_state[f"confirm_del_tm_{t['id']}_{m['id']}"] = True
+                                        if st.session_state.get(f"confirm_del_tm_{t['id']}_{m['id']}"):
+                                            st.warning(f"Eliminar a **{m['full_name']}**?")
+                                            dtm1, dtm2 = st.columns(2)
+                                            if dtm1.button("Confirmar", key=f"cdel_tm_y_{t['id']}_{m['id']}", use_container_width=True):
+                                                dal.delete_team_member(m["id"])
+                                                st.session_state.pop(f"confirm_del_tm_{t['id']}_{m['id']}", None)
+                                                st.rerun()
+                                            if dtm2.button("Cancelar", key=f"cdel_tm_n_{t['id']}_{m['id']}", use_container_width=True):
+                                                st.session_state.pop(f"confirm_del_tm_{t['id']}_{m['id']}", None)
+                                                st.rerun()
 
                             # Mover miembro a otro equipo
                             if len(all_teams) > 1:

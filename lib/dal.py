@@ -291,6 +291,17 @@ def update_team_member(profile_id: str, data: dict) -> dict:
         .execute()
     return resp.data[0] if resp.data else {}
 
+def delete_team_member(profile_id: str):
+    """Elimina un miembro del equipo (perfil + usuario auth)."""
+    sb = _get_admin_supabase()
+    # Eliminar perfil (cascade borra actividades asignadas, notificaciones, etc.)
+    sb.table("profiles").delete().eq("id", profile_id).execute()
+    # Eliminar usuario de Supabase Auth
+    try:
+        sb.auth.admin.delete_user(profile_id)
+    except Exception:
+        pass
+
 
 # ============================================================
 # TEAM CONFIG
