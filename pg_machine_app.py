@@ -49,31 +49,30 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card — entire card is a button */
-    .card-btn { margin-bottom: 5px; }
-    .card-btn button {
+    /* Clickable card buttons — styled via JS class .pgm-card */
+    .pgm-card {
         background: white !important; border: 1px solid #e2e8f0 !important;
         border-radius: 8px !important; padding: 10px 12px !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
         transition: all 0.2s !important; min-height: 0 !important; cursor: pointer !important;
         display: block !important; text-align: left !important;
     }
-    .card-btn button:hover {
+    .pgm-card:hover {
         border-color: #1a73e8 !important; border-width: 2px !important;
         box-shadow: 0 3px 12px rgba(26,115,232,0.18) !important;
     }
-    .card-btn button > div,
-    .card-btn button div[data-testid="stMarkdownContainer"] { text-align: left !important; width: 100% !important; display: block !important; }
-    .card-btn button p { text-align: left !important; margin: 0 0 2px 0 !important; line-height: 1.4 !important; width: 100% !important; display: block !important; }
-    /* Line 1: Project name + stage + amount */
-    .card-btn button p:first-child { font-size: 0.85rem !important; font-weight: 600 !important; color: #1e293b !important; margin-bottom: 5px !important; }
-    .card-btn button p:first-child em { color: white !important; font-size: 0.58rem !important; font-weight: 600 !important; font-style: normal !important; background: #8b5cf6 !important; padding: 2px 7px !important; border-radius: 10px !important; font-family: Georgia, serif !important; letter-spacing: 0.03em !important; vertical-align: middle !important; }
-    .card-btn button p:first-child code { color: #16a34a !important; font-size: 0.93rem !important; font-weight: 800 !important; background: none !important; padding: 0 !important; border: none !important; }
+    .pgm-card > div,
+    .pgm-card div[data-testid="stMarkdownContainer"] { text-align: left !important; width: 100% !important; display: block !important; }
+    .pgm-card p { text-align: left !important; margin: 0 0 2px 0 !important; line-height: 1.4 !important; width: 100% !important; display: block !important; }
+    /* Line 1: Project name + stage badge + amount */
+    .pgm-card p:first-child { font-size: 0.85rem !important; font-weight: 600 !important; color: #1e293b !important; margin-bottom: 5px !important; }
+    .pgm-card p:first-child em { color: white !important; font-size: 0.58rem !important; font-weight: 600 !important; font-style: normal !important; background: #8b5cf6 !important; padding: 2px 7px !important; border-radius: 10px !important; font-family: Georgia, serif !important; letter-spacing: 0.03em !important; vertical-align: middle !important; }
+    .pgm-card p:first-child code { color: #16a34a !important; font-size: 0.93rem !important; font-weight: 800 !important; background: none !important; padding: 0 !important; border: none !important; }
     /* Line 2: Metadata — opp ID in monospace box + close date */
-    .card-btn button p:nth-child(2) { font-size: 0.62rem !important; color: #64748b !important; line-height: 1.2 !important; margin-bottom: 6px !important; background: none !important; }
-    .card-btn button p:nth-child(2) code { font-family: 'Courier New', monospace !important; font-size: 0.6rem !important; font-weight: 700 !important; color: #334155 !important; background: #f1f5f9 !important; border: 1px solid #cbd5e1 !important; padding: 2px 6px !important; border-radius: 4px !important; }
+    .pgm-card p:nth-child(2) { font-size: 0.62rem !important; color: #64748b !important; line-height: 1.2 !important; margin-bottom: 6px !important; background: none !important; }
+    .pgm-card p:nth-child(2) code { font-family: 'Courier New', monospace !important; font-size: 0.6rem !important; font-weight: 700 !important; color: #334155 !important; background: #f1f5f9 !important; border: 1px solid #cbd5e1 !important; padding: 2px 6px !important; border-radius: 4px !important; }
     /* Line 3+: Activity lines — compact, left-aligned with border accent */
-    .card-btn button p:nth-child(n+3) { font-size: 0.6rem !important; color: #475569 !important; line-height: 1.35 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; margin: 0 0 1px 0 !important; padding: 2px 0 2px 8px !important; border-left: 2px solid #cbd5e1 !important; }
+    .pgm-card p:nth-child(n+3) { font-size: 0.6rem !important; color: #475569 !important; line-height: 1.35 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; margin: 0 0 1px 0 !important; padding: 2px 0 2px 8px !important; border-left: 2px solid #cbd5e1 !important; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -85,15 +84,22 @@ st.markdown("""
 
 st.markdown("""
     <script>
-    const observer = new MutationObserver(() => {
+    function pgmFixLayout() {
+        // Full-width layout
         document.querySelectorAll('section.main > div').forEach(el => {
             if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
         });
-    });
+        // Card buttons: find buttons with 3+ paragraphs and add pgm-card class
+        document.querySelectorAll('button[kind="secondary"]').forEach(btn => {
+            const ps = btn.querySelectorAll('div[data-testid="stMarkdownContainer"] p');
+            if (ps.length >= 2 && !btn.classList.contains('pgm-card')) {
+                btn.classList.add('pgm-card');
+            }
+        });
+    }
+    const observer = new MutationObserver(pgmFixLayout);
     observer.observe(document.body, {childList: true, subtree: true, attributes: true});
-    document.querySelectorAll('section.main > div').forEach(el => {
-        el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem';
-    });
+    pgmFixLayout();
     </script>
     """, unsafe_allow_html=True)
 
@@ -586,11 +592,9 @@ else:
                     card_label += "\n\n" + meta_line
                 for ap in act_paragraphs:
                     card_label += "\n\n" + ap
-                st.markdown('<div class="card-btn">', unsafe_allow_html=True)
                 if st.button(card_label, key=f"g_{o['id']}", use_container_width=True):
                     st.session_state.selected_id = o['id']
                     st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         if focused:
