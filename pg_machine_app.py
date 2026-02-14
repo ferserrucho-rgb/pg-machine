@@ -283,10 +283,8 @@ if st.session_state.selected_id:
                 st.rerun()
 
     with r_col:
-        st.title(f"🎯 {opp['cuenta']}")
-
-        # --- HISTORIAL (first) ---
-        st.subheader("📜 Historial e Interacción")
+        st.markdown(f'<div style="font-size:1.3rem; font-weight:700; color:#1e293b; padding:8px 0 4px 0;">🎯 {opp["cuenta"]}</div>', unsafe_allow_html=True)
+        st.caption("📜 Historial e Interacción")
         activities = dal.get_activities_for_opportunity(opp["id"])
         for a in activities:
             with st.container():
@@ -318,8 +316,12 @@ if st.session_state.selected_id:
 
                 aid = a['id']
                 if a["estado"] == "Pendiente":
-                    if st.button("✅ ENVIADO", key=f"d_{aid}"):
+                    b1, b2 = st.columns(2)
+                    if b1.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
                         dal.update_activity(aid, {"estado": "Enviada"})
+                        st.rerun()
+                    if b2.button("✏️ Editar", key=f"toggle_edit_{aid}", use_container_width=True):
+                        st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
                         st.rerun()
                 elif a["estado"] == "Enviada":
                     if st.session_state.get(f"show_fb_{aid}"):
@@ -330,16 +332,23 @@ if st.session_state.selected_id:
                                 st.session_state.pop(f"show_fb_{aid}", None)
                                 st.rerun()
                     else:
-                        b1, b2 = st.columns([1, 1])
-                        if b1.button("📩 RESPONDIDA", key=f"r_{aid}"):
+                        b1, b2, b3 = st.columns(3)
+                        if b1.button("📩 RESPONDIDA", key=f"r_{aid}", use_container_width=True):
                             st.session_state[f"show_fb_{aid}"] = True
                             st.rerun()
-                        if b2.button("🔄 REENVIAR", key=f"re_{aid}"):
+                        if b2.button("✏️ Editar", key=f"toggle_edit_{aid}", use_container_width=True):
+                            st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
+                            st.rerun()
+                        if b3.button("🔄 REENVIAR", key=f"re_{aid}", use_container_width=True):
                             dal.update_activity(aid, {"estado": "Pendiente", "enviada_ts": None, "response_deadline": None})
                             st.rerun()
+                else:
+                    if st.button("✏️ Editar", key=f"toggle_edit_{aid}"):
+                        st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
+                        st.rerun()
 
-                # Editar actividad
-                with st.expander("✏️ Editar", expanded=False):
+                # Inline edit form (toggled)
+                if st.session_state.get(f"show_edit_{aid}"):
                     with st.form(f"edit_act_{aid}"):
                         ea_c1, ea_c2, ea_c3 = st.columns(3)
                         ea_tipo = ea_c1.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"],
@@ -350,15 +359,16 @@ if st.session_state.selected_id:
                             index=sla_keys.index(a["sla_key"]) if a.get("sla_key") in sla_keys else 0,
                             key=f"es_{aid}")
                         ea_fecha = ea_c3.date_input("Fecha", value=_parse_date(a.get("fecha", "")) or date.today(), key=f"ef_{aid}")
-                        ea_objetivo = st.text_input("Objetivo", value=a.get("objetivo", ""), key=f"eo_{aid}")
                         ea_c4, ea_c5 = st.columns(2)
-                        ea_dest = ea_c4.text_input("Destinatario", value=a.get("destinatario", ""), key=f"ed_{aid}")
+                        ea_objetivo = ea_c4.text_input("Objetivo", value=a.get("objetivo", ""), key=f"eo_{aid}")
+                        ea_dest = ea_c5.text_input("Destinatario", value=a.get("destinatario", ""), key=f"ed_{aid}")
                         sla_rpta_keys = list(SLA_RESPUESTA.keys())
                         sla_rpta_vals = list(SLA_RESPUESTA.values())
                         cur_sla_idx = sla_rpta_vals.index(a.get("sla_respuesta_dias", 7)) if a.get("sla_respuesta_dias", 7) in sla_rpta_vals else 1
-                        ea_sla_rpta = ea_c5.selectbox("SLA Respuesta", sla_rpta_keys, index=cur_sla_idx, key=f"esr_{aid}")
-                        ea_desc = st.text_area("Descripción", value=a.get("descripcion", ""), key=f"edc_{aid}")
-                        if st.form_submit_button("💾 Guardar"):
+                        ea_sla_rpta = st.selectbox("SLA Respuesta", sla_rpta_keys, index=cur_sla_idx, key=f"esr_{aid}")
+                        ea_desc = st.text_area("Descripción", value=a.get("descripcion", ""), height=60, key=f"edc_{aid}")
+                        fc1, fc2 = st.columns(2)
+                        if fc1.form_submit_button("💾 Guardar"):
                             new_sla_hours = _sla_to_hours(ea_sla)
                             dal.update_activity(aid, {
                                 "tipo": ea_tipo, "sla_key": ea_sla, "sla_hours": new_sla_hours,
@@ -366,8 +376,8 @@ if st.session_state.selected_id:
                                 "destinatario": ea_dest, "sla_respuesta_dias": SLA_RESPUESTA[ea_sla_rpta],
                                 "descripcion": ea_desc,
                             })
+                            st.session_state.pop(f"show_edit_{aid}", None)
                             st.rerun()
-                    # Delete activity button (outside form)
                     if st.button("🗑️ Eliminar actividad", key=f"del_act_{aid}"):
                         st.session_state[f"confirm_del_act_{aid}"] = True
                     if st.session_state.get(f"confirm_del_act_{aid}"):
