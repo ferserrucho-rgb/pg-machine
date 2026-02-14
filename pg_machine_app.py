@@ -83,6 +83,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+st.markdown("""
+    <script>
+    function pgmFixLayout() {
+        document.querySelectorAll('section.main > div').forEach(el => {
+            if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
+        });
+    }
+    const observer = new MutationObserver(pgmFixLayout);
+    observer.observe(document.body, {childList: true, subtree: true});
+    pgmFixLayout();
+    </script>
+    """, unsafe_allow_html=True)
+
 
 def _get_initials(full_name: str) -> str:
     """Extrae iniciales: primera letra del nombre + primera del apellido."""
