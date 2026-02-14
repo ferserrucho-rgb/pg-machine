@@ -49,9 +49,30 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card — hover highlight, click handled by JS */
-    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+    /* Clickable card — flat bottom merges with invisible button below */
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
     .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
+    /* Pure CSS: hide the abrir button, style it as thin card bottom strip */
+    div:has(> div .pgm-card-wrap) + div button,
+    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div button,
+    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div button {
+        font-size: 0 !important; color: transparent !important; padding: 3px 0 !important;
+        min-height: 0 !important; height: auto !important; line-height: 0 !important;
+        border: 1px solid #e2e8f0 !important; border-top: none !important;
+        border-radius: 0 0 8px 8px !important; background: #fafbfc !important;
+        margin-bottom: 6px !important; cursor: pointer !important;
+    }
+    div:has(> div .pgm-card-wrap) + div button:hover,
+    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap) + div button:hover,
+    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap) + div button:hover {
+        background: #eff6ff !important; border-color: #1a73e8 !important;
+    }
+    /* Highlight card when hovering the button strip below it */
+    div:has(> div .pgm-card-wrap):has(+ div button:hover) .pgm-card-wrap,
+    div:has(> [data-testid="stMarkdown"] .pgm-card-wrap):has(+ div button:hover) .pgm-card-wrap,
+    [data-testid="stVerticalBlock"] > div:has(.pgm-card-wrap):has(+ div button:hover) .pgm-card-wrap {
+        border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18);
+    }
     .pgm-card-wrap .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
     .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
     .pgm-card-wrap .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
@@ -68,48 +89,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown("""
-    <script>
-    function pgmFixLayout() {
-        // Full-width layout
-        document.querySelectorAll('section.main > div').forEach(el => {
-            if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
-        });
-        // Hide "abrir" button containers (collapse to zero height)
-        document.querySelectorAll('button').forEach(btn => {
-            const txt = (btn.textContent || '').trim();
-            if (txt === '▸ abrir' && !btn.dataset.pgmHidden) {
-                btn.dataset.pgmHidden = '1';
-                // Hide the Streamlit wrapper div that contains the button
-                let wrap = btn.closest('[data-testid="stElementToolbarWrapper"]') || btn.closest('[data-testid="element-container"]') || btn.parentElement.parentElement;
-                if (wrap) { wrap.style.height = '0'; wrap.style.overflow = 'hidden'; wrap.style.margin = '0'; wrap.style.padding = '0'; }
-            }
-        });
-        // Make card divs clickable — walk up DOM to find the hidden button
-        document.querySelectorAll('.pgm-card-wrap').forEach(card => {
-            if (card.dataset.pgmClick) return;
-            card.dataset.pgmClick = '1';
-            card.addEventListener('click', () => {
-                let el = card;
-                while (el && el.parentElement) {
-                    el = el.parentElement;
-                    let sib = el.nextElementSibling;
-                    if (sib) {
-                        let btn = sib.querySelector('button');
-                        if (btn && (btn.textContent || '').trim() === '▸ abrir') {
-                            btn.click();
-                            return;
-                        }
-                    }
-                }
-            });
-        });
-    }
-    const observer = new MutationObserver(pgmFixLayout);
-    observer.observe(document.body, {childList: true, subtree: true, attributes: true});
-    pgmFixLayout();
-    </script>
-    """, unsafe_allow_html=True)
 
 def _get_initials(full_name: str) -> str:
     """Extrae iniciales: primera letra del nombre + primera del apellido."""
