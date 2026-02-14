@@ -50,15 +50,14 @@ st.markdown("""
     .opp-monto { color: #16a34a; font-size: 0.95rem; font-weight: 800; }
     .opp-id { color: #94a3b8; font-size: 0.65rem; font-family: monospace; display: block; margin-top: 2px; }
     .opp-stage { color: #8b5cf6; font-size: 0.65rem; font-weight: 600; }
-    /* Clickable card buttons — full width, looks like a card */
-    .card-btn button {
-        background: white !important; border: 1px solid #e2e8f0 !important;
-        border-radius: 8px !important; padding: 10px !important; text-align: left !important;
-        width: 100% !important; min-height: 0 !important; transition: all 0.15s !important;
-        margin-bottom: 4px !important;
+    /* Subtle open-card link button */
+    .open-btn button {
+        background: none !important; border: none !important; box-shadow: none !important;
+        color: #1a73e8 !important; font-size: 0.7rem !important; font-weight: 600 !important;
+        padding: 0 4px !important; min-height: 0 !important; margin: -6px 0 4px 0 !important;
+        cursor: pointer !important;
     }
-    .card-btn button:hover { border-color: #1a73e8 !important; box-shadow: 0 2px 8px rgba(26,115,232,0.12) !important; }
-    .card-btn button p { margin: 0 !important; }
+    .open-btn button:hover { color: #1e293b !important; text-decoration: underline !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -502,14 +501,14 @@ else:
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                         asig_name = a["assigned_profile"]["full_name"]
                     asig = f' 👤{asig_name}' if asig_name else ""
-                    act_lines += f'{light} {a["tipo"]}{obj}{dest}{asig} — {label}  \n'
+                    act_lines += f'<div class="activity-line">{light} {a["tipo"]}{obj}{dest}{asig} — {label}</div>'
                 monto_val = float(o.get("monto") or 0)
-                opp_id_txt = f'`{o.get("opp_id","")}`  ' if o.get("opp_id") else ""
-                close_txt = f'Cierre: {o.get("close_date","")}  ' if o.get("close_date") else ""
-                stage_txt = f'*{o.get("stage","")}*  ' if o.get("stage") else ""
-                label_text = f'**{o["proyecto"]}** {stage_txt} — **USD {monto_val:,.0f}**\n\n{opp_id_txt}{close_txt}\n\n{act_lines}' if act_lines else f'**{o["proyecto"]}** {stage_txt} — **USD {monto_val:,.0f}**\n\n{opp_id_txt}{close_txt}'
-                st.markdown('<div class="card-btn">', unsafe_allow_html=True)
-                if st.button(label_text, key=f"g_{o['id']}", use_container_width=True):
+                opp_id_line = f'<span class="opp-id">ID: {o.get("opp_id","")}</span>' if o.get("opp_id") else ""
+                close_line = f'<span class="opp-id">Cierre: {o.get("close_date","")}</span>' if o.get("close_date") else ""
+                stage_line = f' <span class="opp-stage">{o.get("stage","")}</span>' if o.get("stage") else ""
+                st.markdown(f'<div class="opp-card"><span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}<span class="opp-monto" style="float:right">USD {monto_val:,.0f}</span>{opp_id_line}{close_line}{act_lines}</div>', unsafe_allow_html=True)
+                st.markdown('<div class="open-btn">', unsafe_allow_html=True)
+                if st.button("Abrir ›", key=f"g_{o['id']}", use_container_width=False):
                     st.session_state.selected_id = o['id']
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
