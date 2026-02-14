@@ -49,16 +49,14 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card — anchor tag styled as a scorecard */
-    a.pgm-card { display: block; text-decoration: none; color: inherit; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; cursor: pointer; }
-    a.pgm-card:hover { border-color: #1a73e8; border-width: 2px; box-shadow: 0 3px 12px rgba(26,115,232,0.18); text-decoration: none; color: inherit; }
-    a.pgm-card .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
-    a.pgm-card .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
-    a.pgm-card .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
-    a.pgm-card .opp-meta { font-size: 0.62rem; color: #64748b; margin: 4px 0 0 0; }
-    a.pgm-card .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.6rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; }
-    a.pgm-card .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
-    a.pgm-card .act-line { font-size: 0.6rem; color: #475569; font-style: italic; line-height: 1.4; padding: 1px 0 1px 8px; border-left: 2px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Clickable card inner styles (outer card uses inline styles on <a>) */
+    .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
+    .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
+    .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
+    .opp-meta { font-size: 0.62rem; color: #64748b; margin: 4px 0 0 0; }
+    .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.6rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; }
+    .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
+    .act-line { font-size: 0.6rem; color: #475569; font-style: italic; line-height: 1.4; padding: 1px 0 1px 8px; border-left: 2px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -573,7 +571,7 @@ else:
                 acts_html = ""
                 if act_lines:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
-                st.markdown(f'<a class="pgm-card" href="?sel={o["id"]}">{header_html}{meta_html}{acts_html}</a>', unsafe_allow_html=True)
+                st.markdown(f'<a href="?sel={o["id"]}" style="display:block;text-decoration:none;color:inherit;background:white;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.04);cursor:pointer;">{header_html}{meta_html}{acts_html}</a>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         if focused:
