@@ -56,24 +56,24 @@ st.markdown("""
         border-radius: 8px !important; padding: 10px 12px !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
         transition: all 0.2s !important; min-height: 0 !important; cursor: pointer !important;
-        text-align: left !important; justify-content: flex-start !important;
+        display: block !important; text-align: left !important;
     }
     .card-btn button:hover {
         border-color: #1a73e8 !important; border-width: 2px !important;
         box-shadow: 0 3px 12px rgba(26,115,232,0.18) !important;
     }
-    .card-btn button > div { width: 100% !important; text-align: left !important; }
+    .card-btn button > div,
     .card-btn button div[data-testid="stMarkdownContainer"] { text-align: left !important; width: 100% !important; display: block !important; }
-    .card-btn button p,
-    .card-btn button div[data-testid="stMarkdownContainer"] p { text-align: left !important; margin: 0 0 2px 0 !important; line-height: 1.4 !important; width: 100% !important; }
+    .card-btn button p { text-align: left !important; margin: 0 0 2px 0 !important; line-height: 1.4 !important; width: 100% !important; display: block !important; }
     /* Line 1: Project name + stage + amount */
-    .card-btn button p:first-child { font-size: 0.85rem !important; font-weight: 600 !important; color: #1e293b !important; margin-bottom: 4px !important; }
-    .card-btn button p:first-child em { color: #8b5cf6 !important; font-size: 0.65rem !important; font-weight: 600 !important; font-style: italic !important; }
+    .card-btn button p:first-child { font-size: 0.85rem !important; font-weight: 600 !important; color: #1e293b !important; margin-bottom: 5px !important; }
+    .card-btn button p:first-child em { color: white !important; font-size: 0.58rem !important; font-weight: 600 !important; font-style: normal !important; background: #8b5cf6 !important; padding: 2px 7px !important; border-radius: 10px !important; font-family: Georgia, serif !important; letter-spacing: 0.03em !important; vertical-align: middle !important; }
     .card-btn button p:first-child code { color: #16a34a !important; font-size: 0.93rem !important; font-weight: 800 !important; background: none !important; padding: 0 !important; border: none !important; }
-    /* Line 2: Metadata — pill style, distinct from activities */
-    .card-btn button p:nth-child(2) { font-size: 0.6rem !important; color: #1e293b !important; font-family: monospace !important; line-height: 1.2 !important; background: #e2e8f0 !important; padding: 3px 8px !important; border-radius: 4px !important; display: inline-block !important; margin-bottom: 6px !important; letter-spacing: 0.02em !important; }
+    /* Line 2: Metadata — opp ID in monospace box + close date */
+    .card-btn button p:nth-child(2) { font-size: 0.62rem !important; color: #64748b !important; line-height: 1.2 !important; margin-bottom: 6px !important; background: none !important; }
+    .card-btn button p:nth-child(2) code { font-family: 'Courier New', monospace !important; font-size: 0.6rem !important; font-weight: 700 !important; color: #334155 !important; background: #f1f5f9 !important; border: 1px solid #cbd5e1 !important; padding: 2px 6px !important; border-radius: 4px !important; }
     /* Line 3+: Activity lines — compact, left-aligned with border accent */
-    .card-btn button p:nth-child(n+3) { font-size: 0.6rem !important; color: #475569 !important; line-height: 1.35 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; margin: 0 !important; padding: 2px 0 2px 8px !important; border-left: 2px solid #cbd5e1 !important; }
+    .card-btn button p:nth-child(n+3) { font-size: 0.6rem !important; color: #475569 !important; line-height: 1.35 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; margin: 0 0 1px 0 !important; padding: 2px 0 2px 8px !important; border-left: 2px solid #cbd5e1 !important; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -561,13 +561,13 @@ else:
                 if o.get("stage"):
                     header += f" *{o['stage']}*"
                 header += f" `USD {monto_val:,.0f}`"
-                # Paragraph 2: metadata (ID + close date) — compact tag line
+                # Paragraph 2: metadata (ID in code box + close date)
                 meta_parts = []
                 if o.get("opp_id"):
-                    meta_parts.append(f"ID {o['opp_id']}")
+                    meta_parts.append(f"`{o['opp_id']}`")
                 if o.get("close_date"):
-                    meta_parts.append(f"Cierre {o['close_date']}")
-                meta_line = " | ".join(meta_parts) if meta_parts else ""
+                    meta_parts.append(f"Cierre: {o['close_date']}")
+                meta_line = "  ".join(meta_parts) if meta_parts else ""
                 # Paragraph 3+: each activity as its own paragraph
                 act_paragraphs = []
                 for a in opp_acts:
