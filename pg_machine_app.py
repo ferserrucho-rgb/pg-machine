@@ -1217,7 +1217,24 @@ else:
             st.subheader("Invitar Miembros")
 
             app_url = st.secrets.get("APP_URL", "https://your-app.streamlit.app")
-            team_name = team_info['name'] if team_info else 'Equipo'
+
+            # Admin puede elegir a qué equipo invitar; otros solo a su equipo
+            if is_admin():
+                inv_all_teams = dal.get_all_teams()
+                inv_team_options = {t["id"]: t["name"] for t in inv_all_teams}
+                inv_team_ids = list(inv_team_options.keys())
+                current_idx = inv_team_ids.index(team_id) if team_id in inv_team_ids else 0
+                invite_target_id = st.selectbox(
+                    "Equipo destino",
+                    inv_team_ids,
+                    format_func=lambda tid: inv_team_options[tid],
+                    index=current_idx,
+                    key="invite_target_team",
+                )
+                invite_target_name = inv_team_options.get(invite_target_id, "Equipo")
+            else:
+                invite_target_id = team_id
+                invite_target_name = team_info['name'] if team_info else 'Equipo'
 
             if not has_control_access():
                 st.info("Puedes invitar a otros miembros a unirse al equipo.")
@@ -1229,7 +1246,7 @@ else:
 """)
             inv_c1, inv_c2 = st.columns(2)
             inv_c1.text_input("Enlace de la app", value=app_url, disabled=True, key="invite_url")
-            inv_c2.text_input("ID de equipo", value=team_id, disabled=True, key="invite_tid")
+            inv_c2.text_input("ID de equipo", value=invite_target_id, disabled=True, key="invite_tid")
 
             st.divider()
 
@@ -1253,11 +1270,11 @@ else:
                                     message = Mail(
                                         from_email=Email(st.secrets.get("SENDGRID_FROM_EMAIL", "noreply@pgmachine.com"), st.secrets.get("SENDGRID_FROM_NAME", "PG Machine")),
                                         to_emails=To(inv_email),
-                                        subject=f"Invitación a PG Machine — {team_name}",
-                                        html_content=Content("text/html", f'<div style="font-family:Inter,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>Invitación a PG Machine</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>Hola{" " + inv_name if inv_name else ""},</p><p>Te han invitado a unirte al equipo <b>{team_name}</b> en PG Machine.</p><p>Para registrarte, abre la app y selecciona "Unirse a Equipo":</p><p><b>ID del equipo:</b> <code>{team_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Ir a PG Machine</a></div></div></div>')
+                                        subject=f"Invitación a PG Machine — {invite_target_name}",
+                                        html_content=Content("text/html", f'<div style="font-family:Inter,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>Invitación a PG Machine</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>Hola{" " + inv_name if inv_name else ""},</p><p>Te han invitado a unirte al equipo <b>{invite_target_name}</b> en PG Machine.</p><p>Para registrarte, abre la app y selecciona "Unirse a Equipo":</p><p><b>ID del equipo:</b> <code>{invite_target_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Ir a PG Machine</a></div></div></div>')
                                     )
                                     sg.send(message)
-                                    st.success(f"Invitación enviada a {inv_email}")
+                                    st.success(f"Invitación enviada a {inv_email} para el equipo **{invite_target_name}**")
                                 except Exception as e:
                                     st.error(f"Error enviando email: {e}")
                             else:
