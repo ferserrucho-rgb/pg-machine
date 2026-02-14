@@ -64,8 +64,8 @@ st.markdown("""
     .card-btn button p:first-child code { color: #16a34a !important; font-size: 0.93rem !important; font-weight: 800 !important; background: none !important; padding: 0 !important; border: none !important; }
     /* Line 2: ID + Close date (grey monospace) */
     .card-btn button p:nth-child(2) { font-size: 0.65rem !important; color: #94a3b8 !important; font-family: monospace !important; line-height: 1.3 !important; }
-    /* Line 3+: Activity lines (small, darker) */
-    .card-btn button p:nth-child(n+3) { font-size: 0.72rem !important; color: #475569 !important; line-height: 1.5 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+    /* Line 3+: Activity lines (smaller, muted) */
+    .card-btn button p:nth-child(n+3) { font-size: 0.62rem !important; color: #64748b !important; line-height: 1.3 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; margin: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -528,7 +528,7 @@ else:
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                         asig_name = a["assigned_profile"]["full_name"]
                     asig = f' 👤{asig_name}' if asig_name else ""
-                    act_paragraphs.append(f"{light} {a['tipo']}{obj}{dest}{asig} — {label}")
+                    act_paragraphs.append(f"{light}{obj}{dest}{asig} — {label}")
                 # Assemble: each \n\n creates a new <p> tag
                 card_label = header
                 if meta_line:
