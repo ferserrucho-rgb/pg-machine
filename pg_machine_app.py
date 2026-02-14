@@ -49,8 +49,8 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card — rendered as HTML + invisible button overlay */
-    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
+    /* Clickable card — rendered as HTML, click forwards to hidden button */
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; cursor: pointer; }
     .pgm-card-wrap:hover { border-color: #1a73e8; border-width: 2px; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
     .pgm-card-wrap .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
     .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
@@ -59,9 +59,8 @@ st.markdown("""
     .pgm-card-wrap .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.6rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; }
     .pgm-card-wrap .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
     .pgm-card-wrap .act-line { font-size: 0.6rem; color: #475569; font-style: italic; line-height: 1.4; padding: 1px 0 1px 8px; border-left: 2px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* Card open button — styled via JS class .pgm-open-btn */
-    .pgm-open-btn { font-size: 0.55rem !important; padding: 2px 0 !important; min-height: 0 !important; height: auto !important; color: #94a3b8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 8px 8px !important; background: #fafbfc !important; margin-top: -4px !important; margin-bottom: 6px !important; }
-    .pgm-open-btn:hover { color: #1a73e8 !important; background: #eff6ff !important; }
+    /* Card open button — visually hidden but clickable via JS */
+    .pgm-open-btn { opacity: 0 !important; height: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important; border: none !important; overflow: hidden !important; pointer-events: none !important; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -78,12 +77,27 @@ st.markdown("""
         document.querySelectorAll('section.main > div').forEach(el => {
             if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
         });
-        // Style "abrir" buttons that follow card HTML
+        // Hide "abrir" buttons and make card divs clickable
         document.querySelectorAll('button').forEach(btn => {
             const txt = (btn.textContent || '').trim();
             if (txt === '▸ abrir' && !btn.classList.contains('pgm-open-btn')) {
                 btn.classList.add('pgm-open-btn');
             }
+        });
+        document.querySelectorAll('.pgm-card-wrap').forEach(card => {
+            if (card.dataset.pgmBound) return;
+            card.dataset.pgmBound = '1';
+            card.addEventListener('click', () => {
+                // Walk up to the Streamlit element wrapper, then find the next sibling's button
+                let wrapper = card.closest('[data-testid="stMarkdown"]') || card.closest('[data-testid="element-container"]') || card.parentElement;
+                let sibling = wrapper && wrapper.nextElementSibling;
+                // Search a few siblings in case of extra wrappers
+                for (let i = 0; i < 3 && sibling; i++) {
+                    const btn = sibling.querySelector('button.pgm-open-btn');
+                    if (btn) { btn.click(); return; }
+                    sibling = sibling.nextElementSibling;
+                }
+            });
         });
     }
     const observer = new MutationObserver(pgmFixLayout);
