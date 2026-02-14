@@ -44,20 +44,31 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    .opp-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
-    .opp-card:hover { border-color: #1a73e8; box-shadow: 0 2px 8px rgba(26,115,232,0.12); }
+    .opp-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 6px; }
     .opp-proyecto { color: #1e293b; font-size: 0.85rem; font-weight: 600; }
     .opp-monto { color: #16a34a; font-size: 0.95rem; font-weight: 800; }
     .opp-id { color: #94a3b8; font-size: 0.65rem; font-family: monospace; display: block; margin-top: 2px; }
     .opp-stage { color: #8b5cf6; font-size: 0.65rem; font-weight: 600; }
-    /* Subtle open-card link button */
-    .open-btn button {
-        background: none !important; border: none !important; box-shadow: none !important;
-        color: #1a73e8 !important; font-size: 0.7rem !important; font-weight: 600 !important;
-        padding: 0 4px !important; min-height: 0 !important; margin: -6px 0 4px 0 !important;
-        cursor: pointer !important;
+    /* Clickable card-styled buttons */
+    .card-btn { margin-bottom: 4px; }
+    .card-btn button {
+        background: white !important; border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important; padding: 10px 12px !important;
+        text-align: left !important; box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+        transition: all 0.15s !important; min-height: 0 !important; cursor: pointer !important;
     }
-    .open-btn button:hover { color: #1e293b !important; text-decoration: underline !important; }
+    .card-btn button:hover {
+        border-color: #1a73e8 !important;
+        box-shadow: 0 2px 8px rgba(26,115,232,0.15) !important;
+    }
+    .card-btn button div[data-testid="stMarkdownContainer"] { text-align: left !important; }
+    .card-btn button div[data-testid="stMarkdownContainer"] p {
+        text-align: left !important; margin: 0 0 2px 0 !important;
+        font-size: 0.78rem !important; line-height: 1.4 !important;
+    }
+    .card-btn button div[data-testid="stMarkdownContainer"] p:first-child {
+        font-size: 0.85rem !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -492,7 +503,18 @@ else:
             st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
             for o in opps:
                 opp_acts = all_acts_by_opp.get(o["id"], [])
-                act_lines = ""
+                monto_val = float(o.get("monto") or 0)
+                # Build card label lines
+                line1 = f"**{o['proyecto']}**"
+                if o.get("stage"):
+                    line1 += f" *{o['stage']}*"
+                line1 += f"  ·  **USD {monto_val:,.0f}**"
+                meta_parts = []
+                if o.get("opp_id"):
+                    meta_parts.append(f"`{o['opp_id']}`")
+                if o.get("close_date"):
+                    meta_parts.append(f"Cierre: {o['close_date']}")
+                act_parts = []
                 for a in opp_acts:
                     light, label = _traffic_light(a)
                     obj = f': {a["objetivo"]}' if a.get("objetivo") else ""
@@ -501,14 +523,14 @@ else:
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                         asig_name = a["assigned_profile"]["full_name"]
                     asig = f' 👤{asig_name}' if asig_name else ""
-                    act_lines += f'<div class="activity-line">{light} {a["tipo"]}{obj}{dest}{asig} — {label}</div>'
-                monto_val = float(o.get("monto") or 0)
-                opp_id_line = f'<span class="opp-id">ID: {o.get("opp_id","")}</span>' if o.get("opp_id") else ""
-                close_line = f'<span class="opp-id">Cierre: {o.get("close_date","")}</span>' if o.get("close_date") else ""
-                stage_line = f' <span class="opp-stage">{o.get("stage","")}</span>' if o.get("stage") else ""
-                st.markdown(f'<div class="opp-card"><span class="opp-proyecto">{o["proyecto"]}</span>{stage_line}<span class="opp-monto" style="float:right">USD {monto_val:,.0f}</span>{opp_id_line}{close_line}{act_lines}</div>', unsafe_allow_html=True)
-                st.markdown('<div class="open-btn">', unsafe_allow_html=True)
-                if st.button("Abrir ›", key=f"g_{o['id']}", use_container_width=False):
+                    act_parts.append(f"{light} {a['tipo']}{obj}{dest}{asig} — {label}")
+                card_label = line1
+                if meta_parts:
+                    card_label += "  \n" + " · ".join(meta_parts)
+                if act_parts:
+                    card_label += "  \n" + "  \n".join(act_parts)
+                st.markdown('<div class="card-btn">', unsafe_allow_html=True)
+                if st.button(card_label, key=f"g_{o['id']}", use_container_width=True):
                     st.session_state.selected_id = o['id']
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
