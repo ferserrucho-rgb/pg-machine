@@ -1180,6 +1180,8 @@ else:
         elif act_scope == "👥 Tareas del equipo":
             all_activities_full = [a for a in all_activities_full if a.get("assigned_to") != user_id and a.get("created_by") != user_id]
 
+        all_activities_full.sort(key=_act_status_order)
+
         all_acts_display = []
         act_refs = []
         for a in all_activities_full:
@@ -1245,7 +1247,7 @@ else:
             m5.metric("🟥 Bloqueadas/Vencidas", len(df_filtered[df_filtered["Estado"].isin(["Bloqueada", "Vencida"])]))
 
             st.divider()
-            sorted_indices = df_filtered.sort_values("Fecha", ascending=False).index.tolist() if "Fecha" in df_filtered.columns else df_filtered.index.tolist()
+            sorted_indices = df_filtered.index.tolist()
             display_cols = [c for c in selected_cols if c in df_filtered.columns]
 
             n_cols = len(display_cols)
