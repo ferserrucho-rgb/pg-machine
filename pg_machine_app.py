@@ -501,6 +501,17 @@ def _traffic_light(act):
         return ("🟩", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟩", f"{remaining.days}d rest.")
     return ("🟨", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟨", f"{remaining.days}d rest.")
 
+_ESTADO_ORDER = {"Bloqueada": 0, "Pendiente": 1, "Enviada": 2, "Respondida": 3}
+
+def _act_status_order(a):
+    """Sort key: bloqueada → pendiente → enviada → respondida."""
+    e = a.get("estado", "")
+    if e == "Enviada":
+        _, lbl = _traffic_light(a)
+        if lbl == "Bloqueada":
+            return 0
+    return _ESTADO_ORDER.get(e, 2)
+
 
 # --- 3. SIDEBAR ---
 with st.sidebar:
@@ -748,15 +759,7 @@ if st.session_state.selected_id:
     # --- History ---
     st.caption("📜 Historial e Interacción")
     activities = dal.get_activities_for_opportunity(opp["id"])
-    _estado_order = {"Bloqueada": 0, "Pendiente": 1, "Enviada": 2, "Respondida": 3}
-    def _act_sort_key(a):
-        e = a.get("estado", "")
-        if e == "Enviada":
-            light, lbl = _traffic_light(a)
-            if lbl == "Bloqueada":
-                return 0
-        return _estado_order.get(e, 2)
-    activities.sort(key=_act_sort_key)
+    activities.sort(key=_act_status_order)
     for a in activities:
         with st.container():
             dest_txt = f' → {a["destinatario"]}' if a.get("destinatario") else ""
@@ -1057,16 +1060,7 @@ else:
             safe_cuenta = re.sub(r'[^a-zA-Z0-9]', '_', cuenta)
             st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
             for o in opps:
-                opp_acts = all_acts_by_opp.get(o["id"], [])
-                _eo = {"Bloqueada": 0, "Pendiente": 1, "Enviada": 2, "Respondida": 3}
-                def _card_sort(a):
-                    e = a.get("estado", "")
-                    if e == "Enviada":
-                        _, lbl = _traffic_light(a)
-                        if lbl == "Bloqueada":
-                            return 0
-                    return _eo.get(e, 2)
-                opp_acts.sort(key=_card_sort)
+                opp_acts = sorted(all_acts_by_opp.get(o["id"], []), key=_act_status_order)
                 monto_val = float(o.get("monto") or 0)
                 # Build HTML card — left: name + stage/amount, right: opp_id + close date
                 name_html = f'<div class="opp-name">{o["proyecto"]}</div>'
