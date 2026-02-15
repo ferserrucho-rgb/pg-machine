@@ -748,6 +748,15 @@ if st.session_state.selected_id:
     # --- History ---
     st.caption("📜 Historial e Interacción")
     activities = dal.get_activities_for_opportunity(opp["id"])
+    _estado_order = {"Bloqueada": 0, "Pendiente": 1, "Enviada": 2, "Respondida": 3}
+    def _act_sort_key(a):
+        e = a.get("estado", "")
+        if e == "Enviada":
+            light, lbl = _traffic_light(a)
+            if lbl == "Bloqueada":
+                return 0
+        return _estado_order.get(e, 2)
+    activities.sort(key=_act_sort_key)
     for a in activities:
         with st.container():
             dest_txt = f' → {a["destinatario"]}' if a.get("destinatario") else ""
