@@ -181,6 +181,14 @@ function actStatusOrder(act) {
   return order[e] ?? 2
 }
 
+function compareActivities(a, b) {
+  const sa = actStatusOrder(a), sb = actStatusOrder(b)
+  if (sa !== sb) return sa - sb
+  // Secondary: date ascending (today first)
+  const fa = a.fecha || '', fb = b.fecha || ''
+  return fa < fb ? -1 : fa > fb ? 1 : 0
+}
+
 // ---- AUTH ----
 async function login(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
@@ -239,7 +247,7 @@ async function fetchActivities() {
 
   const { data, error } = await query
   if (error) throw error
-  state.activities = (data || []).sort((a, b) => actStatusOrder(a) - actStatusOrder(b))
+  state.activities = (data || []).sort(compareActivities)
 }
 
 async function updateActivity(actId, updates) {

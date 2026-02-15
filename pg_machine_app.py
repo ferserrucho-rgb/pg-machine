@@ -504,13 +504,18 @@ def _traffic_light(act):
 _ESTADO_ORDER = {"Bloqueada": 0, "Pendiente": 1, "Enviada": 2, "Respondida": 3}
 
 def _act_status_order(a):
-    """Sort key: bloqueada → pendiente → enviada → respondida."""
+    """Sort key: status first (bloqueada → pendiente → enviada → respondida), then date ascending."""
     e = a.get("estado", "")
     if e == "Enviada":
         _, lbl = _traffic_light(a)
         if lbl == "Bloqueada":
-            return 0
-    return _ESTADO_ORDER.get(e, 2)
+            status = 0
+        else:
+            status = 2
+    else:
+        status = _ESTADO_ORDER.get(e, 2)
+    fecha_str = str(a.get("fecha", "") or "")
+    return (status, fecha_str)
 
 
 # --- 3. SIDEBAR ---
