@@ -789,7 +789,8 @@ if st.session_state.selected_id:
                 estado_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
             elif a["estado"] == "Respondida":
                 card_class = "hist-card respondida"
-                resp_date = f' — {a["respondida_ts"]}' if a.get("respondida_ts") else ''
+                _rts = _parse_date(str(a["respondida_ts"])) if a.get("respondida_ts") else None
+                resp_date = f' — {_rts.strftime("%d/%m")}' if _rts else ''
                 estado_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida{resp_date}</span>'
             elif a["estado"] == "Pendiente":
                 card_class = "hist-card pendiente"
@@ -1096,7 +1097,8 @@ else:
                             asig_name = a["creator_profile"]["full_name"]
                     asig_init = _get_initials(asig_name) if asig_name else ""
                     asig = f' <span class="act-asig">{asig_init}</span>' if asig_init else ""
-                    resp_dt = f' — {a["respondida_ts"]}' if a.get("estado") == "Respondida" and a.get("respondida_ts") else ''
+                    _rdt = _parse_date(str(a["respondida_ts"])) if a.get("estado") == "Respondida" and a.get("respondida_ts") else None
+                    resp_dt = f' — {_rdt.strftime("%d/%m")}' if _rdt else ''
                     status_html = f'<span class="act-status">{label}{resp_dt}</span>'
                     # Color border-left by activity type
                     tipo = a.get("tipo", "")

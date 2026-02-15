@@ -306,7 +306,7 @@ function renderList() {
       <div class="card ${cardClass(act)}" data-id="${act.id}">
         <div class="card-top">
           <span class="traffic">${tl.emoji}</span>
-          <span class="status-label">${tl.label}${act.estado === 'Respondida' && act.respondida_ts ? ` — ${act.respondida_ts}` : ''}</span>
+          <span class="status-label">${tl.label}${act.estado === 'Respondida' && act.respondida_ts ? ` — ${act.respondida_ts.substring(8,10)}/${act.respondida_ts.substring(5,7)}` : ''}</span>
           <span class="tipo-icon">${tipoIcon(act.tipo)}</span>
         </div>
         <div class="card-body">
@@ -353,7 +353,7 @@ function openDetail(actId) {
   html += `<div class="detail-section">
     <h3>Estado</h3>
     <div style="font-size:1.5rem; margin-bottom:4px;">${tl.emoji} <b>${tl.label}</b></div>
-    <div style="font-size:0.8rem; color:var(--text-muted);">${act.estado}${act.respondida_ts ? ` — ${act.respondida_ts}` : ''}</div>
+    <div style="font-size:0.8rem; color:var(--text-muted);">${act.estado}${act.respondida_ts ? ` — ${act.respondida_ts.substring(8,10)}/${act.respondida_ts.substring(5,7)}` : ''}</div>
   </div>`
 
   // Activity info
