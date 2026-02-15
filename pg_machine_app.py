@@ -789,7 +789,8 @@ if st.session_state.selected_id:
                 estado_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
             elif a["estado"] == "Respondida":
                 card_class = "hist-card respondida"
-                estado_pill = '<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida</span>'
+                resp_date = f' — {a["respondida_ts"]}' if a.get("respondida_ts") else ''
+                estado_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida{resp_date}</span>'
             elif a["estado"] == "Pendiente":
                 card_class = "hist-card pendiente"
                 estado_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
@@ -835,11 +836,12 @@ if st.session_state.selected_id:
                 if st.session_state.get(f"show_fb_{aid}"):
                     with st.form(f"fb_form_{aid}"):
                         feedback = st.text_area("Feedback del cliente")
+                        resp_fecha = st.date_input("Fecha de respuesta", value=date.today(), key=f"resp_fecha_{aid}")
                         st.divider()
                         crear_seguimiento = st.checkbox("🔁 Crear actividad de seguimiento", value=False, key=f"seg_{aid}")
                         seg_fecha = st.date_input("Fecha seguimiento", value=date.today() + timedelta(days=7), key=f"segf_{aid}")
                         if st.form_submit_button("Confirmar Respuesta"):
-                            dal.update_activity(aid, {"estado": "Respondida", "feedback": feedback})
+                            dal.update_activity(aid, {"estado": "Respondida", "feedback": feedback, "respondida_ts": str(resp_fecha)})
                             if crear_seguimiento:
                                 dal.create_activity(a["opportunity_id"], a["team_id"], user_id, {
                                     "tipo": a.get("tipo", "Email"),

@@ -306,7 +306,7 @@ function renderList() {
       <div class="card ${cardClass(act)}" data-id="${act.id}">
         <div class="card-top">
           <span class="traffic">${tl.emoji}</span>
-          <span class="status-label">${tl.label}</span>
+          <span class="status-label">${tl.label}${act.estado === 'Respondida' && act.respondida_ts ? ` — ${act.respondida_ts}` : ''}</span>
           <span class="tipo-icon">${tipoIcon(act.tipo)}</span>
         </div>
         <div class="card-body">
@@ -353,7 +353,7 @@ function openDetail(actId) {
   html += `<div class="detail-section">
     <h3>Estado</h3>
     <div style="font-size:1.5rem; margin-bottom:4px;">${tl.emoji} <b>${tl.label}</b></div>
-    <div style="font-size:0.8rem; color:var(--text-muted);">${act.estado}</div>
+    <div style="font-size:0.8rem; color:var(--text-muted);">${act.estado}${act.respondida_ts ? ` — ${act.respondida_ts}` : ''}</div>
   </div>`
 
   // Activity info
@@ -400,9 +400,14 @@ function openDetail(actId) {
   html += '</div>'
 
   // Feedback form (hidden by default)
+  const todayStr = new Date().toISOString().split('T')[0]
   const nextWeek = new Date(Date.now() + 7*86400000).toISOString().split('T')[0]
   html += `<div class="feedback-form" id="feedback-form">
     <textarea id="feedback-input" placeholder="Feedback del cliente..."></textarea>
+    <div class="seguimiento-row">
+      <span style="font-size:0.85rem; font-weight:600;">Fecha de respuesta:</span>
+      <input type="date" id="resp-fecha" value="${todayStr}">
+    </div>
     <div class="seguimiento-row">
       <label><input type="checkbox" id="chk-seguimiento"> Crear seguimiento</label>
       <input type="date" id="seg-fecha" value="${nextWeek}">
@@ -458,8 +463,9 @@ function attachDetailHandlers(act) {
       showLoading()
       try {
         const feedback = document.getElementById('feedback-input').value
-        await updateActivity(act.id, { estado: 'Respondida', feedback })
-        act.estado = 'Respondida'; act.feedback = feedback
+        const respFecha = document.getElementById('resp-fecha').value
+        await updateActivity(act.id, { estado: 'Respondida', feedback, respondida_ts: respFecha })
+        act.estado = 'Respondida'; act.feedback = feedback; act.respondida_ts = respFecha
 
         // Follow-up if checked
         const chk = document.getElementById('chk-seguimiento')
