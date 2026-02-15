@@ -53,8 +53,9 @@ st.markdown("""
     /* Clickable card — whole card opens detail, × inside for delete */
     .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
     .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); background: #f8faff; }
-    .card-del-trigger { position: absolute; top: 4px; right: 6px; font-size: 0.7rem; color: #cbd5e1; cursor: pointer; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
+    .card-del-trigger { position: absolute; bottom: 6px; right: 8px; font-size: 0.75rem; color: #cbd5e1; cursor: pointer; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
     .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
+    .bulk-del-bar { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
     .pgm-card-wrap .opp-top { display: flex; justify-content: space-between; align-items: flex-start; }
     .pgm-card-wrap .opp-left { flex: 1; min-width: 0; }
     .pgm-card-wrap .opp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; margin-left: 8px; }
@@ -751,6 +752,37 @@ else:
                 if bc.button(cat, key=f"focus_{cat}", use_container_width=True):
                     st.session_state.focused_cat = cat
                     st.rerun()
+
+        # --- Bulk delete ---
+        opp_options = {o["id"]: f'{o["proyecto"]} — {o["cuenta"]}' for o in all_opps}
+        bulk_sel_col, bulk_act_col = st.columns([0.75, 0.25])
+        with bulk_sel_col:
+            bulk_ids = st.multiselect(
+                "Seleccionar para eliminar",
+                options=list(opp_options.keys()),
+                format_func=lambda oid: opp_options.get(oid, oid),
+                key="bulk_del_select",
+                placeholder="Seleccionar scorecards para eliminar en lote...",
+                label_visibility="collapsed",
+            )
+        with bulk_act_col:
+            if bulk_ids:
+                if st.button(f"🗑 Eliminar {len(bulk_ids)} seleccionados", key="bulk_del_btn", use_container_width=True, type="primary"):
+                    st.session_state.bulk_del_confirm = list(bulk_ids)
+                    st.rerun()
+        if st.session_state.get("bulk_del_confirm"):
+            ids_to_del = st.session_state.bulk_del_confirm
+            names = [opp_options.get(oid, oid) for oid in ids_to_del]
+            st.warning(f"¿Eliminar **{len(ids_to_del)}** oportunidades?\n\n" + ", ".join(names))
+            bd1, bd2 = st.columns(2)
+            if bd1.button("Confirmar eliminación", key="bulk_del_yes", use_container_width=True):
+                for oid in ids_to_del:
+                    dal.delete_opportunity(oid)
+                st.session_state.pop("bulk_del_confirm", None)
+                st.rerun()
+            if bd2.button("Cancelar", key="bulk_del_no", use_container_width=True):
+                st.session_state.pop("bulk_del_confirm", None)
+                st.rerun()
 
         def _render_account_group(cuenta, opps, all_acts_by_opp):
             """Renders one account group with its opportunity cards."""
