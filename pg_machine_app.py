@@ -51,9 +51,11 @@ st.markdown("""
     .meta-btn-del { color: #ef4444; background: #fef2f2; }
     .meta-btn-del:hover { background: #ef4444; color: white; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
-    .hist-card { position: relative; background: #f8fafc; padding: 8px 10px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
-    .act-actions { position: absolute; top: 4px; right: 6px; display: flex; gap: 4px; }
-    .act-btn { cursor: pointer; font-size: 0.6rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
+    .hist-card { background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
+    .act-top { display: flex; align-items: flex-start; gap: 8px; }
+    .act-meta-row { flex: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; }
+    .act-actions { display: flex; gap: 3px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+    .act-btn { cursor: pointer; font-size: 0.6rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; white-space: nowrap; }
     .act-btn-edit { color: #1a73e8; background: #eff6ff; }
     .act-btn-edit:hover { background: #1a73e8; color: white; }
     .act-btn-del { color: #ef4444; background: #fef2f2; }
@@ -64,6 +66,18 @@ st.markdown("""
     .act-btn-resp:hover { background: #7c3aed; color: white; }
     .act-btn-resend { color: #0369a1; background: #e0f2fe; }
     .act-btn-resend:hover { background: #0369a1; color: white; }
+    .act-tipo { font-size: 0.65rem; font-weight: 700; color: white; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+    .act-tipo-email { background: #3b82f6; }
+    .act-tipo-llamada { background: #f59e0b; }
+    .act-tipo-reunion { background: #10b981; }
+    .act-tipo-asignacion { background: #8b5cf6; }
+    .act-obj { font-size: 0.72rem; font-weight: 700; color: #1e293b; }
+    .act-dest { font-size: 0.62rem; font-weight: 600; color: #7c3aed; background: #ede9fe; padding: 1px 6px; border-radius: 8px; }
+    .act-asig { font-size: 0.62rem; font-weight: 600; color: #0369a1; background: #e0f2fe; padding: 1px 6px; border-radius: 8px; }
+    .act-fecha { font-size: 0.6rem; font-weight: 600; color: #94a3b8; }
+    .act-estado { font-size: 0.62rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+    .act-desc { font-size: 0.68rem; color: #64748b; line-height: 1.4; margin-top: 3px; }
+    .act-feedback { font-size: 0.68rem; color: #92400e; background: #fffbeb; border-left: 3px solid #f59e0b; padding: 3px 8px; margin-top: 4px; border-radius: 0 4px 4px 0; }
     .hist-card.tipo-email { border-left-color: #3b82f6; }
     .hist-card.tipo-llamada { border-left-color: #f59e0b; }
     .hist-card.tipo-reunion { border-left-color: #10b981; }
@@ -71,8 +85,6 @@ st.markdown("""
     .hist-card.enviada { background: #f5f3ff; border-left-color: #8b5cf6; }
     .hist-card.bloqueada { background: #fef2f2; border-left-color: #ef4444; }
     .hist-card.respondida { background: #f0fdf4; border-left-color: #16a34a; }
-    .estado-enviada { color: #8b5cf6; font-weight: 600; }
-    .estado-bloqueada { color: #ef4444; font-weight: 700; }
     .activity-line { font-size: 0.72rem; color: #475569; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .account-group { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
     .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
@@ -123,6 +135,8 @@ st.markdown("""
         .account-group { padding: 5px 6px; margin-bottom: 6px; }
         .user-bar { font-size: 0.7rem; padding: 5px 10px; }
         .hist-card { padding: 10px; }
+        .act-top { flex-direction: column; }
+        .act-actions { justify-content: flex-start; }
         .cat-header { font-size: 0.85rem; padding: 8px; }
     }
     @media (max-width: 480px) {
@@ -311,8 +325,21 @@ components.html("""
             if (txt.indexOf('RESPONDIDA') >= 0) hide = true;
             if (txt.indexOf('REENVIAR') >= 0) hide = true;
             if (hide) {
-                var c = btn.closest('[data-testid="element-container"]');
-                if (c) c.style.cssText = 'position:absolute !important;left:-9999px !important;height:0 !important;overflow:hidden !important;';
+                // Walk up hiding single-child wrappers until parent has other visible content
+                var el = btn;
+                while (el && el !== doc.body) {
+                    el.style.cssText = 'display:none !important;';
+                    var par = el.parentElement;
+                    if (!par) break;
+                    var anyVisible = false;
+                    for (var i = 0; i < par.children.length; i++) {
+                        if (par.children[i] !== el && par.children[i].style.cssText.indexOf('display:none') < 0 && par.children[i].style.cssText.indexOf('display: none') < 0) {
+                            anyVisible = true; break;
+                        }
+                    }
+                    if (anyVisible) break;
+                    el = par;
+                }
             }
         });
     }
@@ -702,35 +729,45 @@ if st.session_state.selected_id:
                 assigned_name = RECURSOS_PRESALES.get(a["assigned_to"], "")
 
             light, label = _traffic_light(a)
-            tipo_class = f'tipo-{a.get("tipo", "").lower().replace("ó", "o")}' if a.get("tipo") else ""
+            tipo_lower = a.get("tipo", "").lower().replace("ó", "o")
+            tipo_class = f'tipo-{tipo_lower}' if a.get("tipo") else ""
             if a["estado"] == "Enviada" and label == "Bloqueada":
                 card_class = "hist-card bloqueada"
-                estado_html = '<span class="estado-bloqueada">🟥 BLOQUEADA</span>'
+                estado_pill = '<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 BLOQUEADA</span>'
             elif a["estado"] == "Enviada":
                 card_class = "hist-card enviada"
-                estado_html = f'<span class="estado-enviada">🟪 {a["estado"]} — {label}</span>'
+                estado_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
             elif a["estado"] == "Respondida":
                 card_class = "hist-card respondida"
-                estado_html = '<span style="color:#16a34a; font-weight:600;">🟩 Respondida</span>'
+                estado_pill = '<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida</span>'
             else:
                 card_class = f"hist-card {tipo_class}"
-                estado_html = f'<i>{a["estado"]}</i>'
+                estado_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
 
-            obj_txt = f' {a["objetivo"]}' if a.get("objetivo") else ""
             asig_initials = _get_initials(assigned_name) if assigned_name else ""
-            asig_txt = f' <span class="avatar-badge">{asig_initials}</span> <b>{assigned_name}</b>' if assigned_name else ""
-            feedback_html = f'<br><b>Feedback:</b> {a["feedback"]}' if a.get("feedback") else ""
             fecha_display = str(a.get("fecha", ""))
             tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
             tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
+            tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
 
+            # Metadata elements
+            tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
+            obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
+            dest_html = f'<span class="act-dest">→ {a["destinatario"]}</span>' if a.get("destinatario") else ''
+            asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
+            fecha_html = f'<span class="act-fecha">{fecha_display}</span>'
+            desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
+            fb_html = f'<div class="act-feedback"><b>Feedback:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+
+            # Action buttons
             estado_btns = ''
             if a["estado"] == "Pendiente":
                 estado_btns = '<span class="act-btn act-btn-send">✅ Enviado</span>'
             elif a["estado"] == "Enviada":
                 estado_btns = '<span class="act-btn act-btn-resp">📩 Respondida</span><span class="act-btn act-btn-resend">🔄 Reenviar</span>'
             act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
-            st.markdown(f'<div class="{card_class}">{act_btns}<b>{tipo_icon} {a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} <span style="color:#94a3b8; font-size:0.7rem;">({fecha_display})</span> {estado_html}<br><span style="color:#64748b; font-size:0.75rem;">{a.get("descripcion", "")}</span>{feedback_html}</div>', unsafe_allow_html=True)
+
+            st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{tipo_html}{obj_html}{dest_html}{asig_html}{estado_pill}{fecha_html}</div>{act_btns}</div>{desc_html}{fb_html}</div>', unsafe_allow_html=True)
 
             aid = a['id']
             # State-specific action buttons
