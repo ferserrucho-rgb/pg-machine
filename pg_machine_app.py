@@ -27,10 +27,7 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
-    .cat-header { color: white; padding: 6px 10px; border-radius: 6px; text-align: center; font-weight: 800; font-size: 0.8rem; margin-bottom: 8px; letter-spacing: 0.05em; text-transform: uppercase; }
-    .cat-header-leads { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
-    .cat-header-official { background: linear-gradient(135deg, #10b981, #047857); }
-    .cat-header-gtm { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .cat-styled { color: white !important; font-weight: 800 !important; font-size: 0.8rem !important; letter-spacing: 0.05em !important; text-transform: uppercase !important; border: none !important; border-radius: 6px !important; padding: 6px 10px !important; min-height: 0 !important; }
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .badge { float:right; font-size:0.6rem; font-weight:bold; padding:2px 6px; border-radius:8px; text-transform: uppercase; border: 1.2px solid; }
     .sc-cuenta { color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
@@ -117,6 +114,28 @@ components.html("""
         // Full-width layout
         doc.querySelectorAll('section.main > div').forEach(function(el) {
             if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
+        });
+        // Style category buttons with colored gradients
+        doc.querySelectorAll('button').forEach(function(btn) {
+            if (btn.dataset.catStyled) return;
+            var txt = (btn.textContent || '').trim().toUpperCase();
+            var grad = null;
+            if (txt === 'LEADS' || (txt.indexOf('LEADS') >= 0 && txt.indexOf('\u2715') >= 0)) grad = 'linear-gradient(135deg,#3b82f6,#1d4ed8)';
+            else if (txt === 'OFFICIAL' || (txt.indexOf('OFFICIAL') >= 0 && txt.indexOf('\u2715') >= 0)) grad = 'linear-gradient(135deg,#10b981,#047857)';
+            else if (txt === 'GTM' || (txt.indexOf('GTM') >= 0 && txt.indexOf('\u2715') >= 0)) grad = 'linear-gradient(135deg,#f59e0b,#d97706)';
+            if (grad) {
+                btn.dataset.catStyled = '1';
+                btn.style.background = grad;
+                btn.style.color = 'white';
+                btn.style.fontWeight = '800';
+                btn.style.fontSize = '0.8rem';
+                btn.style.letterSpacing = '0.05em';
+                btn.style.textTransform = 'uppercase';
+                btn.style.border = 'none';
+                btn.style.borderRadius = '6px';
+                btn.style.minHeight = '0';
+                if (txt.indexOf('\u2715') >= 0) btn.style.opacity = '0.75';
+            }
         });
         // Wire card clicks to hidden Streamlit buttons
         doc.querySelectorAll('.pgm-card-wrap').forEach(function(card) {
@@ -743,7 +762,7 @@ else:
         else:
             visible_cats = CATEGORIAS
 
-        # Category selector buttons
+        # Category selector buttons (styled via JS in components.html)
         btn_cols = st.columns(len(CATEGORIAS))
         for i, bc in enumerate(btn_cols):
             cat = CATEGORIAS[i]
@@ -786,13 +805,6 @@ else:
             if bd2.button("Cancelar", key="bulk_del_no", use_container_width=True):
                 st.session_state.pop("bulk_del_confirm", None)
                 st.rerun()
-
-        def _cat_css_class(cat):
-            c = cat.strip().upper()
-            if "LEAD" in c: return "cat-header-leads"
-            if "OFFICIAL" in c: return "cat-header-official"
-            if "GTM" in c: return "cat-header-gtm"
-            return "cat-header-leads"
 
         def _render_account_group(cuenta, opps, all_acts_by_opp):
             """Renders one account group with its opportunity cards."""
@@ -882,7 +894,6 @@ else:
                 for cat in visible_cats:
                     items = [o for o in all_opps if o['categoria'] == cat]
                     if items:
-                        st.markdown(f'<div class="cat-header {_cat_css_class(cat)}">{cat}</div>', unsafe_allow_html=True)
                         accounts = OrderedDict()
                         for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
                             accounts.setdefault(o['cuenta'], []).append(o)
@@ -894,7 +905,6 @@ else:
                 for i, col in enumerate(cols):
                     with col:
                         cat = visible_cats[i]
-                        st.markdown(f'<div class="cat-header {_cat_css_class(cat)}">{cat}</div>', unsafe_allow_html=True)
                         items = [o for o in all_opps if o['categoria'] == cat]
                         accounts = OrderedDict()
                         for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
