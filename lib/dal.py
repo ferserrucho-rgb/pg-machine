@@ -140,7 +140,7 @@ def get_all_activities(team_id: str) -> list[dict]:
     """Obtiene todas las actividades del equipo con datos de oportunidad."""
     sb = get_supabase()
     resp = sb.table("activities") \
-        .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)") \
+        .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty), creator_profile:created_by(full_name)") \
         .eq("team_id", team_id) \
         .order("fecha", desc=True) \
         .execute()
@@ -163,7 +163,7 @@ def get_all_activities_for_user(team_id: str, user_id: str, role: str) -> list[d
     own_acts = []
     if own_opp_ids:
         own_acts_resp = sb.table("activities") \
-            .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)") \
+            .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty), creator_profile:created_by(full_name)") \
             .in_("opportunity_id", own_opp_ids) \
             .order("fecha", desc=True) \
             .execute()
@@ -171,13 +171,13 @@ def get_all_activities_for_user(team_id: str, user_id: str, role: str) -> list[d
     own_act_ids = {a["id"] for a in own_acts}
     # Actividades asignadas a o creadas por el usuario (que no estén ya incluidas)
     assigned_resp = sb.table("activities") \
-        .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)") \
+        .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty), creator_profile:created_by(full_name)") \
         .eq("team_id", team_id) \
         .eq("assigned_to", user_id) \
         .order("fecha", desc=True) \
         .execute()
     created_resp = sb.table("activities") \
-        .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)") \
+        .select("*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty), creator_profile:created_by(full_name)") \
         .eq("team_id", team_id) \
         .eq("created_by", user_id) \
         .order("fecha", desc=True) \

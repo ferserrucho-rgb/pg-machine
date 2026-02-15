@@ -1084,6 +1084,9 @@ else:
                     asig_name = ""
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                         asig_name = a["assigned_profile"]["full_name"]
+                    if not asig_name and a.get("tipo") in ("Email", "Llamada", "Reunión"):
+                        if a.get("creator_profile") and a["creator_profile"].get("full_name"):
+                            asig_name = a["creator_profile"]["full_name"]
                     asig_init = _get_initials(asig_name) if asig_name else ""
                     asig = f' <span class="act-asig">{asig_init}</span>' if asig_init else ""
                     status_html = f'<span class="act-status">{label}</span>'
@@ -1190,6 +1193,9 @@ else:
             assigned_name = ""
             if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                 assigned_name = a["assigned_profile"]["full_name"]
+            if not assigned_name and a.get("tipo") in ("Email", "Llamada", "Reunión"):
+                if a.get("creator_profile") and a["creator_profile"].get("full_name"):
+                    assigned_name = a["creator_profile"]["full_name"]
 
             all_acts_display.append({
                 "Semáforo": light,
