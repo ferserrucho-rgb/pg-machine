@@ -33,6 +33,17 @@ st.markdown("""
     .sc-cuenta { color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
     .sc-proyecto { color: #1e293b; font-size: 0.95rem; font-weight: 700; margin: 4px 0; }
     .sc-monto { color: #16a34a; font-size: 1.1rem; font-weight: 800; display: block; }
+    .opp-meta-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 14px; margin-bottom: 10px; }
+    .opp-meta-bar .meta-name { font-size: 0.85rem; font-weight: 800; color: #1e293b; }
+    .opp-meta-bar .meta-cuenta { font-size: 0.7rem; font-weight: 600; color: #64748b; text-transform: uppercase; }
+    .opp-meta-bar .meta-pill { font-size: 0.6rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+    .opp-meta-bar .meta-cat-leads { background: #dbeafe; color: #1d4ed8; }
+    .opp-meta-bar .meta-cat-official { background: #d1fae5; color: #047857; }
+    .opp-meta-bar .meta-cat-gtm { background: #fef3c7; color: #d97706; }
+    .opp-meta-bar .meta-stage { background: #ede9fe; color: #7c3aed; }
+    .opp-meta-bar .meta-monto { font-size: 0.8rem; font-weight: 800; color: #16a34a; }
+    .opp-meta-bar .meta-id { font-family: 'Courier New', monospace; font-size: 0.55rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 5px; border-radius: 3px; }
+    .opp-meta-bar .meta-close { font-size: 0.6rem; font-weight: 700; color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; padding: 1px 5px; border-radius: 3px; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
     .hist-card { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; border-left: 4px solid #94a3b8; }
     .hist-card.tipo-email { border-left-color: #3b82f6; }
@@ -531,225 +542,235 @@ if st.session_state.selected_id:
         st.session_state.selected_id = None
         st.rerun()
 
-    l_col, r_col = st.columns([1, 1] if is_mobile else [0.25, 0.75])
-    with l_col:
-        opp_id_html = f'<span class="opp-id">ID: {opp.get("opp_id","")}</span>' if opp.get("opp_id") else ""
-        close_html = f'<span class="opp-id">Cierre: {opp.get("close_date","")}</span>' if opp.get("close_date") else ""
-        stage_html = f' <span class="opp-stage">{opp.get("stage","")}</span>' if opp.get("stage") else ""
-        st.markdown(f'<div class="cat-header">{opp["categoria"]}{stage_html}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="scorecard"><div class="sc-cuenta">{opp["cuenta"]}</div><div class="sc-proyecto">{opp["proyecto"]}</div><span class="sc-monto">USD {float(opp.get("monto") or 0):,.0f}</span>{opp_id_html}{close_html}</div>', unsafe_allow_html=True)
-        btn_c1, btn_c2 = st.columns(2)
-        if btn_c1.button("⬅️ VOLVER", use_container_width=True):
+    # --- Opportunity metadata bar (single line) ---
+    monto_val = float(opp.get("monto") or 0)
+    cat_upper = opp["categoria"].strip().upper()
+    cat_cls = "meta-cat-leads" if "LEAD" in cat_upper else ("meta-cat-official" if "OFFICIAL" in cat_upper else "meta-cat-gtm")
+    meta_parts = [
+        f'<span class="meta-name">{opp["proyecto"]}</span>',
+        f'<span class="meta-cuenta">{opp["cuenta"]}</span>',
+        f'<span class="meta-pill {cat_cls}">{opp["categoria"]}</span>',
+    ]
+    if opp.get("stage"):
+        meta_parts.append(f'<span class="meta-pill meta-stage">{opp["stage"]}</span>')
+    meta_parts.append(f'<span class="meta-monto">USD {monto_val:,.0f}</span>')
+    if opp.get("opp_id"):
+        meta_parts.append(f'<span class="meta-id">{opp["opp_id"]}</span>')
+    if opp.get("close_date"):
+        meta_parts.append(f'<span class="meta-close">Cierre: {opp["close_date"]}</span>')
+    st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}</div>', unsafe_allow_html=True)
+
+    # --- Action buttons ---
+    btn_c1, btn_c2, btn_c3 = st.columns([0.15, 0.15, 0.7])
+    if btn_c1.button("⬅️ Volver", use_container_width=True):
+        st.session_state.selected_id = None
+        st.rerun()
+    if btn_c2.button("🗑️ Eliminar", key="del_opp", use_container_width=True):
+        st.session_state[f"confirm_del_opp_{opp['id']}"] = True
+    if st.session_state.get(f"confirm_del_opp_{opp['id']}"):
+        st.warning(f"Eliminar **{opp['proyecto']}** y todas sus actividades?")
+        dc1, dc2 = st.columns(2)
+        if dc1.button("Confirmar", key="confirm_del_opp_yes", use_container_width=True):
+            dal.delete_opportunity(opp["id"])
             st.session_state.selected_id = None
+            st.session_state.pop(f"confirm_del_opp_{opp['id']}", None)
             st.rerun()
-        if btn_c2.button("🗑️ ELIMINAR", key="del_opp", use_container_width=True):
-            st.session_state[f"confirm_del_opp_{opp['id']}"] = True
-        if st.session_state.get(f"confirm_del_opp_{opp['id']}"):
-            st.warning(f"Eliminar **{opp['proyecto']}** y todas sus actividades?")
-            dc1, dc2 = st.columns(2)
-            if dc1.button("Confirmar", key="confirm_del_opp_yes", use_container_width=True):
-                dal.delete_opportunity(opp["id"])
-                st.session_state.selected_id = None
-                st.session_state.pop(f"confirm_del_opp_{opp['id']}", None)
-                st.rerun()
-            if dc2.button("Cancelar", key="confirm_del_opp_no", use_container_width=True):
-                st.session_state.pop(f"confirm_del_opp_{opp['id']}", None)
-                st.rerun()
+        if dc2.button("Cancelar", key="confirm_del_opp_no", use_container_width=True):
+            st.session_state.pop(f"confirm_del_opp_{opp['id']}", None)
+            st.rerun()
 
-    with r_col:
-        st.markdown(f'<div style="font-size:1.3rem; font-weight:700; color:#1e293b; padding:8px 0 4px 0;">🎯 {opp["cuenta"]}</div>', unsafe_allow_html=True)
-        st.caption("📜 Historial e Interacción")
-        activities = dal.get_activities_for_opportunity(opp["id"])
-        for a in activities:
-            with st.container():
-                dest_txt = f' → {a["destinatario"]}' if a.get("destinatario") else ""
-                # Mostrar nombre del asignado
-                assigned_name = ""
-                if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
-                    assigned_name = a["assigned_profile"]["full_name"]
-                elif a.get("assigned_to"):
-                    assigned_name = RECURSOS_PRESALES.get(a["assigned_to"], "")
+    # --- History ---
+    st.caption("📜 Historial e Interacción")
+    activities = dal.get_activities_for_opportunity(opp["id"])
+    for a in activities:
+        with st.container():
+            dest_txt = f' → {a["destinatario"]}' if a.get("destinatario") else ""
+            assigned_name = ""
+            if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
+                assigned_name = a["assigned_profile"]["full_name"]
+            elif a.get("assigned_to"):
+                assigned_name = RECURSOS_PRESALES.get(a["assigned_to"], "")
 
-                light, label = _traffic_light(a)
-                tipo_class = f'tipo-{a.get("tipo", "").lower().replace("ó", "o")}' if a.get("tipo") else ""
-                if a["estado"] == "Enviada" and label == "Bloqueada":
-                    card_class = f"hist-card bloqueada"
-                    estado_html = '<span class="estado-bloqueada">🟥 BLOQUEADA</span>'
-                elif a["estado"] == "Enviada":
-                    card_class = f"hist-card enviada"
-                    estado_html = f'<span class="estado-enviada">🟪 {a["estado"]} — {label}</span>'
-                elif a["estado"] == "Respondida":
-                    card_class = f"hist-card respondida"
-                    estado_html = f'<span style="color:#16a34a; font-weight:600;">🟩 Respondida</span>'
+            light, label = _traffic_light(a)
+            tipo_class = f'tipo-{a.get("tipo", "").lower().replace("ó", "o")}' if a.get("tipo") else ""
+            if a["estado"] == "Enviada" and label == "Bloqueada":
+                card_class = "hist-card bloqueada"
+                estado_html = '<span class="estado-bloqueada">🟥 BLOQUEADA</span>'
+            elif a["estado"] == "Enviada":
+                card_class = "hist-card enviada"
+                estado_html = f'<span class="estado-enviada">🟪 {a["estado"]} — {label}</span>'
+            elif a["estado"] == "Respondida":
+                card_class = "hist-card respondida"
+                estado_html = '<span style="color:#16a34a; font-weight:600;">🟩 Respondida</span>'
+            else:
+                card_class = f"hist-card {tipo_class}"
+                estado_html = f'<i>{a["estado"]}</i>'
+
+            obj_txt = f' {a["objetivo"]}' if a.get("objetivo") else ""
+            asig_initials = _get_initials(assigned_name) if assigned_name else ""
+            asig_txt = f' <span class="avatar-badge">{asig_initials}</span> <b>{assigned_name}</b>' if assigned_name else ""
+            feedback_html = f'<br><b>Feedback:</b> {a["feedback"]}' if a.get("feedback") else ""
+            fecha_display = str(a.get("fecha", ""))
+            tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
+            tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
+
+            st.markdown(f'<div class="{card_class}"><b>{tipo_icon} {a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} <span style="color:#94a3b8; font-size:0.8rem;">({fecha_display})</span> {estado_html}<br><span style="color:#64748b; font-size:0.85rem;">{a.get("descripcion", "")}</span>{feedback_html}</div>', unsafe_allow_html=True)
+
+            aid = a['id']
+            if a["estado"] == "Pendiente":
+                b1, b2 = st.columns(2)
+                if b1.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
+                    dal.update_activity(aid, {"estado": "Enviada"})
+                    st.rerun()
+                if b2.button("✏️ Editar", key=f"toggle_edit_{aid}", use_container_width=True):
+                    st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
+                    st.rerun()
+            elif a["estado"] == "Enviada":
+                if st.session_state.get(f"show_fb_{aid}"):
+                    with st.form(f"fb_form_{aid}"):
+                        feedback = st.text_area("Feedback del cliente")
+                        st.divider()
+                        crear_seguimiento = st.checkbox("🔁 Crear actividad de seguimiento", value=False, key=f"seg_{aid}")
+                        seg_fecha = st.date_input("Fecha seguimiento", value=date.today() + timedelta(days=7), key=f"segf_{aid}")
+                        if st.form_submit_button("Confirmar Respuesta"):
+                            dal.update_activity(aid, {"estado": "Respondida", "feedback": feedback})
+                            if crear_seguimiento:
+                                dal.create_activity(a["opportunity_id"], a["team_id"], user_id, {
+                                    "tipo": a.get("tipo", "Email"),
+                                    "fecha": str(seg_fecha),
+                                    "objetivo": a.get("objetivo", ""),
+                                    "descripcion": f'Seguimiento: {feedback}' if feedback else a.get("descripcion", ""),
+                                    "sla_key": a.get("sla_key", ""),
+                                    "sla_hours": a.get("sla_hours"),
+                                    "sla_respuesta_dias": a.get("sla_respuesta_dias", 7),
+                                    "destinatario": a.get("destinatario", ""),
+                                    "assigned_to": a.get("assigned_to"),
+                                })
+                            st.session_state.pop(f"show_fb_{aid}", None)
+                            st.rerun()
                 else:
-                    card_class = f"hist-card {tipo_class}"
-                    estado_html = f'<i>{a["estado"]}</i>'
-
-                obj_txt = f' {a["objetivo"]}' if a.get("objetivo") else ""
-                asig_initials = _get_initials(assigned_name) if assigned_name else ""
-                asig_txt = f' <span class="avatar-badge">{asig_initials}</span> <b>{assigned_name}</b>' if assigned_name else ""
-                feedback_html = f'<br><b>Feedback:</b> {a["feedback"]}' if a.get("feedback") else ""
-                fecha_display = str(a.get("fecha", ""))
-                tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
-                tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
-
-                st.markdown(f'<div class="{card_class}"><b>{tipo_icon} {a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} <span style="color:#94a3b8; font-size:0.8rem;">({fecha_display})</span> {estado_html}<br><span style="color:#64748b; font-size:0.85rem;">{a.get("descripcion", "")}</span>{feedback_html}</div>', unsafe_allow_html=True)
-
-                aid = a['id']
-                if a["estado"] == "Pendiente":
-                    b1, b2 = st.columns(2)
-                    if b1.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
-                        dal.update_activity(aid, {"estado": "Enviada"})
+                    b1, b2, b3 = st.columns(3)
+                    if b1.button("📩 RESPONDIDA", key=f"r_{aid}", use_container_width=True):
+                        st.session_state[f"show_fb_{aid}"] = True
                         st.rerun()
                     if b2.button("✏️ Editar", key=f"toggle_edit_{aid}", use_container_width=True):
                         st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
                         st.rerun()
-                elif a["estado"] == "Enviada":
-                    if st.session_state.get(f"show_fb_{aid}"):
-                        with st.form(f"fb_form_{aid}"):
-                            feedback = st.text_area("Feedback del cliente")
-                            st.divider()
-                            crear_seguimiento = st.checkbox("🔁 Crear actividad de seguimiento", value=False, key=f"seg_{aid}")
-                            seg_fecha = st.date_input("Fecha seguimiento", value=date.today() + timedelta(days=7), key=f"segf_{aid}")
-                            if st.form_submit_button("Confirmar Respuesta"):
-                                dal.update_activity(aid, {"estado": "Respondida", "feedback": feedback})
-                                if crear_seguimiento:
-                                    dal.create_activity(a["opportunity_id"], a["team_id"], user_id, {
-                                        "tipo": a.get("tipo", "Email"),
-                                        "fecha": str(seg_fecha),
-                                        "objetivo": a.get("objetivo", ""),
-                                        "descripcion": f'Seguimiento: {feedback}' if feedback else a.get("descripcion", ""),
-                                        "sla_key": a.get("sla_key", ""),
-                                        "sla_hours": a.get("sla_hours"),
-                                        "sla_respuesta_dias": a.get("sla_respuesta_dias", 7),
-                                        "destinatario": a.get("destinatario", ""),
-                                        "assigned_to": a.get("assigned_to"),
-                                    })
-                                st.session_state.pop(f"show_fb_{aid}", None)
-                                st.rerun()
-                    else:
-                        b1, b2, b3 = st.columns(3)
-                        if b1.button("📩 RESPONDIDA", key=f"r_{aid}", use_container_width=True):
-                            st.session_state[f"show_fb_{aid}"] = True
-                            st.rerun()
-                        if b2.button("✏️ Editar", key=f"toggle_edit_{aid}", use_container_width=True):
-                            st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
-                            st.rerun()
-                        if b3.button("🔄 REENVIAR", key=f"re_{aid}", use_container_width=True):
-                            dal.update_activity(aid, {"estado": "Pendiente", "enviada_ts": None, "response_deadline": None})
-                            st.rerun()
-                else:
-                    if st.button("✏️ Editar", key=f"toggle_edit_{aid}"):
-                        st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
+                    if b3.button("🔄 REENVIAR", key=f"re_{aid}", use_container_width=True):
+                        dal.update_activity(aid, {"estado": "Pendiente", "enviada_ts": None, "response_deadline": None})
+                        st.rerun()
+            else:
+                if st.button("✏️ Editar", key=f"toggle_edit_{aid}"):
+                    st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
+                    st.rerun()
+
+            # Inline edit form (toggled)
+            if st.session_state.get(f"show_edit_{aid}"):
+                with st.form(f"edit_act_{aid}"):
+                    ea_c1, ea_c2, ea_c3 = st.columns(3)
+                    ea_tipo = ea_c1.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"],
+                        index=["Email", "Llamada", "Reunión", "Asignación"].index(a.get("tipo", "Email")) if a.get("tipo", "Email") in ["Email", "Llamada", "Reunión", "Asignación"] else 0,
+                        key=f"et_{aid}")
+                    sla_keys = list(SLA_OPCIONES.keys())
+                    ea_sla = ea_c2.selectbox("SLA", sla_keys,
+                        index=sla_keys.index(a["sla_key"]) if a.get("sla_key") in sla_keys else 0,
+                        key=f"es_{aid}")
+                    ea_fecha = ea_c3.date_input("Fecha", value=_parse_date(a.get("fecha", "")) or date.today(), key=f"ef_{aid}")
+                    ea_c4, ea_c5 = st.columns(2)
+                    ea_objetivo = ea_c4.text_input("Objetivo", value=a.get("objetivo", ""), key=f"eo_{aid}")
+                    ea_dest = ea_c5.text_input("Destinatario", value=a.get("destinatario", ""), key=f"ed_{aid}")
+                    sla_rpta_keys = list(SLA_RESPUESTA.keys())
+                    sla_rpta_vals = list(SLA_RESPUESTA.values())
+                    cur_sla_idx = sla_rpta_vals.index(a.get("sla_respuesta_dias", 7)) if a.get("sla_respuesta_dias", 7) in sla_rpta_vals else 1
+                    ea_sla_rpta = st.selectbox("SLA Respuesta", sla_rpta_keys, index=cur_sla_idx, key=f"esr_{aid}")
+                    ea_desc = st.text_area("Descripción", value=a.get("descripcion", ""), height=60, key=f"edc_{aid}")
+                    fc1, fc2 = st.columns(2)
+                    if fc1.form_submit_button("💾 Guardar"):
+                        new_sla_hours = _sla_to_hours(ea_sla)
+                        dal.update_activity(aid, {
+                            "tipo": ea_tipo, "sla_key": ea_sla, "sla_hours": new_sla_hours,
+                            "fecha": str(ea_fecha), "objetivo": ea_objetivo,
+                            "destinatario": ea_dest, "sla_respuesta_dias": SLA_RESPUESTA[ea_sla_rpta],
+                            "descripcion": ea_desc,
+                        })
+                        st.session_state.pop(f"show_edit_{aid}", None)
+                        st.rerun()
+                if st.button("🗑️ Eliminar actividad", key=f"del_act_{aid}"):
+                    st.session_state[f"confirm_del_act_{aid}"] = True
+                if st.session_state.get(f"confirm_del_act_{aid}"):
+                    st.warning("Eliminar esta actividad?")
+                    da1, da2 = st.columns(2)
+                    if da1.button("Confirmar", key=f"cdel_act_y_{aid}", use_container_width=True):
+                        dal.delete_activity(aid)
+                        st.session_state.pop(f"confirm_del_act_{aid}", None)
+                        st.rerun()
+                    if da2.button("Cancelar", key=f"cdel_act_n_{aid}", use_container_width=True):
+                        st.session_state.pop(f"confirm_del_act_{aid}", None)
                         st.rerun()
 
-                # Inline edit form (toggled)
-                if st.session_state.get(f"show_edit_{aid}"):
-                    with st.form(f"edit_act_{aid}"):
-                        ea_c1, ea_c2, ea_c3 = st.columns(3)
-                        ea_tipo = ea_c1.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"],
-                            index=["Email", "Llamada", "Reunión", "Asignación"].index(a.get("tipo", "Email")) if a.get("tipo", "Email") in ["Email", "Llamada", "Reunión", "Asignación"] else 0,
-                            key=f"et_{aid}")
-                        sla_keys = list(SLA_OPCIONES.keys())
-                        ea_sla = ea_c2.selectbox("SLA", sla_keys,
-                            index=sla_keys.index(a["sla_key"]) if a.get("sla_key") in sla_keys else 0,
-                            key=f"es_{aid}")
-                        ea_fecha = ea_c3.date_input("Fecha", value=_parse_date(a.get("fecha", "")) or date.today(), key=f"ef_{aid}")
-                        ea_c4, ea_c5 = st.columns(2)
-                        ea_objetivo = ea_c4.text_input("Objetivo", value=a.get("objetivo", ""), key=f"eo_{aid}")
-                        ea_dest = ea_c5.text_input("Destinatario", value=a.get("destinatario", ""), key=f"ed_{aid}")
-                        sla_rpta_keys = list(SLA_RESPUESTA.keys())
-                        sla_rpta_vals = list(SLA_RESPUESTA.values())
-                        cur_sla_idx = sla_rpta_vals.index(a.get("sla_respuesta_dias", 7)) if a.get("sla_respuesta_dias", 7) in sla_rpta_vals else 1
-                        ea_sla_rpta = st.selectbox("SLA Respuesta", sla_rpta_keys, index=cur_sla_idx, key=f"esr_{aid}")
-                        ea_desc = st.text_area("Descripción", value=a.get("descripcion", ""), height=60, key=f"edc_{aid}")
-                        fc1, fc2 = st.columns(2)
-                        if fc1.form_submit_button("💾 Guardar"):
-                            new_sla_hours = _sla_to_hours(ea_sla)
-                            dal.update_activity(aid, {
-                                "tipo": ea_tipo, "sla_key": ea_sla, "sla_hours": new_sla_hours,
-                                "fecha": str(ea_fecha), "objetivo": ea_objetivo,
-                                "destinatario": ea_dest, "sla_respuesta_dias": SLA_RESPUESTA[ea_sla_rpta],
-                                "descripcion": ea_desc,
-                            })
-                            st.session_state.pop(f"show_edit_{aid}", None)
-                            st.rerun()
-                    if st.button("🗑️ Eliminar actividad", key=f"del_act_{aid}"):
-                        st.session_state[f"confirm_del_act_{aid}"] = True
-                    if st.session_state.get(f"confirm_del_act_{aid}"):
-                        st.warning("Eliminar esta actividad?")
-                        da1, da2 = st.columns(2)
-                        if da1.button("Confirmar", key=f"cdel_act_y_{aid}", use_container_width=True):
-                            dal.delete_activity(aid)
-                            st.session_state.pop(f"confirm_del_act_{aid}", None)
-                            st.rerun()
-                        if da2.button("Cancelar", key=f"cdel_act_n_{aid}", use_container_width=True):
-                            st.session_state.pop(f"confirm_del_act_{aid}", None)
-                            st.rerun()
+    if not activities:
+        st.info("No hay actividades registradas aún.")
 
-        if not activities:
-            st.info("No hay actividades registradas aún.")
+    st.divider()
 
-        st.divider()
+    # --- EDITING SECTION (compressed in expanders) ---
+    with st.expander("✏️ Editar Oportunidad", expanded=False):
+        with st.form("edit_opp"):
+            ed_c1, ed_c2, ed_c3 = st.columns(3)
+            ed_cuenta = ed_c1.text_input("Cuenta", value=opp["cuenta"])
+            ed_proyecto = ed_c2.text_input("Proyecto", value=opp["proyecto"])
+            ed_monto = ed_c3.number_input("Monto USD", value=float(opp.get("monto") or 0))
+            ed_c4, ed_c5, ed_c6 = st.columns(3)
+            ed_cat = ed_c4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(opp["categoria"]) if opp["categoria"] in CATEGORIAS else 0)
+            ed_opp_id = ed_c5.text_input("Opportunity ID", value=opp.get("opp_id", ""))
+            ed_stage = ed_c6.text_input("Stage", value=opp.get("stage", ""))
+            close_val = _parse_date(opp.get("close_date", ""))
+            ed_close = st.date_input("Close Date", value=close_val)
+            if st.form_submit_button("💾 Guardar Cambios"):
+                dal.update_opportunity(opp["id"], {
+                    "cuenta": ed_cuenta, "proyecto": ed_proyecto,
+                    "monto": float(ed_monto), "categoria": ed_cat,
+                    "opp_id": ed_opp_id, "stage": ed_stage,
+                    "close_date": str(ed_close) if ed_close else None,
+                })
+                st.rerun()
 
-        # --- EDITING SECTION (compressed in expanders) ---
-        with st.expander("✏️ Editar Oportunidad", expanded=False):
-            with st.form("edit_opp"):
-                ed_c1, ed_c2, ed_c3 = st.columns(3)
-                ed_cuenta = ed_c1.text_input("Cuenta", value=opp["cuenta"])
-                ed_proyecto = ed_c2.text_input("Proyecto", value=opp["proyecto"])
-                ed_monto = ed_c3.number_input("Monto USD", value=float(opp.get("monto") or 0))
-                ed_c4, ed_c5, ed_c6 = st.columns(3)
-                ed_cat = ed_c4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(opp["categoria"]) if opp["categoria"] in CATEGORIAS else 0)
-                ed_opp_id = ed_c5.text_input("Opportunity ID", value=opp.get("opp_id", ""))
-                ed_stage = ed_c6.text_input("Stage", value=opp.get("stage", ""))
-                close_val = _parse_date(opp.get("close_date", ""))
-                ed_close = st.date_input("Close Date", value=close_val)
-                if st.form_submit_button("💾 Guardar Cambios"):
-                    dal.update_opportunity(opp["id"], {
-                        "cuenta": ed_cuenta, "proyecto": ed_proyecto,
-                        "monto": float(ed_monto), "categoria": ed_cat,
-                        "opp_id": ed_opp_id, "stage": ed_stage,
-                        "close_date": str(ed_close) if ed_close else None,
-                    })
-                    st.rerun()
-
-        with st.expander("➕ Nueva Actividad", expanded=False):
-            tipo = st.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
-            with st.form("act_form"):
-                c1, c2, c3 = st.columns(3)
-                sla_key = c1.selectbox("SLA", list(SLA_OPCIONES.keys()))
-                fecha = c2.date_input("Fecha", value=date.today())
-                objetivo = c3.text_input("Objetivo")
-                asignado_a_id = None
-                if tipo == "Asignación":
-                    c4, c5, c6 = st.columns(3)
-                    destinatario = c4.text_input("Destinatario")
-                    recurso_opciones = [""] + list(RECURSOS_PRESALES.values())
-                    recurso_ids = [""] + list(RECURSOS_PRESALES.keys())
-                    sel_idx = c5.selectbox("Asignado a", range(len(recurso_opciones)), format_func=lambda i: recurso_opciones[i])
-                    if sel_idx > 0:
-                        asignado_a_id = recurso_ids[sel_idx]
-                    sla_rpta = c6.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
-                else:
-                    c4, c5 = st.columns(2)
-                    destinatario = c4.text_input("Destinatario")
-                    sla_rpta = c5.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
-                desc = st.text_area("Descripción / Notas", height=80)
-                if st.form_submit_button("Guardar Actividad"):
-                    sla_hours = _sla_to_hours(sla_key)
-                    new_act = dal.create_activity(opp["id"], team_id, user_id, {
-                        "tipo": tipo, "fecha": str(fecha), "objetivo": objetivo,
-                        "descripcion": desc, "sla_key": sla_key, "sla_hours": sla_hours,
-                        "sla_respuesta_dias": SLA_RESPUESTA[sla_rpta],
-                        "destinatario": destinatario, "assigned_to": asignado_a_id,
-                    })
-                    if asignado_a_id and new_act:
-                        assignee = dal.get_team_member(asignado_a_id)
-                        if assignee:
-                            notifications.send_assignment_notification(new_act, assignee, opp)
-                            dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
-                    st.rerun()
+    with st.expander("➕ Nueva Actividad", expanded=False):
+        tipo = st.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
+        with st.form("act_form"):
+            c1, c2, c3 = st.columns(3)
+            sla_key = c1.selectbox("SLA", list(SLA_OPCIONES.keys()))
+            fecha = c2.date_input("Fecha", value=date.today())
+            objetivo = c3.text_input("Objetivo")
+            asignado_a_id = None
+            if tipo == "Asignación":
+                c4, c5, c6 = st.columns(3)
+                destinatario = c4.text_input("Destinatario")
+                recurso_opciones = [""] + list(RECURSOS_PRESALES.values())
+                recurso_ids = [""] + list(RECURSOS_PRESALES.keys())
+                sel_idx = c5.selectbox("Asignado a", range(len(recurso_opciones)), format_func=lambda i: recurso_opciones[i])
+                if sel_idx > 0:
+                    asignado_a_id = recurso_ids[sel_idx]
+                sla_rpta = c6.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
+            else:
+                c4, c5 = st.columns(2)
+                destinatario = c4.text_input("Destinatario")
+                sla_rpta = c5.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
+            desc = st.text_area("Descripción / Notas", height=80)
+            if st.form_submit_button("Guardar Actividad"):
+                sla_hours = _sla_to_hours(sla_key)
+                new_act = dal.create_activity(opp["id"], team_id, user_id, {
+                    "tipo": tipo, "fecha": str(fecha), "objetivo": objetivo,
+                    "descripcion": desc, "sla_key": sla_key, "sla_hours": sla_hours,
+                    "sla_respuesta_dias": SLA_RESPUESTA[sla_rpta],
+                    "destinatario": destinatario, "assigned_to": asignado_a_id,
+                })
+                if asignado_a_id and new_act:
+                    assignee = dal.get_team_member(asignado_a_id)
+                    if assignee:
+                        notifications.send_assignment_notification(new_act, assignee, opp)
+                        dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
+                st.rerun()
 
 else:
     # --- VISTAS PRINCIPALES ---
