@@ -45,7 +45,7 @@ st.markdown("""
     .opp-meta-bar .meta-id { font-family: 'Courier New', monospace; font-size: 0.55rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 5px; border-radius: 3px; }
     .opp-meta-bar .meta-close { font-size: 0.6rem; font-weight: 700; color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; padding: 1px 5px; border-radius: 3px; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
-    .hist-card { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; border-left: 4px solid #94a3b8; }
+    .hist-card { background: #f8fafc; padding: 8px 10px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
     .hist-card.tipo-email { border-left-color: #3b82f6; }
     .hist-card.tipo-llamada { border-left-color: #f59e0b; }
     .hist-card.tipo-reunion { border-left-color: #10b981; }
@@ -560,8 +560,8 @@ if st.session_state.selected_id:
         meta_parts.append(f'<span class="meta-close">Cierre: {opp["close_date"]}</span>')
     st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}</div>', unsafe_allow_html=True)
 
-    # --- Action buttons ---
-    btn_c1, btn_c2, btn_c3 = st.columns([0.15, 0.15, 0.7])
+    # --- Action buttons (right-aligned at meta bar level) ---
+    _spacer, btn_c1, btn_c2 = st.columns([0.74, 0.13, 0.13])
     if btn_c1.button("⬅️ Volver", use_container_width=True):
         st.session_state.selected_id = None
         st.rerun()
