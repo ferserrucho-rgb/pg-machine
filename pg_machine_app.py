@@ -1102,7 +1102,7 @@ else:
                     tipo = a.get("tipo", "")
                     border_colors = {"Email": "#3b82f6", "Llamada": "#f59e0b", "Reunión": "#10b981", "Asignación": "#8b5cf6"}
                     border_color = border_colors.get(tipo, "#cbd5e1")
-                    act_lines.append(f'<div class="act-line" style="border-left-color:{border_color};">{light}{obj}{dest}{asig} — {status_html}</div>')
+                    act_lines.append(f'<div class="act-line" style="border-left-color:{border_color};">{light}{asig}{dest}{obj} — {status_html}</div>')
                 acts_html = ""
                 if act_lines:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
