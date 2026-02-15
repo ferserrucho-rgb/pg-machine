@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import json
 from collections import OrderedDict
@@ -101,19 +102,33 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown("""
-    <script>
-    function pgmFixLayout() {
+components.html("""
+<script>
+(function() {
+    var doc = window.parent.document;
+    if (doc._pgmObserver) return;
+    doc._pgmObserver = true;
+
+    function pgmFix() {
         // Full-width layout
-        document.querySelectorAll('section.main > div').forEach(el => {
+        doc.querySelectorAll('section.main > div').forEach(function(el) {
             if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
         });
         // Wire card clicks to hidden Streamlit buttons
-        document.querySelectorAll('.pgm-card-wrap').forEach(card => {
+        doc.querySelectorAll('.pgm-card-wrap').forEach(function(card) {
             if (card.dataset.pgmBound) return;
             card.dataset.pgmBound = '1';
-            var mkd = card.closest('[data-testid="stMarkdown"]') || card.parentElement;
-            var btnRow = mkd.nextElementSibling;
+            // Walk up from card to find the sibling container with buttons
+            var el = card.parentElement;
+            var btnRow = null;
+            while (el && !btnRow) {
+                var sib = el.nextElementSibling;
+                if (sib) {
+                    var btns = sib.querySelectorAll('button');
+                    if (btns.length > 0) { btnRow = sib; break; }
+                }
+                el = el.parentElement;
+            }
             if (!btnRow) return;
             var openBtn = null, delBtn = null;
             btnRow.querySelectorAll('button').forEach(function(b) {
@@ -121,32 +136,37 @@ st.markdown("""
                 if (t === '\u25b8') openBtn = b;
                 if (t === '\u00d7') delBtn = b;
             });
-            if (openBtn || delBtn) btnRow.style.cssText = 'position:absolute;left:-9999px;height:0;overflow:hidden;';
+            if (!openBtn && !delBtn) return;
+            // Hide the button row
+            btnRow.style.cssText = 'position:absolute !important;left:-9999px !important;height:0 !important;overflow:hidden !important;';
+            // Card click → open
             card.addEventListener('click', function(e) {
                 if (e.target.closest('.card-del-trigger')) return;
                 if (openBtn) openBtn.click();
             });
+            // × click → delete
             var dt = card.querySelector('.card-del-trigger');
             if (dt && delBtn) {
                 dt.addEventListener('click', function(e) { e.stopPropagation(); delBtn.click(); });
             }
         });
     }
-    const observer = new MutationObserver(pgmFixLayout);
-    observer.observe(document.body, {childList: true, subtree: true, attributes: true});
-    pgmFixLayout();
-    // Mobile detection — set _mob query param
-    (function() {
-        if (window.innerWidth <= 768) {
-            const params = new URLSearchParams(window.location.search);
-            if (!params.has('_mob')) {
-                params.set('_mob', '1');
-                window.history.replaceState({}, '', '?' + params.toString());
-            }
+
+    var obs = new MutationObserver(pgmFix);
+    obs.observe(doc.body, {childList: true, subtree: true});
+    pgmFix();
+
+    // Mobile detection
+    if (window.parent.innerWidth <= 768) {
+        var params = new URLSearchParams(window.parent.location.search);
+        if (!params.has('_mob')) {
+            params.set('_mob', '1');
+            window.parent.history.replaceState({}, '', '?' + params.toString());
         }
-    })();
-    </script>
-    """, unsafe_allow_html=True)
+    }
+})();
+</script>
+""", height=0)
 
 is_mobile = st.query_params.get("_mob") == "1"
 
