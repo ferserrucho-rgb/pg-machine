@@ -259,33 +259,158 @@ with st.sidebar:
     with st.expander("📥 CARGA MASIVA (EXCEL)", expanded=True):
         perfil = st.radio("Formato:", ["Leads Propios", "Forecast BMC"])
         up = st.file_uploader("Subir Archivo", type=["xlsx"])
-        if up and st.button("Ejecutar Importación"):
+
+        # Paso 1: Analizar archivo
+        if up and st.button("Analizar Archivo"):
             df = pd.read_excel(up)
             items = []
             for _, r in df.iterrows():
                 if perfil == "Leads Propios":
                     parsed = _parse_date(r.get('Close Date', None))
                     items.append({
-                        "proyecto": r.get('Proyecto', 'S/N'),
-                        "cuenta": r.get('Empresa', r.get('Cuenta', 'S/N')),
-                        "monto": r.get('Valor', r.get('Monto', 0)),
+                        "proyecto": str(r.get('Proyecto', 'S/N')),
+                        "cuenta": str(r.get('Empresa', r.get('Cuenta', 'S/N'))),
+                        "monto": float(r.get('Valor', r.get('Monto', 0)) or 0),
                         "categoria": "LEADS",
                         "close_date": str(parsed) if parsed else None,
                     })
                 else:
                     parsed = _parse_date(r.get('Close Date', None))
                     items.append({
-                        "proyecto": r.get('Opportunity Name', '-'),
-                        "cuenta": r.get('Account Name', '-'),
-                        "monto": r.get('Amount USD', 0),
+                        "proyecto": str(r.get('Opportunity Name', '-')),
+                        "cuenta": str(r.get('Account Name', '-')),
+                        "monto": float(r.get('Amount USD', 0) or 0),
                         "categoria": "OFFICIAL",
                         "opp_id": str(r.get('BMC Opportunity Id', '')),
                         "stage": str(r.get('Stage', '')),
                         "close_date": str(parsed) if parsed else None,
                     })
-            count = dal.bulk_create_opportunities(team_id, user_id, items)
-            st.success(f"Importación exitosa: {count} oportunidades")
-            st.rerun()
+
+            # Comparar con existentes
+            existing = dal.get_opportunities(team_id)
+            # Índices de búsqueda
+            by_opp_id = {o["opp_id"]: o for o in existing if o.get("opp_id")}
+            by_proy_cuenta = {(o["proyecto"], o["cuenta"]): o for o in existing}
+
+            nuevas = []
+            iguales = []
+            con_cambios = []  # (item_excel, opp_existente, campos_dif)
+            compare_fields = ["proyecto", "cuenta", "monto", "categoria", "opp_id", "stage", "close_date"]
+
+            for item in items:
+                match = None
+                # Match por opp_id primero (Forecast BMC)
+                if item.get("opp_id") and item["opp_id"] in by_opp_id:
+                    match = by_opp_id[item["opp_id"]]
+                # Luego por proyecto + cuenta
+                elif (item["proyecto"], item["cuenta"]) in by_proy_cuenta:
+                    match = by_proy_cuenta[(item["proyecto"], item["cuenta"])]
+
+                if match:
+                    diffs = {}
+                    for f in compare_fields:
+                        val_new = str(item.get(f, "") or "")
+                        val_old = str(match.get(f, "") or "")
+                        if val_new != val_old and val_new:
+                            diffs[f] = {"excel": item.get(f), "actual": match.get(f)}
+                    if diffs:
+                        con_cambios.append((item, match, diffs))
+                    else:
+                        iguales.append(item)
+                else:
+                    nuevas.append(item)
+
+            st.session_state["import_nuevas"] = nuevas
+            st.session_state["import_iguales"] = iguales
+            st.session_state["import_con_cambios"] = con_cambios
+            st.session_state["import_analizado"] = True
+
+        # Paso 2: Mostrar resultados y opciones
+        if st.session_state.get("import_analizado"):
+            nuevas = st.session_state.get("import_nuevas", [])
+            iguales = st.session_state.get("import_iguales", [])
+            con_cambios = st.session_state.get("import_con_cambios", [])
+
+            st.markdown(f"**Resultado del análisis:**")
+            st.markdown(f"- 🆕 **{len(nuevas)}** nuevas")
+            st.markdown(f"- ✅ **{len(iguales)}** sin cambios (se omiten)")
+            st.markdown(f"- ⚠️ **{len(con_cambios)}** con diferencias")
+
+            # Nuevas: checkbox individual para aceptar/rechazar
+            if nuevas:
+                st.markdown("---")
+                st.markdown("**🆕 Nuevas oportunidades:**")
+                nc1, nc2 = st.columns([0.8, 0.2])
+                select_all_new = nc2.checkbox("Todas", value=True, key="sel_all_new")
+                for i, item in enumerate(nuevas):
+                    monto_str = f"USD {float(item.get('monto', 0)):,.0f}"
+                    st.checkbox(
+                        f"{item['cuenta']} — {item['proyecto']} ({monto_str})",
+                        value=select_all_new,
+                        key=f"imp_new_{i}",
+                    )
+
+            # Con cambios: checkbox individual + detalle de diffs
+            if con_cambios:
+                st.markdown("---")
+                st.markdown("**⚠️ Con diferencias (sobrescribir con Excel):**")
+                cc1, cc2 = st.columns([0.8, 0.2])
+                select_all_chg = cc2.checkbox("Todas", value=False, key="sel_all_chg")
+                for i, (item, existing_opp, diffs) in enumerate(con_cambios):
+                    diff_summary = ", ".join(f"{f}: {v['actual']} → {v['excel']}" for f, v in diffs.items())
+                    st.checkbox(
+                        f"{item['cuenta']} — {item['proyecto']}",
+                        value=select_all_chg,
+                        key=f"imp_chg_{i}",
+                        help=diff_summary,
+                    )
+
+            st.markdown("---")
+            bc1, bc2 = st.columns(2)
+            if bc1.button("Ejecutar Importación", key="exec_import", use_container_width=True):
+                created = 0
+                updated = 0
+                skipped_new = 0
+                # Crear nuevas seleccionadas
+                selected_nuevas = [item for i, item in enumerate(nuevas) if st.session_state.get(f"imp_new_{i}")]
+                skipped_new = len(nuevas) - len(selected_nuevas)
+                if selected_nuevas:
+                    created = dal.bulk_create_opportunities(team_id, user_id, selected_nuevas)
+                # Actualizar cambios seleccionados
+                for i, (item, existing_opp, diffs) in enumerate(con_cambios):
+                    if st.session_state.get(f"imp_chg_{i}"):
+                        update_data = {f: item[f] for f in diffs}
+                        dal.update_opportunity(existing_opp["id"], update_data)
+                        updated += 1
+
+                parts = []
+                if created:
+                    parts.append(f"{created} creadas")
+                if updated:
+                    parts.append(f"{updated} actualizadas")
+                if iguales:
+                    parts.append(f"{len(iguales)} sin cambios")
+                if skipped_new:
+                    parts.append(f"{skipped_new} omitidas")
+                st.success(f"Importación completada: {', '.join(parts)}")
+
+                # Limpiar estado
+                keys_to_clear = ["import_nuevas", "import_iguales", "import_con_cambios", "import_analizado"]
+                keys_to_clear += [f"imp_new_{i}" for i in range(len(nuevas))]
+                keys_to_clear += [f"imp_chg_{i}" for i in range(len(con_cambios))]
+                keys_to_clear += ["sel_all_new", "sel_all_chg"]
+                for k in keys_to_clear:
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+            if bc2.button("Cancelar", key="cancel_import", use_container_width=True):
+                keys_to_clear = ["import_nuevas", "import_iguales", "import_con_cambios", "import_analizado"]
+                keys_to_clear += [f"imp_new_{i}" for i in range(len(nuevas))]
+                keys_to_clear += [f"imp_chg_{i}" for i in range(len(con_cambios))]
+                keys_to_clear += ["sel_all_new", "sel_all_chg"]
+                for k in keys_to_clear:
+                    st.session_state.pop(k, None)
+                st.rerun()
 
     st.divider()
     st.write("✍️ **ALTA MANUAL**")
