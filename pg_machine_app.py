@@ -27,7 +27,10 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
-    .cat-header { background: #1e293b; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: 700; margin-bottom: 15px; }
+    .cat-header { color: white; padding: 6px 10px; border-radius: 6px; text-align: center; font-weight: 800; font-size: 0.8rem; margin-bottom: 8px; letter-spacing: 0.05em; text-transform: uppercase; }
+    .cat-header-leads { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+    .cat-header-official { background: linear-gradient(135deg, #10b981, #047857); }
+    .cat-header-gtm { background: linear-gradient(135deg, #f59e0b, #d97706); }
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .badge { float:right; font-size:0.6rem; font-weight:bold; padding:2px 6px; border-radius:8px; text-transform: uppercase; border: 1.2px solid; }
     .sc-cuenta { color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
@@ -45,10 +48,10 @@ st.markdown("""
     .estado-enviada { color: #8b5cf6; font-weight: 600; }
     .estado-bloqueada { color: #ef4444; font-weight: 700; }
     .activity-line { font-size: 0.72rem; color: #475569; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .account-group { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px; margin-bottom: 12px; }
-    .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
-    .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
+    .account-group { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
+    .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .account-name { color: #1e293b; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+    .account-total { color: #16a34a; font-size: 0.7rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
     /* Clickable card — whole card opens detail, × inside for delete */
     .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
@@ -87,7 +90,7 @@ st.markdown("""
         .pgm-card-wrap { padding: 8px 10px; }
         .pgm-card-wrap .opp-header { font-size: 0.8rem; }
         .pgm-card-wrap .amount { font-size: 0.85rem; }
-        .account-group { padding: 8px; margin-bottom: 8px; }
+        .account-group { padding: 5px 6px; margin-bottom: 6px; }
         .user-bar { font-size: 0.7rem; padding: 5px 10px; }
         .hist-card { padding: 10px; }
         .cat-header { font-size: 0.85rem; padding: 8px; }
@@ -784,6 +787,13 @@ else:
                 st.session_state.pop("bulk_del_confirm", None)
                 st.rerun()
 
+        def _cat_css_class(cat):
+            c = cat.strip().upper()
+            if "LEAD" in c: return "cat-header-leads"
+            if "OFFICIAL" in c: return "cat-header-official"
+            if "GTM" in c: return "cat-header-gtm"
+            return "cat-header-leads"
+
         def _render_account_group(cuenta, opps, all_acts_by_opp):
             """Renders one account group with its opportunity cards."""
             total = sum(float(o.get('monto') or 0) for o in opps)
@@ -872,7 +882,7 @@ else:
                 for cat in visible_cats:
                     items = [o for o in all_opps if o['categoria'] == cat]
                     if items:
-                        st.markdown(f'<div class="cat-header">{cat}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="cat-header {_cat_css_class(cat)}">{cat}</div>', unsafe_allow_html=True)
                         accounts = OrderedDict()
                         for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
                             accounts.setdefault(o['cuenta'], []).append(o)
@@ -884,6 +894,7 @@ else:
                 for i, col in enumerate(cols):
                     with col:
                         cat = visible_cats[i]
+                        st.markdown(f'<div class="cat-header {_cat_css_class(cat)}">{cat}</div>', unsafe_allow_html=True)
                         items = [o for o in all_opps if o['categoria'] == cat]
                         accounts = OrderedDict()
                         for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
