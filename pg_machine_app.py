@@ -61,7 +61,13 @@ st.markdown("""
     .pgm-card-wrap .opp-meta { font-size: 0.62rem; color: #64748b; margin: 4px 0 0 0; }
     .pgm-card-wrap .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.6rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; }
     .pgm-card-wrap .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
-    .pgm-card-wrap .act-line { font-size: 0.6rem; color: #475569; font-style: italic; line-height: 1.4; padding: 1px 0 1px 8px; border-left: 2px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pgm-card-wrap .act-line { font-size: 0.72rem; color: #334155; line-height: 1.5; padding: 3px 0 3px 8px; border-left: 3px solid #cbd5e1; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pgm-card-wrap .act-line .act-obj { font-weight: 600; color: #1e293b; }
+    .pgm-card-wrap .act-line .act-dest { color: #7c3aed; font-weight: 500; }
+    .pgm-card-wrap .act-line .act-asig { color: #0369a1; font-weight: 600; font-size: 0.65rem; background: #e0f2fe; padding: 1px 4px; border-radius: 3px; }
+    .pgm-card-wrap .act-line .act-status { font-weight: 600; font-size: 0.65rem; }
+    /* Card action buttons */
+    .pgm-card-wrap + div button { font-size: 0.6rem !important; padding: 2px 4px !important; min-height: 24px !important; height: 24px !important; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -732,14 +738,19 @@ else:
                 act_lines = []
                 for a in opp_acts:
                     light, label = _traffic_light(a)
-                    obj = f' {a["objetivo"]}' if a.get("objetivo") else ""
-                    dest = f' - {a["destinatario"]}' if a.get("destinatario") else ""
+                    obj = f' <span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ""
+                    dest = f' → <span class="act-dest">{a["destinatario"]}</span>' if a.get("destinatario") else ""
                     asig_name = ""
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                         asig_name = a["assigned_profile"]["full_name"]
                     asig_init = _get_initials(asig_name) if asig_name else ""
-                    asig = f' [{asig_init}]' if asig_init else ""
-                    act_lines.append(f'<div class="act-line">{light}{obj}{dest}{asig} — {label}</div>')
+                    asig = f' <span class="act-asig">{asig_init}</span>' if asig_init else ""
+                    status_html = f'<span class="act-status">{label}</span>'
+                    # Color border-left by activity type
+                    tipo = a.get("tipo", "")
+                    border_colors = {"Email": "#3b82f6", "Llamada": "#f59e0b", "Reunión": "#10b981", "Asignación": "#8b5cf6"}
+                    border_color = border_colors.get(tipo, "#cbd5e1")
+                    act_lines.append(f'<div class="act-line" style="border-left-color:{border_color};">{light}{obj}{dest}{asig} — {status_html}</div>')
                 acts_html = ""
                 if act_lines:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
