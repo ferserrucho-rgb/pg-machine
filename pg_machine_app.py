@@ -52,8 +52,12 @@ st.markdown("""
     .meta-btn-del:hover { background: #ef4444; color: white; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
     .hist-card { position: relative; background: #f8fafc; padding: 8px 10px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
-    .act-edit-trigger { position: absolute; top: 4px; right: 6px; font-size: 0.7rem; color: #94a3b8; cursor: pointer; transition: all 0.15s; }
-    .act-edit-trigger:hover { color: #1a73e8; }
+    .act-actions { position: absolute; top: 4px; right: 6px; display: flex; gap: 4px; }
+    .act-btn { cursor: pointer; font-size: 0.6rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
+    .act-btn-edit { color: #1a73e8; background: #eff6ff; }
+    .act-btn-edit:hover { background: #1a73e8; color: white; }
+    .act-btn-del { color: #ef4444; background: #fef2f2; }
+    .act-btn-del:hover { background: #ef4444; color: white; }
     .hist-card.tipo-email { border-left-color: #3b82f6; }
     .hist-card.tipo-llamada { border-left-color: #f59e0b; }
     .hist-card.tipo-reunion { border-left-color: #10b981; }
@@ -195,10 +199,17 @@ components.html("""
             return;
         }
 
-        // 4. Activity edit icon
-        if (e.target.closest('.act-edit-trigger')) {
+        // 4. Activity edit button
+        if (e.target.closest('.act-btn-edit')) {
             var hc = e.target.closest('.hist-card');
             if (hc) { var b = findBtn(hc, 'Editar'); if (b) b.click(); }
+            return;
+        }
+
+        // 5. Activity delete button
+        if (e.target.closest('.act-btn-del')) {
+            var hc = e.target.closest('.hist-card');
+            if (hc) { var b = findBtn(hc, '\u232b'); if (b) b.click(); }
             return;
         }
     };
@@ -261,6 +272,16 @@ components.html("""
                     }
                     el = el.parentElement;
                 }
+            }
+        });
+        // Hide "✏️ Editar" and "⌫" triggers (replaced by in-card buttons)
+        doc.querySelectorAll('button').forEach(function(btn) {
+            var txt = (btn.textContent||'').trim();
+            var isEdit = txt.indexOf('Editar') >= 0 && txt.indexOf('Oportunidad') < 0 && !btn.closest('form');
+            var isDel = txt.indexOf('\u232b') >= 0;
+            if (isEdit || isDel) {
+                var c = btn.closest('[data-testid="element-container"]');
+                if (c) c.style.cssText = 'position:absolute !important;left:-9999px !important;height:0 !important;overflow:hidden !important;';
             }
         });
     }
@@ -672,17 +693,14 @@ if st.session_state.selected_id:
             tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
             tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
 
-            edit_icon = '<span class="act-edit-trigger">✏</span>'
-            st.markdown(f'<div class="{card_class}">{edit_icon}<b>{tipo_icon} {a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} <span style="color:#94a3b8; font-size:0.7rem;">({fecha_display})</span> {estado_html}<br><span style="color:#64748b; font-size:0.75rem;">{a.get("descripcion", "")}</span>{feedback_html}</div>', unsafe_allow_html=True)
+            act_btns = '<span class="act-actions"><span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
+            st.markdown(f'<div class="{card_class}">{act_btns}<b>{tipo_icon} {a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} <span style="color:#94a3b8; font-size:0.7rem;">({fecha_display})</span> {estado_html}<br><span style="color:#64748b; font-size:0.75rem;">{a.get("descripcion", "")}</span>{feedback_html}</div>', unsafe_allow_html=True)
 
             aid = a['id']
+            # State-specific action buttons
             if a["estado"] == "Pendiente":
-                b1, b2 = st.columns(2)
-                if b1.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
+                if st.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
                     dal.update_activity(aid, {"estado": "Enviada"})
-                    st.rerun()
-                if b2.button("✏️ Editar", key=f"toggle_edit_{aid}", use_container_width=True):
-                    st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
                     st.rerun()
             elif a["estado"] == "Enviada":
                 if st.session_state.get(f"show_fb_{aid}"):
@@ -708,19 +726,31 @@ if st.session_state.selected_id:
                             st.session_state.pop(f"show_fb_{aid}", None)
                             st.rerun()
                 else:
-                    b1, b2, b3 = st.columns(3)
+                    b1, b2 = st.columns(2)
                     if b1.button("📩 RESPONDIDA", key=f"r_{aid}", use_container_width=True):
                         st.session_state[f"show_fb_{aid}"] = True
                         st.rerun()
-                    if b2.button("✏️ Editar", key=f"toggle_edit_{aid}", use_container_width=True):
-                        st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
-                        st.rerun()
-                    if b3.button("🔄 REENVIAR", key=f"re_{aid}", use_container_width=True):
+                    if b2.button("🔄 REENVIAR", key=f"re_{aid}", use_container_width=True):
                         dal.update_activity(aid, {"estado": "Pendiente", "enviada_ts": None, "response_deadline": None})
                         st.rerun()
-            else:
-                if st.button("✏️ Editar", key=f"toggle_edit_{aid}"):
-                    st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
+
+            # Hidden edit/delete triggers (wired via JS from in-card buttons)
+            if st.button("✏️ Editar", key=f"toggle_edit_{aid}"):
+                st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
+                st.rerun()
+            if st.button("⌫", key=f"act_del_{aid}"):
+                st.session_state[f"confirm_del_act_{aid}"] = True
+
+            # Delete confirmation
+            if st.session_state.get(f"confirm_del_act_{aid}"):
+                st.warning("Eliminar esta actividad?")
+                da1, da2 = st.columns(2)
+                if da1.button("Confirmar", key=f"cdel_act_y_{aid}", use_container_width=True):
+                    dal.delete_activity(aid)
+                    st.session_state.pop(f"confirm_del_act_{aid}", None)
+                    st.rerun()
+                if da2.button("Cancelar", key=f"cdel_act_n_{aid}", use_container_width=True):
+                    st.session_state.pop(f"confirm_del_act_{aid}", None)
                     st.rerun()
 
             # Inline edit form (toggled)
@@ -753,18 +783,6 @@ if st.session_state.selected_id:
                             "descripcion": ea_desc,
                         })
                         st.session_state.pop(f"show_edit_{aid}", None)
-                        st.rerun()
-                if st.button("🗑️ Eliminar actividad", key=f"del_act_{aid}"):
-                    st.session_state[f"confirm_del_act_{aid}"] = True
-                if st.session_state.get(f"confirm_del_act_{aid}"):
-                    st.warning("Eliminar esta actividad?")
-                    da1, da2 = st.columns(2)
-                    if da1.button("Confirmar", key=f"cdel_act_y_{aid}", use_container_width=True):
-                        dal.delete_activity(aid)
-                        st.session_state.pop(f"confirm_del_act_{aid}", None)
-                        st.rerun()
-                    if da2.button("Cancelar", key=f"cdel_act_n_{aid}", use_container_width=True):
-                        st.session_state.pop(f"confirm_del_act_{aid}", None)
                         st.rerun()
 
     if not activities:
