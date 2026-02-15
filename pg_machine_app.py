@@ -50,6 +50,10 @@ st.markdown("""
     .meta-btn-back:hover { background: #1a73e8; color: white; }
     .meta-btn-del { color: #ef4444; background: #fef2f2; }
     .meta-btn-del:hover { background: #ef4444; color: white; }
+    .meta-btn-edit-opp { color: #047857; background: #d1fae5; }
+    .meta-btn-edit-opp:hover { background: #047857; color: white; }
+    .meta-btn-new-act { color: #1a73e8; background: #eff6ff; }
+    .meta-btn-new-act:hover { background: #1a73e8; color: white; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
     .hist-card { background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
     .act-top { display: flex; align-items: flex-start; gap: 8px; }
@@ -219,7 +223,21 @@ components.html("""
             return;
         }
 
-        // 4. Activity edit button
+        // 4. Meta-bar edit opportunity
+        if (e.target.closest('.meta-btn-edit-opp')) {
+            var bar = e.target.closest('.opp-meta-bar');
+            if (bar) { var b = findBtn(bar, 'EDIT_OPP'); if (b) b.click(); }
+            return;
+        }
+
+        // 5. Meta-bar new activity
+        if (e.target.closest('.meta-btn-new-act')) {
+            var bar = e.target.closest('.opp-meta-bar');
+            if (bar) { var b = findBtn(bar, 'NEW_ACT'); if (b) b.click(); }
+            return;
+        }
+
+        // 6. Activity edit button
         if (e.target.closest('.act-btn-edit')) {
             var hc = e.target.closest('.hist-card');
             if (hc) { var b = findBtn(hc, 'Editar'); if (b) b.click(); }
@@ -324,6 +342,8 @@ components.html("""
             if (txt.indexOf('ENVIADO') >= 0) hide = true;
             if (txt.indexOf('RESPONDIDA') >= 0) hide = true;
             if (txt.indexOf('REENVIAR') >= 0) hide = true;
+            if (txt.indexOf('EDIT_OPP') >= 0) hide = true;
+            if (txt.indexOf('NEW_ACT') >= 0) hide = true;
             if (hide) {
                 // Walk up hiding single-child wrappers until parent has other visible content
                 var el = btn;
@@ -694,7 +714,7 @@ if st.session_state.selected_id:
         meta_parts.append(f'<span class="meta-id">{opp["opp_id"]}</span>')
     if opp.get("close_date"):
         meta_parts.append(f'<span class="meta-close">Cierre: {opp["close_date"]}</span>')
-    action_html = '<span class="meta-actions"><span class="meta-btn meta-btn-back">⬅ Volver</span><span class="meta-btn meta-btn-del">🗑 Eliminar</span></span>'
+    action_html = '<span class="meta-actions"><span class="meta-btn meta-btn-edit-opp">✏ Editar</span><span class="meta-btn meta-btn-new-act">+ Nueva</span><span class="meta-btn meta-btn-back">⬅ Volver</span><span class="meta-btn meta-btn-del">🗑 Eliminar</span></span>'
     st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}{action_html}</div>', unsafe_allow_html=True)
 
     # --- Hidden action buttons (wired via JS) ---
@@ -715,6 +735,14 @@ if st.session_state.selected_id:
         if dc2.button("Cancelar", key="confirm_del_opp_no", use_container_width=True):
             st.session_state.pop(f"confirm_del_opp_{opp['id']}", None)
             st.rerun()
+
+    # Hidden toggles for edit opp / new activity (wired via JS)
+    if st.button("✏ EDIT_OPP", key="toggle_edit_opp"):
+        st.session_state["show_edit_opp"] = not st.session_state.get("show_edit_opp", False)
+        st.rerun()
+    if st.button("+ NEW_ACT", key="toggle_new_act"):
+        st.session_state["show_new_act"] = not st.session_state.get("show_new_act", False)
+        st.rerun()
 
     # --- History ---
     st.caption("📜 Historial e Interacción")
@@ -861,10 +889,9 @@ if st.session_state.selected_id:
     if not activities:
         st.info("No hay actividades registradas aún.")
 
-    st.divider()
-
-    # --- EDITING SECTION (compressed in expanders) ---
-    with st.expander("✏️ Editar Oportunidad", expanded=False):
+    # --- Edit Opportunity (toggled from meta-bar) ---
+    if st.session_state.get("show_edit_opp"):
+        st.caption("✏️ Editar Oportunidad")
         with st.form("edit_opp"):
             ed_c1, ed_c2, ed_c3 = st.columns(3)
             ed_cuenta = ed_c1.text_input("Cuenta", value=opp["cuenta"])
@@ -883,9 +910,12 @@ if st.session_state.selected_id:
                     "opp_id": ed_opp_id, "stage": ed_stage,
                     "close_date": str(ed_close) if ed_close else None,
                 })
+                st.session_state.pop("show_edit_opp", None)
                 st.rerun()
 
-    with st.expander("➕ Nueva Actividad", expanded=False):
+    # --- New Activity (toggled from meta-bar) ---
+    if st.session_state.get("show_new_act"):
+        st.caption("➕ Nueva Actividad")
         tipo = st.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
         with st.form("act_form"):
             c1, c2, c3 = st.columns(3)
@@ -920,6 +950,7 @@ if st.session_state.selected_id:
                     if assignee:
                         notifications.send_assignment_notification(new_act, assignee, opp)
                         dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
+                st.session_state.pop("show_new_act", None)
                 st.rerun()
 
 else:
