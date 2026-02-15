@@ -307,8 +307,8 @@ function renderList() {
           <div class="cuenta">${opp.cuenta || ''}</div>
         </div>
         <div class="card-footer">
+          ${asigName ? `<span class="initials-badge">${asigInitials}</span><span class="asig-name">${asigName}</span>` : ''}
           <span class="dest">${dest}</span>
-          ${asigInitials ? `<span class="initials-badge">${asigInitials}</span>` : ''}
           <span class="fecha">${act.fecha || ''}</span>
         </div>
       </div>`
