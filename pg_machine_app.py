@@ -86,10 +86,10 @@ st.markdown("""
     .hist-card.tipo-llamada { border-left-color: #f59e0b; }
     .hist-card.tipo-reunion { border-left-color: #10b981; }
     .hist-card.tipo-asignacion { border-left-color: #8b5cf6; }
-    .hist-card.enviada { background: #f5f3ff; border-left-color: #8b5cf6; }
-    .hist-card.bloqueada { background: #fef2f2; border-left-color: #ef4444; }
-    .hist-card.respondida { background: #f0fdf4; border-left-color: #16a34a; }
-    .hist-card.pendiente { background: #fffbeb; border-left-color: #f59e0b; }
+    .hist-card.enviada { background: #f5f3ff; }
+    .hist-card.bloqueada { background: #fef2f2; }
+    .hist-card.respondida { background: #f0fdf4; }
+    .hist-card.pendiente { background: #fffbeb; }
     .activity-line { font-size: 0.72rem; color: #475569; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .account-group { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
     .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
@@ -819,17 +819,17 @@ if st.session_state.selected_id:
             tipo_lower = a.get("tipo", "").lower().replace("ó", "o")
             tipo_class = f'tipo-{tipo_lower}' if a.get("tipo") else ""
             if a["estado"] == "Enviada" and label == "Bloqueada":
-                card_class = "hist-card bloqueada"
+                card_class = f"hist-card {tipo_class} bloqueada"
                 estado_pill = '<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 BLOQUEADA</span>'
             elif a["estado"] == "Enviada":
-                card_class = "hist-card enviada"
+                card_class = f"hist-card {tipo_class} enviada"
                 estado_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
             elif a["estado"] == "Respondida":
-                card_class = "hist-card respondida"
+                card_class = f"hist-card {tipo_class} respondida"
                 resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
                 estado_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida{resp_date}</span>'
             elif a["estado"] == "Pendiente":
-                card_class = "hist-card pendiente"
+                card_class = f"hist-card {tipo_class} pendiente"
                 estado_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
             else:
                 card_class = f"hist-card {tipo_class}"
