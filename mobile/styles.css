@@ -125,7 +125,7 @@ body {
   color: white; display: inline-flex; align-items: center; justify-content: center;
   font-size: 0.55rem; font-weight: 700;
 }
-.card-footer .fecha { font-family: 'Courier New', monospace; font-size: 0.68rem; }
+.card-footer .fecha { font-family: 'Courier New', monospace; font-size: 0.82rem; font-weight: 600; color: var(--text); }
 
 .empty-state { text-align: center; padding: 60px 24px; color: var(--text-muted); }
 .empty-state .emoji { font-size: 3rem; margin-bottom: 12px; }
