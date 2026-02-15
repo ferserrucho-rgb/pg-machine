@@ -89,6 +89,7 @@ st.markdown("""
     .hist-card.enviada { background: #f5f3ff; border-left-color: #8b5cf6; }
     .hist-card.bloqueada { background: #fef2f2; border-left-color: #ef4444; }
     .hist-card.respondida { background: #f0fdf4; border-left-color: #16a34a; }
+    .hist-card.pendiente { background: #fffbeb; border-left-color: #f59e0b; }
     .activity-line { font-size: 0.72rem; color: #475569; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .account-group { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
     .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
@@ -768,6 +769,9 @@ if st.session_state.selected_id:
             elif a["estado"] == "Respondida":
                 card_class = "hist-card respondida"
                 estado_pill = '<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida</span>'
+            elif a["estado"] == "Pendiente":
+                card_class = "hist-card pendiente"
+                estado_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
             else:
                 card_class = f"hist-card {tipo_class}"
                 estado_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
@@ -795,7 +799,13 @@ if st.session_state.selected_id:
                 estado_btns = '<span class="act-btn act-btn-resp">📩 Respondida</span><span class="act-btn act-btn-resend">🔄 Reenviar</span>'
             act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
 
-            st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{tipo_html}{obj_html}{dest_html}{asig_html}{estado_pill}{fecha_html}</div>{act_btns}</div>{desc_html}{fb_html}</div>', unsafe_allow_html=True)
+            # Build meta-row: Asignación shows assignee first → destinatario
+            if a.get("tipo") == "Asignación":
+                meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{estado_pill}{fecha_html}'
+            else:
+                meta_row = f'{tipo_html}{obj_html}{dest_html}{asig_html}{estado_pill}{fecha_html}'
+
+            st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}</div>', unsafe_allow_html=True)
 
             aid = a['id']
             # State-specific action buttons
