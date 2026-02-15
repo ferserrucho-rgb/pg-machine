@@ -55,19 +55,21 @@ st.markdown("""
     /* Card open button — styled via JS class .pgm-open-btn */
     .pgm-open-btn { font-size: 0.7rem !important; padding: 4px 0 !important; min-height: 0 !important; height: auto !important; color: #1a73e8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 8px 8px !important; background: #fafbfc !important; margin-top: -4px !important; margin-bottom: 6px !important; }
     .pgm-open-btn:hover { color: white !important; background: #1a73e8 !important; }
-    .pgm-card-wrap .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
-    .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
-    .pgm-card-wrap .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
-    .pgm-card-wrap .opp-meta { font-size: 0.62rem; color: #64748b; margin: 4px 0 0 0; }
+    .pgm-card-wrap .opp-name { font-size: 0.85rem; font-weight: 700; color: #1e293b; line-height: 1.3; margin-bottom: 2px; }
+    .pgm-card-wrap .opp-row2 { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+    .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; }
+    .pgm-card-wrap .amount { color: #16a34a; font-size: 0.9rem; font-weight: 800; }
+    .pgm-card-wrap .opp-row3 { display: flex; align-items: center; gap: 8px; margin: 2px 0 0 0; }
     .pgm-card-wrap .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.6rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; }
+    .pgm-card-wrap .close-date { font-size: 0.7rem; font-weight: 700; color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; padding: 2px 6px; border-radius: 4px; }
     .pgm-card-wrap .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
     .pgm-card-wrap .act-line { font-size: 0.72rem; color: #334155; line-height: 1.5; padding: 3px 0 3px 8px; border-left: 3px solid #cbd5e1; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pgm-card-wrap .act-line .act-obj { font-weight: 600; color: #1e293b; }
     .pgm-card-wrap .act-line .act-dest { color: #7c3aed; font-weight: 500; }
     .pgm-card-wrap .act-line .act-asig { color: #0369a1; font-weight: 600; font-size: 0.65rem; background: #e0f2fe; padding: 1px 4px; border-radius: 3px; }
     .pgm-card-wrap .act-line .act-status { font-weight: 600; font-size: 0.65rem; }
-    /* Card action buttons */
-    .pgm-card-wrap + div button { font-size: 0.6rem !important; padding: 2px 4px !important; min-height: 24px !important; height: 24px !important; }
+    /* Card action buttons — applied via JS */
+    .pgm-card-btn { font-size: 0.6rem !important; padding: 1px 0 !important; min-height: 20px !important; height: 20px !important; line-height: 1 !important; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -110,8 +112,13 @@ st.markdown("""
         // Style card buttons that follow card HTML
         document.querySelectorAll('button').forEach(btn => {
             const txt = (btn.textContent || '').trim();
-            if (txt === 'Abrir' && !btn.classList.contains('pgm-open-btn')) {
-                btn.classList.add('pgm-open-btn');
+            if (txt === 'Abrir' && !btn.classList.contains('pgm-card-btn')) {
+                btn.classList.add('pgm-card-btn');
+            }
+            if ((txt === '✏️' || txt === '🗑️') && !btn.classList.contains('pgm-card-btn')) {
+                // Only tag small action buttons near cards (not form buttons)
+                const parent = btn.closest('[data-testid="column"]');
+                if (parent) btn.classList.add('pgm-card-btn');
             }
         });
     }
@@ -725,15 +732,21 @@ else:
             for o in opps:
                 opp_acts = all_acts_by_opp.get(o["id"], [])
                 monto_val = float(o.get("monto") or 0)
-                # Build HTML card
-                stage_html = f' <span class="stage-badge">{o["stage"]}</span>' if o.get("stage") else ""
-                header_html = f'<div class="opp-header">{o["proyecto"]}{stage_html} <span class="amount">USD {monto_val:,.0f}</span></div>'
-                meta_parts = []
+                # Build HTML card — 3 lines
+                # Line 1: Project name
+                name_html = f'<div class="opp-name">{o["proyecto"]}</div>'
+                # Line 2: Stage + Amount
+                stage_html = f'<span class="stage-badge">{o["stage"]}</span>' if o.get("stage") else ""
+                row2_html = f'<div class="opp-row2">{stage_html}<span class="amount">USD {monto_val:,.0f}</span></div>'
+                # Line 3: Opp ID + Close date (highlighted)
+                row3_parts = []
                 if o.get("opp_id"):
-                    meta_parts.append(f'<span class="opp-id-box">{o["opp_id"]}</span>')
+                    row3_parts.append(f'<span class="opp-id-box">{o["opp_id"]}</span>')
                 if o.get("close_date"):
-                    meta_parts.append(f'Cierre: {o["close_date"]}')
-                meta_html = f'<div class="opp-meta">{" &nbsp; ".join(meta_parts)}</div>' if meta_parts else ""
+                    row3_parts.append(f'<span class="close-date">Cierre: {o["close_date"]}</span>')
+                row3_html = f'<div class="opp-row3">{" ".join(row3_parts)}</div>' if row3_parts else ""
+                header_html = f'{name_html}{row2_html}{row3_html}'
+                meta_html = ""
                 # Activities
                 act_lines = []
                 for a in opp_acts:
