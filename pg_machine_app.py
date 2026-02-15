@@ -55,13 +55,15 @@ st.markdown("""
     /* Card open button — styled via JS class .pgm-open-btn */
     .pgm-open-btn { font-size: 0.7rem !important; padding: 4px 0 !important; min-height: 0 !important; height: auto !important; color: #1a73e8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 8px 8px !important; background: #fafbfc !important; margin-top: -4px !important; margin-bottom: 6px !important; }
     .pgm-open-btn:hover { color: white !important; background: #1a73e8 !important; }
+    .pgm-card-wrap .opp-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .pgm-card-wrap .opp-left { flex: 1; min-width: 0; }
+    .pgm-card-wrap .opp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; margin-left: 8px; }
     .pgm-card-wrap .opp-name { font-size: 0.85rem; font-weight: 700; color: #1e293b; line-height: 1.3; margin-bottom: 2px; }
-    .pgm-card-wrap .opp-row2 { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+    .pgm-card-wrap .opp-row2 { display: flex; align-items: center; gap: 8px; }
     .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; }
     .pgm-card-wrap .amount { color: #16a34a; font-size: 0.9rem; font-weight: 800; }
-    .pgm-card-wrap .opp-row3 { display: flex; align-items: center; gap: 8px; margin: 2px 0 0 0; }
-    .pgm-card-wrap .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.6rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; }
-    .pgm-card-wrap .close-date { font-size: 0.7rem; font-weight: 700; color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; padding: 2px 6px; border-radius: 4px; }
+    .pgm-card-wrap .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.55rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 5px; border-radius: 3px; }
+    .pgm-card-wrap .close-date { font-size: 0.6rem; font-weight: 700; color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; padding: 1px 5px; border-radius: 3px; }
     .pgm-card-wrap .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
     .pgm-card-wrap .act-line { font-size: 0.72rem; color: #334155; line-height: 1.5; padding: 3px 0 3px 8px; border-left: 3px solid #cbd5e1; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pgm-card-wrap .act-line .act-obj { font-weight: 600; color: #1e293b; }
@@ -732,20 +734,18 @@ else:
             for o in opps:
                 opp_acts = all_acts_by_opp.get(o["id"], [])
                 monto_val = float(o.get("monto") or 0)
-                # Build HTML card — 3 lines
-                # Line 1: Project name
+                # Build HTML card — left: name + stage/amount, right: opp_id + close date
                 name_html = f'<div class="opp-name">{o["proyecto"]}</div>'
-                # Line 2: Stage + Amount
                 stage_html = f'<span class="stage-badge">{o["stage"]}</span>' if o.get("stage") else ""
                 row2_html = f'<div class="opp-row2">{stage_html}<span class="amount">USD {monto_val:,.0f}</span></div>'
-                # Line 3: Opp ID + Close date (highlighted)
-                row3_parts = []
+                # Right side: opp ID + close date stacked
+                right_parts = []
                 if o.get("opp_id"):
-                    row3_parts.append(f'<span class="opp-id-box">{o["opp_id"]}</span>')
+                    right_parts.append(f'<span class="opp-id-box">{o["opp_id"]}</span>')
                 if o.get("close_date"):
-                    row3_parts.append(f'<span class="close-date">Cierre: {o["close_date"]}</span>')
-                row3_html = f'<div class="opp-row3">{" ".join(row3_parts)}</div>' if row3_parts else ""
-                header_html = f'{name_html}{row2_html}{row3_html}'
+                    right_parts.append(f'<span class="close-date">Cierre: {o["close_date"]}</span>')
+                right_html = f'<div class="opp-right">{"".join(right_parts)}</div>' if right_parts else ""
+                header_html = f'<div class="opp-top"><div class="opp-left">{name_html}{row2_html}</div>{right_html}</div>'
                 meta_html = ""
                 # Activities
                 act_lines = []
