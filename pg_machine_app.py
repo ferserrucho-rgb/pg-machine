@@ -44,8 +44,16 @@ st.markdown("""
     .opp-meta-bar .meta-monto { font-size: 0.8rem; font-weight: 800; color: #16a34a; }
     .opp-meta-bar .meta-id { font-family: 'Courier New', monospace; font-size: 0.55rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 5px; border-radius: 3px; }
     .opp-meta-bar .meta-close { font-size: 0.6rem; font-weight: 700; color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; padding: 1px 5px; border-radius: 3px; }
+    .opp-meta-bar .meta-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+    .meta-btn { cursor: pointer; font-size: 0.65rem; font-weight: 600; padding: 3px 8px; border-radius: 4px; transition: all 0.15s; }
+    .meta-btn-back { color: #1a73e8; background: #eff6ff; }
+    .meta-btn-back:hover { background: #1a73e8; color: white; }
+    .meta-btn-del { color: #ef4444; background: #fef2f2; }
+    .meta-btn-del:hover { background: #ef4444; color: white; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
-    .hist-card { background: #f8fafc; padding: 8px 10px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
+    .hist-card { position: relative; background: #f8fafc; padding: 8px 10px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
+    .act-edit-trigger { position: absolute; top: 4px; right: 6px; font-size: 0.7rem; color: #94a3b8; cursor: pointer; transition: all 0.15s; }
+    .act-edit-trigger:hover { color: #1a73e8; }
     .hist-card.tipo-email { border-left-color: #3b82f6; }
     .hist-card.tipo-llamada { border-left-color: #f59e0b; }
     .hist-card.tipo-reunion { border-left-color: #10b981; }
@@ -122,41 +130,77 @@ components.html("""
 <script>
 (function() {
     var doc = window.parent.document;
-
-    // Clean up previous observer if iframe re-rendered
     if (doc._pgmObs) { try { doc._pgmObs.disconnect(); } catch(e){} }
 
-    // Event delegation: card clicks (no stale references)
-    if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
-    doc._pgmClickHandler = function(e) {
-        var card = e.target.closest('.pgm-card-wrap');
-        if (!card) return;
-        // Find hidden button row for this card
-        var el = card.parentElement;
-        var btnRow = null;
-        while (el) {
+    // Helper: walk up DOM from startEl, search subsequent siblings for button matching text
+    function findBtn(startEl, textMatch) {
+        var el = startEl;
+        while (el && el !== doc.body) {
             var sib = el.nextElementSibling;
-            if (sib) {
-                var hasOpen = false;
-                sib.querySelectorAll('button').forEach(function(b) {
-                    if ((b.textContent||'').trim() === '\u25b8') hasOpen = true;
-                });
-                if (hasOpen) { btnRow = sib; break; }
+            while (sib) {
+                var btns = sib.querySelectorAll('button');
+                for (var i = 0; i < btns.length; i++) {
+                    if ((btns[i].textContent||'').indexOf(textMatch) >= 0) return btns[i];
+                }
+                sib = sib.nextElementSibling;
             }
             el = el.parentElement;
         }
-        if (!btnRow) return;
-        if (e.target.closest('.card-del-trigger')) {
-            // Delete icon clicked
+        return null;
+    }
+
+    // Event delegation for all custom click handlers
+    if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
+    doc._pgmClickHandler = function(e) {
+        // 1. Dashboard card click (open / delete)
+        var card = e.target.closest('.pgm-card-wrap');
+        if (card) {
+            var el = card.parentElement;
+            var btnRow = null;
+            while (el) {
+                var sib = el.nextElementSibling;
+                if (sib) {
+                    var hasOpen = false;
+                    sib.querySelectorAll('button').forEach(function(b) {
+                        if ((b.textContent||'').trim() === '\u25b8') hasOpen = true;
+                    });
+                    if (hasOpen) { btnRow = sib; break; }
+                }
+                el = el.parentElement;
+            }
+            if (!btnRow) return;
+            if (e.target.closest('.card-del-trigger')) {
+                btnRow.querySelectorAll('button').forEach(function(b) {
+                    if ((b.textContent||'').trim() === '\u00d7') b.click();
+                });
+                return;
+            }
             btnRow.querySelectorAll('button').forEach(function(b) {
-                if ((b.textContent||'').trim() === '\u00d7') b.click();
+                if ((b.textContent||'').trim() === '\u25b8') b.click();
             });
             return;
         }
-        // Card body clicked → open
-        btnRow.querySelectorAll('button').forEach(function(b) {
-            if ((b.textContent||'').trim() === '\u25b8') b.click();
-        });
+
+        // 2. Meta-bar back button
+        if (e.target.closest('.meta-btn-back')) {
+            var bar = e.target.closest('.opp-meta-bar');
+            if (bar) { var b = findBtn(bar, 'Volver'); if (b) b.click(); }
+            return;
+        }
+
+        // 3. Meta-bar delete button
+        if (e.target.closest('.meta-btn-del')) {
+            var bar = e.target.closest('.opp-meta-bar');
+            if (bar) { var b = findBtn(bar, 'Eliminar'); if (b) b.click(); }
+            return;
+        }
+
+        // 4. Activity edit icon
+        if (e.target.closest('.act-edit-trigger')) {
+            var hc = e.target.closest('.hist-card');
+            if (hc) { var b = findBtn(hc, 'Editar'); if (b) b.click(); }
+            return;
+        }
     };
     doc.body.addEventListener('click', doc._pgmClickHandler);
 
@@ -186,7 +230,7 @@ components.html("""
                 if (txt.indexOf('\u2715')>=0) btn.style.opacity = '0.75';
             }
         });
-        // Hide button rows below cards (re-applied every pass for fresh DOM)
+        // Hide button rows below dashboard cards
         doc.querySelectorAll('.pgm-card-wrap').forEach(function(card) {
             var el = card.parentElement;
             while (el) {
@@ -205,13 +249,26 @@ components.html("""
                 el = el.parentElement;
             }
         });
+        // Hide Volver/Eliminar row in detail view (replaced by meta-bar buttons)
+        doc.querySelectorAll('button').forEach(function(btn) {
+            var txt = (btn.textContent||'').trim();
+            if (txt.indexOf('Volver') >= 0 && txt.indexOf('\u2b05') >= 0) {
+                var el = btn;
+                while (el && el !== doc.body) {
+                    if (el.previousElementSibling && el.previousElementSibling.querySelector && el.previousElementSibling.querySelector('.opp-meta-bar')) {
+                        el.style.cssText = 'position:absolute !important;left:-9999px !important;height:0 !important;overflow:hidden !important;';
+                        break;
+                    }
+                    el = el.parentElement;
+                }
+            }
+        });
     }
 
     doc._pgmObs = new MutationObserver(pgmFix);
     doc._pgmObs.observe(doc.body, {childList: true, subtree: true});
     pgmFix();
 
-    // Mobile detection
     if (window.parent.innerWidth <= 768) {
         var params = new URLSearchParams(window.parent.location.search);
         if (!params.has('_mob')) {
@@ -558,14 +615,15 @@ if st.session_state.selected_id:
         meta_parts.append(f'<span class="meta-id">{opp["opp_id"]}</span>')
     if opp.get("close_date"):
         meta_parts.append(f'<span class="meta-close">Cierre: {opp["close_date"]}</span>')
-    st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}</div>', unsafe_allow_html=True)
+    action_html = '<span class="meta-actions"><span class="meta-btn meta-btn-back">⬅ Volver</span><span class="meta-btn meta-btn-del">🗑 Eliminar</span></span>'
+    st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}{action_html}</div>', unsafe_allow_html=True)
 
-    # --- Action buttons (right-aligned at meta bar level) ---
-    _spacer, btn_c1, btn_c2 = st.columns([0.74, 0.13, 0.13])
-    if btn_c1.button("⬅️ Volver", use_container_width=True):
+    # --- Hidden action buttons (wired via JS) ---
+    _hid_c1, _hid_c2 = st.columns(2)
+    if _hid_c1.button("⬅️ Volver", use_container_width=True, key="detail_back"):
         st.session_state.selected_id = None
         st.rerun()
-    if btn_c2.button("🗑️ Eliminar", key="del_opp", use_container_width=True):
+    if _hid_c2.button("🗑️ Eliminar", key="del_opp", use_container_width=True):
         st.session_state[f"confirm_del_opp_{opp['id']}"] = True
     if st.session_state.get(f"confirm_del_opp_{opp['id']}"):
         st.warning(f"Eliminar **{opp['proyecto']}** y todas sus actividades?")
@@ -614,7 +672,8 @@ if st.session_state.selected_id:
             tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
             tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
 
-            st.markdown(f'<div class="{card_class}"><b>{tipo_icon} {a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} <span style="color:#94a3b8; font-size:0.8rem;">({fecha_display})</span> {estado_html}<br><span style="color:#64748b; font-size:0.85rem;">{a.get("descripcion", "")}</span>{feedback_html}</div>', unsafe_allow_html=True)
+            edit_icon = '<span class="act-edit-trigger">✏</span>'
+            st.markdown(f'<div class="{card_class}">{edit_icon}<b>{tipo_icon} {a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} <span style="color:#94a3b8; font-size:0.7rem;">({fecha_display})</span> {estado_html}<br><span style="color:#64748b; font-size:0.75rem;">{a.get("descripcion", "")}</span>{feedback_html}</div>', unsafe_allow_html=True)
 
             aid = a['id']
             if a["estado"] == "Pendiente":
