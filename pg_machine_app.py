@@ -812,11 +812,8 @@ if st.session_state.selected_id:
                 estado_btns = '<span class="act-btn act-btn-resp">📩 Respondida</span><span class="act-btn act-btn-resend">🔄 Reenviar</span>'
             act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
 
-            # Build meta-row: Asignación shows assignee first → destinatario
-            if a.get("tipo") == "Asignación":
-                meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{estado_pill}{fecha_html}'
-            else:
-                meta_row = f'{tipo_html}{obj_html}{dest_html}{asig_html}{estado_pill}{fecha_html}'
+            # Build meta-row: assignee first, then → destinatario, then description
+            meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{estado_pill}{fecha_html}'
 
             st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}</div>', unsafe_allow_html=True)
 
