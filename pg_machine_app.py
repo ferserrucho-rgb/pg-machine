@@ -1058,6 +1058,15 @@ else:
             st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
             for o in opps:
                 opp_acts = all_acts_by_opp.get(o["id"], [])
+                _eo = {"Bloqueada": 0, "Pendiente": 1, "Enviada": 2, "Respondida": 3}
+                def _card_sort(a):
+                    e = a.get("estado", "")
+                    if e == "Enviada":
+                        _, lbl = _traffic_light(a)
+                        if lbl == "Bloqueada":
+                            return 0
+                    return _eo.get(e, 2)
+                opp_acts.sort(key=_card_sort)
                 monto_val = float(o.get("monto") or 0)
                 # Build HTML card — left: name + stage/amount, right: opp_id + close date
                 name_html = f'<div class="opp-name">{o["proyecto"]}</div>'
