@@ -346,10 +346,10 @@ components.html("""
             if (txt.indexOf('EDIT_OPP') >= 0) hide = true;
             if (txt.indexOf('NEW_ACT') >= 0) hide = true;
             if (hide) {
-                // Walk up hiding single-child wrappers until parent has other visible content
+                // Walk up hiding wrappers — use offscreen positioning to keep buttons clickable
                 var el = btn;
                 while (el && el !== doc.body) {
-                    el.style.cssText = 'display:none !important;';
+                    el.style.cssText = 'height:0 !important;overflow:hidden !important;margin:0 !important;padding:0 !important;border:0 !important;';
                     var par = el.parentElement;
                     if (!par) break;
                     var anyVisible = false;
