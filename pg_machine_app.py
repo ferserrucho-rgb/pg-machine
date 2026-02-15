@@ -1198,6 +1198,7 @@ else:
                     assigned_name = a["creator_profile"]["full_name"]
 
             all_acts_display.append({
+                "_sort": _act_status_order(a),
                 "Semáforo": light,
                 "Estado": label,
                 "Categoría": opp_data.get("categoria", ""),
@@ -1253,7 +1254,7 @@ else:
             m5.metric("🟥 Bloqueadas/Vencidas", len(df_filtered[df_filtered["Estado"].isin(["Bloqueada", "Vencida"])]))
 
             st.divider()
-            sorted_indices = df_filtered.index.tolist()
+            sorted_indices = df_filtered.sort_values("_sort").index.tolist()
             display_cols = [c for c in selected_cols if c in df_filtered.columns]
 
             n_cols = len(display_cols)
