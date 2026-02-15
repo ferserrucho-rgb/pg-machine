@@ -1096,7 +1096,8 @@ else:
                             asig_name = a["creator_profile"]["full_name"]
                     asig_init = _get_initials(asig_name) if asig_name else ""
                     asig = f' <span class="act-asig">{asig_init}</span>' if asig_init else ""
-                    status_html = f'<span class="act-status">{label}</span>'
+                    resp_dt = f' — {a["respondida_ts"]}' if a.get("estado") == "Respondida" and a.get("respondida_ts") else ''
+                    status_html = f'<span class="act-status">{label}{resp_dt}</span>'
                     # Color border-left by activity type
                     tipo = a.get("tipo", "")
                     border_colors = {"Email": "#3b82f6", "Llamada": "#f59e0b", "Reunión": "#10b981", "Asignación": "#8b5cf6"}
