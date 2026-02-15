@@ -382,6 +382,13 @@ components.html("""
 
 is_mobile = st.query_params.get("_mob") == "1"
 
+def _fmt_date(val) -> str:
+    """Formatea fecha como DD/MM."""
+    if not val:
+        return ""
+    d = _parse_date(str(val)) if not isinstance(val, date) else val
+    return d.strftime("%d/%m") if d else str(val)
+
 def _get_initials(full_name: str) -> str:
     """Extrae iniciales: primera letra del nombre + primera del apellido."""
     parts = (full_name or "").strip().split()
@@ -730,7 +737,7 @@ if st.session_state.selected_id:
     if opp.get("opp_id"):
         meta_parts.append(f'<span class="meta-id">{opp["opp_id"]}</span>')
     if opp.get("close_date"):
-        meta_parts.append(f'<span class="meta-close">Cierre: {opp["close_date"]}</span>')
+        meta_parts.append(f'<span class="meta-close">Cierre: {_fmt_date(opp["close_date"])}</span>')
     action_html = '<span class="meta-actions"><span class="meta-btn meta-btn-edit-opp">✏ Editar</span><span class="meta-btn meta-btn-new-act">+ Nueva</span><span class="meta-btn meta-btn-back">⬅ Volver</span><span class="meta-btn meta-btn-del">🗑 Eliminar</span></span>'
     st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}{action_html}</div>', unsafe_allow_html=True)
 
@@ -789,8 +796,7 @@ if st.session_state.selected_id:
                 estado_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
             elif a["estado"] == "Respondida":
                 card_class = "hist-card respondida"
-                _rts = _parse_date(str(a["respondida_ts"])) if a.get("respondida_ts") else None
-                resp_date = f' — {_rts.strftime("%d/%m")}' if _rts else ''
+                resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
                 estado_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida{resp_date}</span>'
             elif a["estado"] == "Pendiente":
                 card_class = "hist-card pendiente"
@@ -800,7 +806,7 @@ if st.session_state.selected_id:
                 estado_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
 
             asig_initials = _get_initials(assigned_name) if assigned_name else ""
-            fecha_display = str(a.get("fecha", ""))
+            fecha_display = _fmt_date(a.get("fecha", ""))
             tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
             tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
             tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
@@ -1079,7 +1085,7 @@ else:
                 if o.get("opp_id"):
                     right_parts.append(f'<span class="opp-id-box">{o["opp_id"]}</span>')
                 if o.get("close_date"):
-                    right_parts.append(f'<span class="close-date">Cierre: {o["close_date"]}</span>')
+                    right_parts.append(f'<span class="close-date">Cierre: {_fmt_date(o["close_date"])}</span>')
                 right_html = f'<div class="opp-right">{"".join(right_parts)}</div>' if right_parts else ""
                 header_html = f'<div class="opp-top"><div class="opp-left">{name_html}{row2_html}</div>{right_html}</div>'
                 meta_html = ""
@@ -1097,8 +1103,7 @@ else:
                             asig_name = a["creator_profile"]["full_name"]
                     asig_init = _get_initials(asig_name) if asig_name else ""
                     asig = f' <span class="act-asig">{asig_init}</span>' if asig_init else ""
-                    _rdt = _parse_date(str(a["respondida_ts"])) if a.get("estado") == "Respondida" and a.get("respondida_ts") else None
-                    resp_dt = f' — {_rdt.strftime("%d/%m")}' if _rdt else ''
+                    resp_dt = f' — {_fmt_date(a["respondida_ts"])}' if a.get("estado") == "Respondida" and a.get("respondida_ts") else ''
                     status_html = f'<span class="act-status">{label}{resp_dt}</span>'
                     # Color border-left by activity type
                     tipo = a.get("tipo", "")
@@ -1219,7 +1224,7 @@ else:
                 "Objetivo": a.get("objetivo", ""),
                 "Destinatario": a.get("destinatario", ""),
                 "Asignado a": assigned_name,
-                "Fecha": str(a.get("fecha", "")),
+                "Fecha": _fmt_date(a.get("fecha", "")),
                 "SLA": a.get("sla_key", ""),
                 "SLA Respuesta (días)": a.get("sla_respuesta_dias", ""),
                 "Estado Interno": a.get("estado", ""),
