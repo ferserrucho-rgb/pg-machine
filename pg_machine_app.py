@@ -58,6 +58,12 @@ st.markdown("""
     .act-btn-edit:hover { background: #1a73e8; color: white; }
     .act-btn-del { color: #ef4444; background: #fef2f2; }
     .act-btn-del:hover { background: #ef4444; color: white; }
+    .act-btn-send { color: #047857; background: #d1fae5; }
+    .act-btn-send:hover { background: #047857; color: white; }
+    .act-btn-resp { color: #7c3aed; background: #ede9fe; }
+    .act-btn-resp:hover { background: #7c3aed; color: white; }
+    .act-btn-resend { color: #0369a1; background: #e0f2fe; }
+    .act-btn-resend:hover { background: #0369a1; color: white; }
     .hist-card.tipo-email { border-left-color: #3b82f6; }
     .hist-card.tipo-llamada { border-left-color: #f59e0b; }
     .hist-card.tipo-reunion { border-left-color: #10b981; }
@@ -212,6 +218,27 @@ components.html("""
             if (hc) { var b = findBtn(hc, '\u232b'); if (b) b.click(); }
             return;
         }
+
+        // 6. Activity send (mark as Enviada)
+        if (e.target.closest('.act-btn-send')) {
+            var hc = e.target.closest('.hist-card');
+            if (hc) { var b = findBtn(hc, 'ENVIADO'); if (b) b.click(); }
+            return;
+        }
+
+        // 7. Activity responded
+        if (e.target.closest('.act-btn-resp')) {
+            var hc = e.target.closest('.hist-card');
+            if (hc) { var b = findBtn(hc, 'RESPONDIDA'); if (b) b.click(); }
+            return;
+        }
+
+        // 8. Activity resend
+        if (e.target.closest('.act-btn-resend')) {
+            var hc = e.target.closest('.hist-card');
+            if (hc) { var b = findBtn(hc, 'REENVIAR'); if (b) b.click(); }
+            return;
+        }
     };
     doc.body.addEventListener('click', doc._pgmClickHandler);
 
@@ -274,12 +301,16 @@ components.html("""
                 }
             }
         });
-        // Hide "✏️ Editar" and "⌫" triggers (replaced by in-card buttons)
+        // Hide activity Streamlit buttons (replaced by in-card pill buttons)
         doc.querySelectorAll('button').forEach(function(btn) {
             var txt = (btn.textContent||'').trim();
-            var isEdit = txt.indexOf('Editar') >= 0 && txt.indexOf('Oportunidad') < 0 && !btn.closest('form');
-            var isDel = txt.indexOf('\u232b') >= 0;
-            if (isEdit || isDel) {
+            var hide = false;
+            if (txt.indexOf('Editar') >= 0 && txt.indexOf('Oportunidad') < 0 && !btn.closest('form')) hide = true;
+            if (txt.indexOf('\u232b') >= 0) hide = true;
+            if (txt.indexOf('ENVIADO') >= 0) hide = true;
+            if (txt.indexOf('RESPONDIDA') >= 0) hide = true;
+            if (txt.indexOf('REENVIAR') >= 0) hide = true;
+            if (hide) {
                 var c = btn.closest('[data-testid="element-container"]');
                 if (c) c.style.cssText = 'position:absolute !important;left:-9999px !important;height:0 !important;overflow:hidden !important;';
             }
@@ -693,7 +724,12 @@ if st.session_state.selected_id:
             tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
             tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
 
-            act_btns = '<span class="act-actions"><span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
+            estado_btns = ''
+            if a["estado"] == "Pendiente":
+                estado_btns = '<span class="act-btn act-btn-send">✅ Enviado</span>'
+            elif a["estado"] == "Enviada":
+                estado_btns = '<span class="act-btn act-btn-resp">📩 Respondida</span><span class="act-btn act-btn-resend">🔄 Reenviar</span>'
+            act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
             st.markdown(f'<div class="{card_class}">{act_btns}<b>{tipo_icon} {a["tipo"]}{obj_txt}</b>{dest_txt}{asig_txt} <span style="color:#94a3b8; font-size:0.7rem;">({fecha_display})</span> {estado_html}<br><span style="color:#64748b; font-size:0.75rem;">{a.get("descripcion", "")}</span>{feedback_html}</div>', unsafe_allow_html=True)
 
             aid = a['id']
