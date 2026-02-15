@@ -56,6 +56,10 @@ st.markdown("""
     .card-del-trigger { position: absolute; bottom: 6px; right: 8px; font-size: 0.75rem; color: #cbd5e1; cursor: pointer; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
     .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
     .bulk-del-bar { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+    div[data-testid="stMultiSelect"] { margin-top: -8px !important; margin-bottom: -8px !important; }
+    div[data-testid="stMultiSelect"] > div { min-height: 0 !important; }
+    div[data-testid="stMultiSelect"] input { font-size: 0.7rem !important; }
+    div[data-testid="stMultiSelect"] span[data-baseweb="tag"] { font-size: 0.65rem !important; height: 20px !important; }
     .pgm-card-wrap .opp-top { display: flex; justify-content: space-between; align-items: flex-start; }
     .pgm-card-wrap .opp-left { flex: 1; min-width: 0; }
     .pgm-card-wrap .opp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; margin-left: 8px; }
@@ -107,23 +111,57 @@ components.html("""
 <script>
 (function() {
     var doc = window.parent.document;
-    if (doc._pgmObserver) return;
-    doc._pgmObserver = true;
+
+    // Clean up previous observer if iframe re-rendered
+    if (doc._pgmObs) { try { doc._pgmObs.disconnect(); } catch(e){} }
+
+    // Event delegation: card clicks (no stale references)
+    if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
+    doc._pgmClickHandler = function(e) {
+        var card = e.target.closest('.pgm-card-wrap');
+        if (!card) return;
+        // Find hidden button row for this card
+        var el = card.parentElement;
+        var btnRow = null;
+        while (el) {
+            var sib = el.nextElementSibling;
+            if (sib) {
+                var hasOpen = false;
+                sib.querySelectorAll('button').forEach(function(b) {
+                    if ((b.textContent||'').trim() === '\u25b8') hasOpen = true;
+                });
+                if (hasOpen) { btnRow = sib; break; }
+            }
+            el = el.parentElement;
+        }
+        if (!btnRow) return;
+        if (e.target.closest('.card-del-trigger')) {
+            // Delete icon clicked
+            btnRow.querySelectorAll('button').forEach(function(b) {
+                if ((b.textContent||'').trim() === '\u00d7') b.click();
+            });
+            return;
+        }
+        // Card body clicked → open
+        btnRow.querySelectorAll('button').forEach(function(b) {
+            if ((b.textContent||'').trim() === '\u25b8') b.click();
+        });
+    };
+    doc.body.addEventListener('click', doc._pgmClickHandler);
 
     function pgmFix() {
         // Full-width layout
         doc.querySelectorAll('section.main > div').forEach(function(el) {
-            if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
+            if (el.style.maxWidth) { el.style.maxWidth='100%'; el.style.paddingLeft='1rem'; el.style.paddingRight='1rem'; }
         });
         // Style category buttons with colored gradients
         doc.querySelectorAll('button').forEach(function(btn) {
-            if (btn.dataset.catStyled) return;
-            var txt = (btn.textContent || '').trim().toUpperCase();
+            var txt = (btn.textContent||'').trim().toUpperCase();
             var grad = null;
-            if (txt === 'LEADS' || (txt.indexOf('LEADS') >= 0 && txt.indexOf('\u2715') >= 0)) grad = 'linear-gradient(135deg,#3b82f6,#1d4ed8)';
-            else if (txt === 'OFFICIAL' || (txt.indexOf('OFFICIAL') >= 0 && txt.indexOf('\u2715') >= 0)) grad = 'linear-gradient(135deg,#10b981,#047857)';
-            else if (txt === 'GTM' || (txt.indexOf('GTM') >= 0 && txt.indexOf('\u2715') >= 0)) grad = 'linear-gradient(135deg,#f59e0b,#d97706)';
-            if (grad) {
+            if (txt === 'LEADS' || (txt.indexOf('LEADS')>=0 && txt.indexOf('\u2715')>=0)) grad = 'linear-gradient(135deg,#3b82f6,#1d4ed8)';
+            else if (txt === 'OFFICIAL' || (txt.indexOf('OFFICIAL')>=0 && txt.indexOf('\u2715')>=0)) grad = 'linear-gradient(135deg,#10b981,#047857)';
+            else if (txt === 'GTM' || (txt.indexOf('GTM')>=0 && txt.indexOf('\u2715')>=0)) grad = 'linear-gradient(135deg,#f59e0b,#d97706)';
+            if (grad && !btn.dataset.catStyled) {
                 btn.dataset.catStyled = '1';
                 btn.style.background = grad;
                 btn.style.color = 'white';
@@ -134,49 +172,32 @@ components.html("""
                 btn.style.border = 'none';
                 btn.style.borderRadius = '6px';
                 btn.style.minHeight = '0';
-                if (txt.indexOf('\u2715') >= 0) btn.style.opacity = '0.75';
+                if (txt.indexOf('\u2715')>=0) btn.style.opacity = '0.75';
             }
         });
-        // Wire card clicks to hidden Streamlit buttons
+        // Hide button rows below cards (re-applied every pass for fresh DOM)
         doc.querySelectorAll('.pgm-card-wrap').forEach(function(card) {
-            if (card.dataset.pgmBound) return;
-            card.dataset.pgmBound = '1';
-            // Walk up from card to find the sibling container with buttons
             var el = card.parentElement;
-            var btnRow = null;
-            while (el && !btnRow) {
+            while (el) {
                 var sib = el.nextElementSibling;
                 if (sib) {
-                    var btns = sib.querySelectorAll('button');
-                    if (btns.length > 0) { btnRow = sib; break; }
+                    var hasCardBtn = false;
+                    sib.querySelectorAll('button').forEach(function(b) {
+                        var t = (b.textContent||'').trim();
+                        if (t === '\u25b8' || t === '\u00d7') hasCardBtn = true;
+                    });
+                    if (hasCardBtn) {
+                        sib.style.cssText = 'position:absolute !important;left:-9999px !important;height:0 !important;overflow:hidden !important;';
+                        break;
+                    }
                 }
                 el = el.parentElement;
-            }
-            if (!btnRow) return;
-            var openBtn = null, delBtn = null;
-            btnRow.querySelectorAll('button').forEach(function(b) {
-                var t = (b.textContent || '').trim();
-                if (t === '\u25b8') openBtn = b;
-                if (t === '\u00d7') delBtn = b;
-            });
-            if (!openBtn && !delBtn) return;
-            // Hide the button row
-            btnRow.style.cssText = 'position:absolute !important;left:-9999px !important;height:0 !important;overflow:hidden !important;';
-            // Card click → open
-            card.addEventListener('click', function(e) {
-                if (e.target.closest('.card-del-trigger')) return;
-                if (openBtn) openBtn.click();
-            });
-            // × click → delete
-            var dt = card.querySelector('.card-del-trigger');
-            if (dt && delBtn) {
-                dt.addEventListener('click', function(e) { e.stopPropagation(); delBtn.click(); });
             }
         });
     }
 
-    var obs = new MutationObserver(pgmFix);
-    obs.observe(doc.body, {childList: true, subtree: true});
+    doc._pgmObs = new MutationObserver(pgmFix);
+    doc._pgmObs.observe(doc.body, {childList: true, subtree: true});
     pgmFix();
 
     // Mobile detection
