@@ -49,12 +49,13 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card — rendered as HTML + invisible button overlay */
-    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
-    .pgm-card-wrap:hover { border-color: #1a73e8; border-width: 2px; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
-    /* Card open button — styled via JS class .pgm-open-btn */
-    .pgm-open-btn { font-size: 0.7rem !important; padding: 4px 0 !important; min-height: 0 !important; height: auto !important; color: #1a73e8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 8px 8px !important; background: #fafbfc !important; margin-top: -4px !important; margin-bottom: 6px !important; }
-    .pgm-open-btn:hover { color: white !important; background: #1a73e8 !important; }
+    /* Clickable card + footer */
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
+    .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
+    .pgm-open-btn { font-size: 0.55rem !important; padding: 1px 0 !important; min-height: 18px !important; height: 18px !important; line-height: 1 !important; color: #94a3b8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 0 8px !important; background: white !important; margin-bottom: 6px !important; }
+    .pgm-open-btn:hover { color: white !important; background: #1a73e8 !important; border-color: #1a73e8 !important; }
+    .pgm-del-icon { font-size: 0.55rem !important; padding: 1px 0 !important; min-height: 18px !important; height: 18px !important; line-height: 1 !important; color: #cbd5e1 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-left: none !important; border-radius: 0 0 8px 0 !important; background: white !important; margin-bottom: 6px !important; }
+    .pgm-del-icon:hover { color: white !important; background: #ef4444 !important; border-color: #ef4444 !important; }
     .pgm-card-wrap .opp-top { display: flex; justify-content: space-between; align-items: flex-start; }
     .pgm-card-wrap .opp-left { flex: 1; min-width: 0; }
     .pgm-card-wrap .opp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; margin-left: 8px; }
@@ -70,8 +71,7 @@ st.markdown("""
     .pgm-card-wrap .act-line .act-dest { color: #7c3aed; font-weight: 500; }
     .pgm-card-wrap .act-line .act-asig { color: #0369a1; font-weight: 600; font-size: 0.65rem; background: #e0f2fe; padding: 1px 4px; border-radius: 3px; }
     .pgm-card-wrap .act-line .act-status { font-weight: 600; font-size: 0.65rem; }
-    /* Card action buttons — applied via JS */
-    .pgm-card-btn { font-size: 0.6rem !important; padding: 1px 0 !important; min-height: 20px !important; height: 20px !important; line-height: 1 !important; }
+    /* Card footer buttons styled via JS: .pgm-open-btn, .pgm-del-icon */
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -111,16 +111,15 @@ st.markdown("""
         document.querySelectorAll('section.main > div').forEach(el => {
             if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
         });
-        // Style card buttons that follow card HTML
+        // Style card footer buttons
         document.querySelectorAll('button').forEach(btn => {
             const txt = (btn.textContent || '').trim();
-            if (txt === 'Abrir' && !btn.classList.contains('pgm-card-btn')) {
-                btn.classList.add('pgm-card-btn');
+            if (txt === '\u25b8' && !btn.classList.contains('pgm-open-btn')) {
+                btn.classList.add('pgm-open-btn');
             }
-            if ((txt === '✏️' || txt === '🗑️') && !btn.classList.contains('pgm-card-btn')) {
-                // Only tag small action buttons near cards (not form buttons)
+            if (txt === '\u00d7' && !btn.classList.contains('pgm-del-icon')) {
                 const parent = btn.closest('[data-testid="column"]');
-                if (parent) btn.classList.add('pgm-card-btn');
+                if (parent) btn.classList.add('pgm-del-icon');
             }
         });
     }
@@ -769,39 +768,14 @@ else:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
                 card_html = f'<div class="pgm-card-wrap">{header_html}{meta_html}{acts_html}</div>'
                 st.markdown(card_html, unsafe_allow_html=True)
-                cb1, cb2, cb3 = st.columns([0.5, 0.25, 0.25])
-                if cb1.button("Abrir", key=f"g_{o['id']}", use_container_width=True):
+                c_open, c_del = st.columns([0.92, 0.08])
+                if c_open.button("▸", key=f"g_{o['id']}", use_container_width=True):
                     st.session_state.selected_id = o['id']
                     st.rerun()
-                if cb2.button("✏️", key=f"qe_{o['id']}", use_container_width=True):
-                    st.session_state[f"quick_edit_{o['id']}"] = not st.session_state.get(f"quick_edit_{o['id']}", False)
-                    st.rerun()
-                if cb3.button("🗑️", key=f"qd_{o['id']}", use_container_width=True):
+                if c_del.button("×", key=f"qd_{o['id']}", use_container_width=True):
                     st.session_state[f"quick_del_{o['id']}"] = True
                     st.rerun()
-                # Quick edit form
-                if st.session_state.get(f"quick_edit_{o['id']}"):
-                    with st.form(f"qedit_{o['id']}"):
-                        qe1, qe2 = st.columns(2)
-                        qe_cuenta = qe1.text_input("Cuenta", value=o["cuenta"], key=f"qec_{o['id']}")
-                        qe_proyecto = qe2.text_input("Proyecto", value=o["proyecto"], key=f"qep_{o['id']}")
-                        qe3, qe4 = st.columns(2)
-                        qe_monto = qe3.number_input("Monto USD", value=float(o.get("monto") or 0), key=f"qem_{o['id']}")
-                        qe_cat = qe4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(o["categoria"]) if o["categoria"] in CATEGORIAS else 0, key=f"qecat_{o['id']}")
-                        qe5, qe6 = st.columns(2)
-                        qe_opp_id = qe5.text_input("Opportunity ID", value=o.get("opp_id", ""), key=f"qeoid_{o['id']}")
-                        qe_stage = qe6.text_input("Stage", value=o.get("stage", ""), key=f"qes_{o['id']}")
-                        qe_close = st.date_input("Close Date", value=_parse_date(o.get("close_date", "")), key=f"qecl_{o['id']}")
-                        if st.form_submit_button("💾 Guardar", use_container_width=True):
-                            dal.update_opportunity(o["id"], {
-                                "cuenta": qe_cuenta, "proyecto": qe_proyecto,
-                                "monto": float(qe_monto), "categoria": qe_cat,
-                                "opp_id": qe_opp_id, "stage": qe_stage,
-                                "close_date": str(qe_close) if qe_close else None,
-                            })
-                            st.session_state.pop(f"quick_edit_{o['id']}", None)
-                            st.rerun()
-                # Quick delete confirmation
+                # Delete confirmation
                 if st.session_state.get(f"quick_del_{o['id']}"):
                     st.warning(f"Eliminar **{o['proyecto']}**?")
                     qd1, qd2 = st.columns(2)
