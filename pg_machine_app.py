@@ -765,6 +765,10 @@ if st.session_state.selected_id:
                 assigned_name = a["assigned_profile"]["full_name"]
             elif a.get("assigned_to"):
                 assigned_name = RECURSOS_PRESALES.get(a["assigned_to"], "")
+            # For Email/Llamada/Reunión, show creator as the person performing the action
+            if not assigned_name and a.get("tipo") in ("Email", "Llamada", "Reunión"):
+                if a.get("creator_profile") and a["creator_profile"].get("full_name"):
+                    assigned_name = a["creator_profile"]["full_name"]
 
             light, label = _traffic_light(a)
             tipo_lower = a.get("tipo", "").lower().replace("ó", "o")

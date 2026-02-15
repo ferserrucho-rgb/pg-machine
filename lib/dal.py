@@ -130,7 +130,7 @@ def get_activities_for_opportunity(opp_id: str) -> list[dict]:
     """Obtiene actividades de una oportunidad, ordenadas por fecha desc."""
     sb = get_supabase()
     resp = sb.table("activities") \
-        .select("*, assigned_profile:assigned_to(full_name, specialty)") \
+        .select("*, assigned_profile:assigned_to(full_name, specialty), creator_profile:created_by(full_name)") \
         .eq("opportunity_id", opp_id) \
         .order("created_at", desc=True) \
         .execute()
