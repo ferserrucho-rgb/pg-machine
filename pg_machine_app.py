@@ -49,13 +49,11 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.8rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
-    /* Clickable card + footer */
-    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
-    .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
-    .pgm-open-btn { font-size: 0.55rem !important; padding: 1px 0 !important; min-height: 18px !important; height: 18px !important; line-height: 1 !important; color: #94a3b8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 0 8px !important; background: white !important; margin-bottom: 6px !important; }
-    .pgm-open-btn:hover { color: white !important; background: #1a73e8 !important; border-color: #1a73e8 !important; }
-    .pgm-del-icon { font-size: 0.55rem !important; padding: 1px 0 !important; min-height: 18px !important; height: 18px !important; line-height: 1 !important; color: #cbd5e1 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-left: none !important; border-radius: 0 0 8px 0 !important; background: white !important; margin-bottom: 6px !important; }
-    .pgm-del-icon:hover { color: white !important; background: #ef4444 !important; border-color: #ef4444 !important; }
+    /* Clickable card — whole card opens detail, × inside for delete */
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
+    .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); background: #f8faff; }
+    .card-del-trigger { position: absolute; top: 4px; right: 6px; font-size: 0.7rem; color: #cbd5e1; cursor: pointer; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
+    .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
     .pgm-card-wrap .opp-top { display: flex; justify-content: space-between; align-items: flex-start; }
     .pgm-card-wrap .opp-left { flex: 1; min-width: 0; }
     .pgm-card-wrap .opp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; margin-left: 8px; }
@@ -71,7 +69,6 @@ st.markdown("""
     .pgm-card-wrap .act-line .act-dest { color: #7c3aed; font-weight: 500; }
     .pgm-card-wrap .act-line .act-asig { color: #0369a1; font-weight: 600; font-size: 0.65rem; background: #e0f2fe; padding: 1px 4px; border-radius: 3px; }
     .pgm-card-wrap .act-line .act-status { font-weight: 600; font-size: 0.65rem; }
-    /* Card footer buttons styled via JS: .pgm-open-btn, .pgm-del-icon */
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
@@ -111,15 +108,27 @@ st.markdown("""
         document.querySelectorAll('section.main > div').forEach(el => {
             if (el.style.maxWidth) { el.style.maxWidth = '100%'; el.style.paddingLeft = '1rem'; el.style.paddingRight = '1rem'; }
         });
-        // Style card footer buttons
-        document.querySelectorAll('button').forEach(btn => {
-            const txt = (btn.textContent || '').trim();
-            if (txt === '\u25b8' && !btn.classList.contains('pgm-open-btn')) {
-                btn.classList.add('pgm-open-btn');
-            }
-            if (txt === '\u00d7' && !btn.classList.contains('pgm-del-icon')) {
-                const parent = btn.closest('[data-testid="column"]');
-                if (parent) btn.classList.add('pgm-del-icon');
+        // Wire card clicks to hidden Streamlit buttons
+        document.querySelectorAll('.pgm-card-wrap').forEach(card => {
+            if (card.dataset.pgmBound) return;
+            card.dataset.pgmBound = '1';
+            var mkd = card.closest('[data-testid="stMarkdown"]') || card.parentElement;
+            var btnRow = mkd.nextElementSibling;
+            if (!btnRow) return;
+            var openBtn = null, delBtn = null;
+            btnRow.querySelectorAll('button').forEach(function(b) {
+                var t = (b.textContent || '').trim();
+                if (t === '\u25b8') openBtn = b;
+                if (t === '\u00d7') delBtn = b;
+            });
+            if (openBtn || delBtn) btnRow.style.cssText = 'position:absolute;left:-9999px;height:0;overflow:hidden;';
+            card.addEventListener('click', function(e) {
+                if (e.target.closest('.card-del-trigger')) return;
+                if (openBtn) openBtn.click();
+            });
+            var dt = card.querySelector('.card-del-trigger');
+            if (dt && delBtn) {
+                dt.addEventListener('click', function(e) { e.stopPropagation(); delBtn.click(); });
             }
         });
     }
@@ -766,7 +775,8 @@ else:
                 acts_html = ""
                 if act_lines:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
-                card_html = f'<div class="pgm-card-wrap">{header_html}{meta_html}{acts_html}</div>'
+                del_icon = '<span class="card-del-trigger">&times;</span>'
+                card_html = f'<div class="pgm-card-wrap">{del_icon}{header_html}{meta_html}{acts_html}</div>'
                 st.markdown(card_html, unsafe_allow_html=True)
                 c_open, c_del = st.columns([0.92, 0.08])
                 if c_open.button("▸", key=f"g_{o['id']}", use_container_width=True):
