@@ -53,8 +53,8 @@ st.markdown("""
     .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px 8px 0 0; padding: 10px 12px; margin-bottom: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
     .pgm-card-wrap:hover { border-color: #1a73e8; border-width: 2px; box-shadow: 0 3px 12px rgba(26,115,232,0.18); }
     /* Card open button — styled via JS class .pgm-open-btn */
-    .pgm-open-btn { font-size: 0.55rem !important; padding: 2px 0 !important; min-height: 0 !important; height: auto !important; color: #94a3b8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 8px 8px !important; background: #fafbfc !important; margin-top: -4px !important; margin-bottom: 6px !important; }
-    .pgm-open-btn:hover { color: #1a73e8 !important; background: #eff6ff !important; }
+    .pgm-open-btn { font-size: 0.7rem !important; padding: 4px 0 !important; min-height: 0 !important; height: auto !important; color: #1a73e8 !important; border: 1px solid #e2e8f0 !important; border-top: none !important; border-radius: 0 0 8px 8px !important; background: #fafbfc !important; margin-top: -4px !important; margin-bottom: 6px !important; }
+    .pgm-open-btn:hover { color: white !important; background: #1a73e8 !important; }
     .pgm-card-wrap .opp-header { font-size: 0.85rem; font-weight: 600; color: #1e293b; margin-bottom: 3px; }
     .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; vertical-align: middle; }
     .pgm-card-wrap .amount { color: #16a34a; font-size: 0.93rem; font-weight: 800; }
@@ -104,7 +104,7 @@ st.markdown("""
         // Style card buttons that follow card HTML
         document.querySelectorAll('button').forEach(btn => {
             const txt = (btn.textContent || '').trim();
-            if (txt === '▸' && !btn.classList.contains('pgm-open-btn')) {
+            if (txt === 'Abrir' && !btn.classList.contains('pgm-open-btn')) {
                 btn.classList.add('pgm-open-btn');
             }
         });
@@ -745,9 +745,49 @@ else:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
                 card_html = f'<div class="pgm-card-wrap">{header_html}{meta_html}{acts_html}</div>'
                 st.markdown(card_html, unsafe_allow_html=True)
-                if st.button("▸", key=f"g_{o['id']}", use_container_width=True):
+                cb1, cb2, cb3 = st.columns([0.5, 0.25, 0.25])
+                if cb1.button("Abrir", key=f"g_{o['id']}", use_container_width=True):
                     st.session_state.selected_id = o['id']
                     st.rerun()
+                if cb2.button("✏️", key=f"qe_{o['id']}", use_container_width=True):
+                    st.session_state[f"quick_edit_{o['id']}"] = not st.session_state.get(f"quick_edit_{o['id']}", False)
+                    st.rerun()
+                if cb3.button("🗑️", key=f"qd_{o['id']}", use_container_width=True):
+                    st.session_state[f"quick_del_{o['id']}"] = True
+                    st.rerun()
+                # Quick edit form
+                if st.session_state.get(f"quick_edit_{o['id']}"):
+                    with st.form(f"qedit_{o['id']}"):
+                        qe1, qe2 = st.columns(2)
+                        qe_cuenta = qe1.text_input("Cuenta", value=o["cuenta"], key=f"qec_{o['id']}")
+                        qe_proyecto = qe2.text_input("Proyecto", value=o["proyecto"], key=f"qep_{o['id']}")
+                        qe3, qe4 = st.columns(2)
+                        qe_monto = qe3.number_input("Monto USD", value=float(o.get("monto") or 0), key=f"qem_{o['id']}")
+                        qe_cat = qe4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(o["categoria"]) if o["categoria"] in CATEGORIAS else 0, key=f"qecat_{o['id']}")
+                        qe5, qe6 = st.columns(2)
+                        qe_opp_id = qe5.text_input("Opportunity ID", value=o.get("opp_id", ""), key=f"qeoid_{o['id']}")
+                        qe_stage = qe6.text_input("Stage", value=o.get("stage", ""), key=f"qes_{o['id']}")
+                        qe_close = st.date_input("Close Date", value=_parse_date(o.get("close_date", "")), key=f"qecl_{o['id']}")
+                        if st.form_submit_button("💾 Guardar", use_container_width=True):
+                            dal.update_opportunity(o["id"], {
+                                "cuenta": qe_cuenta, "proyecto": qe_proyecto,
+                                "monto": float(qe_monto), "categoria": qe_cat,
+                                "opp_id": qe_opp_id, "stage": qe_stage,
+                                "close_date": str(qe_close) if qe_close else None,
+                            })
+                            st.session_state.pop(f"quick_edit_{o['id']}", None)
+                            st.rerun()
+                # Quick delete confirmation
+                if st.session_state.get(f"quick_del_{o['id']}"):
+                    st.warning(f"Eliminar **{o['proyecto']}**?")
+                    qd1, qd2 = st.columns(2)
+                    if qd1.button("Confirmar", key=f"qdy_{o['id']}", use_container_width=True):
+                        dal.delete_opportunity(o["id"])
+                        st.session_state.pop(f"quick_del_{o['id']}", None)
+                        st.rerun()
+                    if qd2.button("Cancelar", key=f"qdn_{o['id']}", use_container_width=True):
+                        st.session_state.pop(f"quick_del_{o['id']}", None)
+                        st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         if focused:
