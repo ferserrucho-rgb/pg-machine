@@ -174,6 +174,13 @@ function cardClass(act) {
   return 'estado-pendiente'
 }
 
+function actStatusOrder(act) {
+  const e = act.estado || ''
+  if (e === 'Enviada' && trafficLight(act).label === 'Bloqueada') return 0
+  const order = { 'Pendiente': 1, 'Enviada': 2, 'Respondida': 3 }
+  return order[e] ?? 2
+}
+
 // ---- AUTH ----
 async function login(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
@@ -222,7 +229,7 @@ async function logout() {
 async function fetchActivities() {
   const uid = state.user.id
   let query = supabase.from('activities')
-    .select('*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)')
+    .select('*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty), creator_profile:created_by(full_name)')
     .eq('team_id', state.user.team_id)
     .order('fecha', { ascending: false })
 
@@ -232,7 +239,7 @@ async function fetchActivities() {
 
   const { data, error } = await query
   if (error) throw error
-  state.activities = data || []
+  state.activities = (data || []).sort((a, b) => actStatusOrder(a) - actStatusOrder(b))
 }
 
 async function updateActivity(actId, updates) {
@@ -279,7 +286,12 @@ function renderList() {
     const tl = trafficLight(act)
     const opp = act.opportunity || {}
     const asig = act.assigned_profile || {}
-    const asigInitials = asig.full_name ? getInitials(asig.full_name) : ''
+    const creator = act.creator_profile || {}
+    let asigName = asig.full_name || ''
+    if (!asigName && ['Email', 'Llamada', 'Reunion', 'Reunión'].includes(act.tipo)) {
+      asigName = creator.full_name || ''
+    }
+    const asigInitials = asigName ? getInitials(asigName) : ''
     const dest = act.destinatario ? `&#x2192; ${act.destinatario}` : ''
 
     html += `
@@ -317,6 +329,12 @@ function openDetail(actId) {
   const tl = trafficLight(act)
   const opp = act.opportunity || {}
   const asig = act.assigned_profile || {}
+  const creator = act.creator_profile || {}
+  let detailAsigName = asig.full_name || ''
+  if (!detailAsigName && ['Email', 'Llamada', 'Reunion', 'Reunión'].includes(act.tipo)) {
+    detailAsigName = creator.full_name || ''
+  }
+  const detailAsigSpecialty = detailAsigName === asig.full_name && asig.specialty ? ` (${asig.specialty})` : ''
 
   $('detail-title').textContent = act.tipo + (act.objetivo ? ` - ${act.objetivo}` : '')
   $('detail-traffic').textContent = tl.emoji
@@ -337,7 +355,7 @@ function openDetail(actId) {
     <div class="field"><span class="field-label">Objetivo</span><div class="field-value">${act.objetivo || '-'}</div></div>
     <div class="field"><span class="field-label">Descripcion</span><div class="field-value">${act.descripcion || '-'}</div></div>
     <div class="field"><span class="field-label">Destinatario</span><div class="field-value">${act.destinatario || '-'}</div></div>
-    <div class="field"><span class="field-label">Asignado a</span><div class="field-value">${asig.full_name || '-'}${asig.specialty ? ' (' + asig.specialty + ')' : ''}</div></div>
+    <div class="field"><span class="field-label">Asignado a</span><div class="field-value">${detailAsigName || '-'}${detailAsigSpecialty}</div></div>
     <div class="field"><span class="field-label">Fecha</span><div class="field-value">${act.fecha || '-'}</div></div>
     <div class="field"><span class="field-label">SLA</span><div class="field-value">${act.sla_key || '-'}</div></div>
   </div>`
@@ -494,7 +512,7 @@ function isManagerOrAdmin() {
 async function fetchAllActivities() {
   // Fetch ALL team activities (not filtered by user)
   const { data, error } = await supabase.from('activities')
-    .select('*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty)')
+    .select('*, opportunity:opportunity_id(proyecto, cuenta, monto, categoria), assigned_profile:assigned_to(full_name, specialty), creator_profile:created_by(full_name)')
     .eq('team_id', state.user.team_id)
     .order('fecha', { ascending: false })
   if (error) throw error
