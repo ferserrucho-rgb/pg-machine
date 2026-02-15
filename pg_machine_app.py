@@ -96,6 +96,31 @@ st.markdown("""
     .account-name { color: #1e293b; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.7rem; font-weight: 800; }
     .account-badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
+    /* Historial tab */
+    .historial-item { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s; }
+    .historial-item:hover { border-color: #3b82f6; background: #f8faff; }
+    .historial-item.active { border-color: #3b82f6; border-left: 4px solid #3b82f6; background: #eff6ff; }
+    .historial-name { font-size: 0.82rem; font-weight: 700; color: #1e293b; margin-bottom: 3px; }
+    .historial-stats { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .historial-count { font-size: 0.65rem; font-weight: 600; color: #64748b; }
+    .historial-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+    .historial-dot-pendiente { background: #f59e0b; }
+    .historial-dot-enviada { background: #8b5cf6; }
+    .historial-dot-respondida { background: #16a34a; }
+    .historial-dot-bloqueada { background: #ef4444; }
+    .timeline-header { background: #1e293b; color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; }
+    .timeline-header .tl-name { font-size: 1rem; font-weight: 700; }
+    .timeline-header .tl-stats { display: flex; gap: 12px; margin-top: 6px; font-size: 0.72rem; font-weight: 600; }
+    .timeline-card { background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
+    .timeline-card.tipo-email { border-left-color: #3b82f6; }
+    .timeline-card.tipo-llamada { border-left-color: #f59e0b; }
+    .timeline-card.tipo-reunion { border-left-color: #10b981; }
+    .timeline-card.tipo-asignacion { border-left-color: #8b5cf6; }
+    .timeline-card.enviada { background: #f5f3ff; border-left-color: #8b5cf6; }
+    .timeline-card.bloqueada { background: #fef2f2; border-left-color: #ef4444; }
+    .timeline-card.respondida { background: #f0fdf4; border-left-color: #16a34a; }
+    .timeline-card.pendiente { background: #fffbeb; border-left-color: #f59e0b; }
+    .timeline-opp-ctx { font-size: 0.65rem; font-weight: 600; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px; margin-top: 4px; display: inline-block; }
     /* Clickable card — whole card opens detail, × inside for delete */
     .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
     .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); background: #f8faff; }
@@ -143,6 +168,7 @@ st.markdown("""
         .act-top { flex-direction: column; }
         .act-actions { justify-content: flex-start; }
         .cat-header { font-size: 0.85rem; padding: 8px; }
+        .timeline-card { padding: 10px; }
     }
     @media (max-width: 480px) {
         .pgm-card-wrap .opp-header { font-size: 0.75rem; }
@@ -407,6 +433,10 @@ if 'selected_id' not in st.session_state:
     st.session_state.selected_id = None
 if 'focused_cat' not in st.session_state:
     st.session_state.focused_cat = None
+if 'historial_group_by' not in st.session_state:
+    st.session_state.historial_group_by = "Cuenta"
+if 'historial_selected' not in st.session_state:
+    st.session_state.historial_selected = None
 
 # Cargar configuración del equipo
 SLA_OPCIONES = dal.get_sla_options(team_id)
@@ -992,7 +1022,7 @@ if st.session_state.selected_id:
 
 else:
     # --- VISTAS PRINCIPALES ---
-    tabs = ["📊 Tablero", "📋 Actividades"]
+    tabs = ["📊 Tablero", "📋 Actividades", "📜 Historial"]
     if has_control_access():
         tabs.append("📈 Control")
     tabs.append("👥 Equipo")
@@ -1332,9 +1362,205 @@ else:
                         st.session_state.pop("edit_act_tab_idx", None)
                         st.rerun()
 
+    # --- TAB: HISTORIAL ---
+    with selected_tabs[2]:
+        st.markdown(user_bar_html, unsafe_allow_html=True)
+        st.markdown("### 📜 Historial de Interacciones")
+
+        # Fetch activities (respects role permissions)
+        if can_see_all_opportunities():
+            hist_activities = dal.get_all_activities(team_id)
+        else:
+            hist_activities = dal.get_all_activities_for_user(team_id, user_id, user["role"])
+
+        # Grouping selector
+        group_options = ["Cuenta", "Proyecto", "Destinatario", "Asignado a"]
+        hist_group = st.radio("Agrupar por", group_options, horizontal=True, key="historial_group_by")
+
+        # Build groups
+        hist_groups = {}
+        for a in hist_activities:
+            opp = a.get("opportunity", {}) or {}
+            if hist_group == "Cuenta":
+                key = opp.get("cuenta", "Sin cuenta") or "Sin cuenta"
+            elif hist_group == "Proyecto":
+                key = opp.get("proyecto", "Sin proyecto") or "Sin proyecto"
+            elif hist_group == "Destinatario":
+                key = a.get("destinatario", "Sin destinatario") or "Sin destinatario"
+            else:  # Asignado a
+                if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
+                    key = a["assigned_profile"]["full_name"]
+                elif a.get("creator_profile") and a["creator_profile"].get("full_name"):
+                    key = a["creator_profile"]["full_name"]
+                else:
+                    key = "Sin asignar"
+            hist_groups.setdefault(key, []).append(a)
+
+        # Search filter
+        hist_search = st.text_input("🔍 Buscar", key="hist_search", placeholder="Filtrar grupos...")
+        if hist_search:
+            hist_groups = {k: v for k, v in hist_groups.items() if hist_search.lower() in k.lower()}
+
+        sorted_groups = sorted(hist_groups.items(), key=lambda x: x[0].lower())
+
+        if not sorted_groups:
+            st.info("No se encontraron interacciones.")
+        else:
+            # Layout: desktop side-by-side, mobile stacked
+            if is_mobile:
+                # --- Mobile: group list then timeline ---
+                for g_name, g_acts in sorted_groups:
+                    n_pend = len([a for a in g_acts if a.get("estado") == "Pendiente"])
+                    n_env = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] != "Bloqueada"])
+                    n_resp = len([a for a in g_acts if a.get("estado") == "Respondida"])
+                    n_bloq = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] == "Bloqueada"])
+                    dots = ""
+                    if n_pend: dots += f'<span class="historial-dot historial-dot-pendiente"></span> {n_pend} '
+                    if n_env: dots += f'<span class="historial-dot historial-dot-enviada"></span> {n_env} '
+                    if n_resp: dots += f'<span class="historial-dot historial-dot-respondida"></span> {n_resp} '
+                    if n_bloq: dots += f'<span class="historial-dot historial-dot-bloqueada"></span> {n_bloq} '
+                    is_sel = st.session_state.historial_selected == g_name
+                    cls = "historial-item active" if is_sel else "historial-item"
+                    st.markdown(f'<div class="{cls}"><div class="historial-name">{g_name}</div><div class="historial-stats"><span class="historial-count">{len(g_acts)} actividades</span> {dots}</div></div>', unsafe_allow_html=True)
+                    if st.button(f"Ver {g_name}", key=f"hsel_{g_name}", use_container_width=True):
+                        st.session_state.historial_selected = g_name if not is_sel else None
+                        st.rerun()
+                    if is_sel:
+                        # Timeline for selected group
+                        timeline_acts = sorted(g_acts, key=lambda a: str(a.get("fecha", "") or ""))
+                        t_pend = len([a for a in timeline_acts if a.get("estado") == "Pendiente"])
+                        t_env = len([a for a in timeline_acts if a.get("estado") == "Enviada"])
+                        t_resp = len([a for a in timeline_acts if a.get("estado") == "Respondida"])
+                        st.markdown(f'''<div class="timeline-header">
+                            <div class="tl-name">{g_name}</div>
+                            <div class="tl-stats"><span>Total: {len(timeline_acts)}</span><span style="color:#fbbf24;">Pendientes: {t_pend}</span><span style="color:#a78bfa;">Enviadas: {t_env}</span><span style="color:#4ade80;">Respondidas: {t_resp}</span></div>
+                        </div>''', unsafe_allow_html=True)
+                        for a in timeline_acts:
+                            opp = a.get("opportunity", {}) or {}
+                            tipo_lower = a.get("tipo", "").lower().replace("ó", "o")
+                            tipo_class = f'tipo-{tipo_lower}' if a.get("tipo") else ""
+                            light, label = _traffic_light(a)
+                            if a["estado"] == "Enviada" and label == "Bloqueada":
+                                card_cls = "timeline-card bloqueada"
+                                est_pill = '<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 BLOQUEADA</span>'
+                            elif a["estado"] == "Enviada":
+                                card_cls = "timeline-card enviada"
+                                est_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
+                            elif a["estado"] == "Respondida":
+                                card_cls = "timeline-card respondida"
+                                resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
+                                est_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida{resp_date}</span>'
+                            elif a["estado"] == "Pendiente":
+                                card_cls = "timeline-card pendiente"
+                                est_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
+                            else:
+                                card_cls = f"timeline-card {tipo_class}"
+                                est_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
+                            assigned_name = ""
+                            if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
+                                assigned_name = a["assigned_profile"]["full_name"]
+                            elif a.get("creator_profile") and a["creator_profile"].get("full_name"):
+                                assigned_name = a["creator_profile"]["full_name"]
+                            tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
+                            tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
+                            tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
+                            tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
+                            obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
+                            dest_html = f'<span class="act-dest">→ {a["destinatario"]}</span>' if a.get("destinatario") else ''
+                            asig_initials = _get_initials(assigned_name) if assigned_name else ""
+                            asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
+                            fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
+                            desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
+                            fb_html = f'<div class="act-feedback"><b>Feedback:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+                            ctx_html = ""
+                            if hist_group != "Proyecto":
+                                ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
+                            elif hist_group != "Cuenta":
+                                ctx_html = f'<div class="timeline-opp-ctx">🏢 {opp.get("cuenta", "")}</div>'
+                            meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{est_pill}{fecha_html}'
+                            st.markdown(f'<div class="{card_cls}"><div class="act-top"><div class="act-meta-row">{meta_row}</div></div>{desc_html}{fb_html}{ctx_html}</div>', unsafe_allow_html=True)
+            else:
+                # --- Desktop: side-by-side ---
+                col_list, col_timeline = st.columns([0.3, 0.7])
+                with col_list:
+                    for g_name, g_acts in sorted_groups:
+                        n_pend = len([a for a in g_acts if a.get("estado") == "Pendiente"])
+                        n_env = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] != "Bloqueada"])
+                        n_resp = len([a for a in g_acts if a.get("estado") == "Respondida"])
+                        n_bloq = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] == "Bloqueada"])
+                        dots = ""
+                        if n_pend: dots += f'<span class="historial-dot historial-dot-pendiente"></span> {n_pend} '
+                        if n_env: dots += f'<span class="historial-dot historial-dot-enviada"></span> {n_env} '
+                        if n_resp: dots += f'<span class="historial-dot historial-dot-respondida"></span> {n_resp} '
+                        if n_bloq: dots += f'<span class="historial-dot historial-dot-bloqueada"></span> {n_bloq} '
+                        is_sel = st.session_state.historial_selected == g_name
+                        cls = "historial-item active" if is_sel else "historial-item"
+                        st.markdown(f'<div class="{cls}"><div class="historial-name">{g_name}</div><div class="historial-stats"><span class="historial-count">{len(g_acts)} actividades</span> {dots}</div></div>', unsafe_allow_html=True)
+                        if st.button(f"{'📌 ' if is_sel else ''}{g_name}", key=f"hsel_{g_name}", use_container_width=True):
+                            st.session_state.historial_selected = g_name if not is_sel else None
+                            st.rerun()
+
+                with col_timeline:
+                    sel_name = st.session_state.historial_selected
+                    if sel_name and sel_name in hist_groups:
+                        timeline_acts = sorted(hist_groups[sel_name], key=lambda a: str(a.get("fecha", "") or ""))
+                        t_pend = len([a for a in timeline_acts if a.get("estado") == "Pendiente"])
+                        t_env = len([a for a in timeline_acts if a.get("estado") == "Enviada"])
+                        t_resp = len([a for a in timeline_acts if a.get("estado") == "Respondida"])
+                        st.markdown(f'''<div class="timeline-header">
+                            <div class="tl-name">{sel_name}</div>
+                            <div class="tl-stats"><span>Total: {len(timeline_acts)}</span><span style="color:#fbbf24;">Pendientes: {t_pend}</span><span style="color:#a78bfa;">Enviadas: {t_env}</span><span style="color:#4ade80;">Respondidas: {t_resp}</span></div>
+                        </div>''', unsafe_allow_html=True)
+                        for a in timeline_acts:
+                            opp = a.get("opportunity", {}) or {}
+                            tipo_lower = a.get("tipo", "").lower().replace("ó", "o")
+                            tipo_class = f'tipo-{tipo_lower}' if a.get("tipo") else ""
+                            light, label = _traffic_light(a)
+                            if a["estado"] == "Enviada" and label == "Bloqueada":
+                                card_cls = "timeline-card bloqueada"
+                                est_pill = '<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 BLOQUEADA</span>'
+                            elif a["estado"] == "Enviada":
+                                card_cls = "timeline-card enviada"
+                                est_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
+                            elif a["estado"] == "Respondida":
+                                card_cls = "timeline-card respondida"
+                                resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
+                                est_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida{resp_date}</span>'
+                            elif a["estado"] == "Pendiente":
+                                card_cls = "timeline-card pendiente"
+                                est_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
+                            else:
+                                card_cls = f"timeline-card {tipo_class}"
+                                est_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
+                            assigned_name = ""
+                            if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
+                                assigned_name = a["assigned_profile"]["full_name"]
+                            elif a.get("creator_profile") and a["creator_profile"].get("full_name"):
+                                assigned_name = a["creator_profile"]["full_name"]
+                            tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
+                            tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
+                            tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
+                            tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
+                            obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
+                            dest_html = f'<span class="act-dest">→ {a["destinatario"]}</span>' if a.get("destinatario") else ''
+                            asig_initials = _get_initials(assigned_name) if assigned_name else ""
+                            asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
+                            fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
+                            desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
+                            fb_html = f'<div class="act-feedback"><b>Feedback:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+                            ctx_html = ""
+                            if hist_group != "Proyecto":
+                                ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
+                            elif hist_group != "Cuenta":
+                                ctx_html = f'<div class="timeline-opp-ctx">🏢 {opp.get("cuenta", "")}</div>'
+                            meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{est_pill}{fecha_html}'
+                            st.markdown(f'<div class="{card_cls}"><div class="act-top"><div class="act-meta-row">{meta_row}</div></div>{desc_html}{fb_html}{ctx_html}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div style="text-align:center;color:#94a3b8;padding:40px;font-size:0.9rem;">← Seleccioná un grupo para ver su historial cronológico</div>', unsafe_allow_html=True)
+
     # --- TAB: CONTROL (admin, vp, y managers) ---
     if has_control_access():
-        with selected_tabs[2]:
+        with selected_tabs[3]:
             st.markdown(user_bar_html, unsafe_allow_html=True)
             st.markdown("### 📈 Panel de Control — RSM")
 
@@ -1500,7 +1726,7 @@ else:
                     st.bar_chart(df_resp_chart.set_index("Miembro"), color=["#16a34a"])
 
     # --- TAB: EQUIPO (todos los roles) ---
-    equipo_tab_idx = 3 if has_control_access() else 2
+    equipo_tab_idx = 4 if has_control_access() else 3
     with selected_tabs[equipo_tab_idx]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
         team_info = dal.get_team(team_id)
