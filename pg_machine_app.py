@@ -933,77 +933,47 @@ def _act_status_order(a):
     return (status, fecha_str)
 
 
-def _generate_ics(activity: dict, opportunity: dict, organizer_name: str, organizer_email: str) -> str:
-    """Genera un archivo .ics (iCalendar) para una actividad de tipo Reunión."""
-    now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+def _outlook_event_url(activity: dict, opportunity: dict) -> str:
+    """Genera URL de Outlook Web para crear un evento de calendario directamente."""
+    from urllib.parse import quote
     fecha_raw = activity.get("fecha", "")
     try:
         dt = datetime.strptime(str(fecha_raw)[:10], "%Y-%m-%d")
     except (ValueError, TypeError):
         dt = datetime.utcnow()
-    dtstart = dt.strftime("%Y%m%dT100000")
-    dtend = dt.strftime("%Y%m%dT110000")
+    startdt = dt.strftime("%Y-%m-%dT10:00:00")
+    enddt = dt.strftime("%Y-%m-%dT11:00:00")
     cuenta = opportunity.get("cuenta", "")
     proyecto = opportunity.get("proyecto", "")
-    summary = activity.get("objetivo") or f"Reunión — {cuenta}"
-    desc_parts = []
+    subject = activity.get("objetivo") or f"Reunión — {cuenta}"
+    body_parts = []
     if activity.get("descripcion"):
-        desc_parts.append(activity["descripcion"])
+        body_parts.append(activity["descripcion"])
     if cuenta:
-        desc_parts.append(f"Cuenta: {cuenta}")
+        body_parts.append(f"Cuenta: {cuenta}")
     if proyecto:
-        desc_parts.append(f"Proyecto: {proyecto}")
-    description = "\\n".join(desc_parts)
-    uid = f'{activity.get("id", "act")}@pgmachine'
-
-    lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//PG Machine//Reunion//ES",
-        "BEGIN:VEVENT",
-        f"UID:{uid}",
-        f"DTSTAMP:{now}",
-        f"DTSTART:{dtstart}",
-        f"DTEND:{dtend}",
-        f"SUMMARY:{summary}",
-        f"DESCRIPTION:{description}",
-        f"ORGANIZER;CN={organizer_name}:mailto:{organizer_email}",
-    ]
+        body_parts.append(f"Proyecto: {proyecto}")
+    body = "\n".join(body_parts)
     destinatario = (activity.get("destinatario") or "").strip()
+    params = f"subject={quote(subject)}&body={quote(body)}&startdt={quote(startdt)}&enddt={quote(enddt)}"
     if "@" in destinatario:
-        lines.append(f"ATTENDEE;CN={destinatario};RSVP=TRUE:mailto:{destinatario}")
-    lines += ["END:VEVENT", "END:VCALENDAR"]
-    return "\r\n".join(lines)
+        params += f"&to={quote(destinatario)}"
+    return f"https://outlook.office.com/calendar/0/deeplink/compose?{params}&path=/calendar/action/compose&rru=addevent"
 
 
-def _render_ics_button(ics_content: str, key: str):
-    """Renderiza un botón que abre el .ics directamente en la app de calendario del sistema."""
-    import base64
-    b64 = base64.b64encode(ics_content.encode("utf-8")).decode("ascii")
+def _render_outlook_button(activity: dict, opportunity: dict, key: str):
+    """Renderiza un botón que abre Outlook Web para crear el evento directamente."""
+    url = _outlook_event_url(activity, opportunity)
     components.html(f"""
-    <button id="ics-{key}" onclick="openICS()" style="
+    <a href="{url}" target="_blank" style="
         display:inline-flex;align-items:center;gap:6px;
         padding:8px 18px;background:#0ea5e9;color:white;border:none;
         border-radius:8px;font-family:Inter,sans-serif;font-size:0.85rem;
-        font-weight:600;cursor:pointer;transition:background 0.2s;">
+        font-weight:600;cursor:pointer;text-decoration:none;transition:background 0.2s;"
+        onmouseover="this.style.background='#0284c7'"
+        onmouseout="this.style.background='#0ea5e9'">
         📅 Agendar Reunión
-    </button>
-    <script>
-    function openICS() {{
-        var raw = atob("{b64}");
-        var bytes = new Uint8Array(raw.length);
-        for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-        var blob = new Blob([bytes], {{type:"text/calendar"}});
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement("a");
-        a.href = url;
-        a.download = "reunion.ics";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(function(){{ URL.revokeObjectURL(url); }}, 1000);
-    }}
-    </script>
+    </a>
     """, height=50)
 
 
@@ -1365,10 +1335,9 @@ if st.session_state.selected_id:
             st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}</div>', unsafe_allow_html=True)
 
             aid = a['id']
-            # Abrir .ics en app de calendario para Reuniones
+            # Abrir Outlook Web para agendar Reuniones
             if a.get("tipo") == "Reunión":
-                ics_content = _generate_ics(a, opp, user["full_name"], user["email"])
-                _render_ics_button(ics_content, key=f"ics_{aid}")
+                _render_outlook_button(a, opp, key=f"cal_{aid}")
             # State-specific action buttons
             if a["estado"] == "Pendiente":
                 if st.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
@@ -1493,17 +1462,6 @@ if st.session_state.selected_id:
                 st.session_state.pop("show_edit_opp", None)
                 st.rerun()
 
-    # --- Abrir .ics después de crear una Reunión ---
-    if st.session_state.get("_ics_pending"):
-        _ics_data = st.session_state["_ics_pending"]
-        _ics_content = _generate_ics(_ics_data["activity"], _ics_data["opportunity"],
-                                     user["full_name"], user["email"])
-        st.info("Haz click para agendar la reunión directamente en tu calendario.")
-        _render_ics_button(_ics_content, key="ics_new")
-        if st.button("Continuar", key="ics_dismiss"):
-            st.session_state.pop("_ics_pending", None)
-            st.rerun()
-
     # --- New Activity (toggled from meta-bar) ---
     if st.session_state.get("show_new_act"):
         st.caption("➕ Nueva Actividad")
@@ -1541,10 +1499,6 @@ if st.session_state.selected_id:
                     if assignee:
                         notifications.send_assignment_notification(new_act, assignee, opp)
                         dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
-                if tipo == "Reunión" and new_act:
-                    st.session_state["_ics_pending"] = {
-                        "activity": new_act, "opportunity": opp,
-                    }
                 st.session_state.pop("show_new_act", None)
                 st.rerun()
 
