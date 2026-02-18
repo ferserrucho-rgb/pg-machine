@@ -26,6 +26,11 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+    /* --- Loading overlay --- */
+    .pgm-loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(248,250,252,0.75); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; backdrop-filter: blur(2px); pointer-events: none; }
+    .pgm-loading-icon { font-size: 2.5rem; animation: pgm-bounce 0.8s ease-in-out infinite; }
+    .pgm-loading-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
+    @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
     .cat-styled { color: white !important; font-weight: 800 !important; font-size: 0.8rem !important; letter-spacing: 0.05em !important; text-transform: uppercase !important; border: none !important; border-radius: 6px !important; padding: 6px 10px !important; min-height: 0 !important; }
@@ -405,6 +410,26 @@ components.html("""
             params.set('_mob', '1');
             window.parent.history.replaceState({}, '', '?' + params.toString());
         }
+    }
+
+    // Loading overlay — watches Streamlit's running state
+    if (!doc._pgmLoadingInit) {
+        doc._pgmLoadingInit = true;
+        var overlay = doc.createElement('div');
+        overlay.className = 'pgm-loading';
+        overlay.style.display = 'none';
+        overlay.innerHTML = '<div class="pgm-loading-icon">🚀</div><div class="pgm-loading-text">Cargando...</div>';
+        doc.body.appendChild(overlay);
+
+        var loadObs = new MutationObserver(function() {
+            var running = doc.querySelector('[data-testid="stStatusWidget"]');
+            if (running && running.offsetParent !== null) {
+                overlay.style.display = 'flex';
+            } else {
+                overlay.style.display = 'none';
+            }
+        });
+        loadObs.observe(doc.body, {childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style']});
     }
 })();
 </script>
