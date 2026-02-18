@@ -383,7 +383,8 @@ components.html("""
                     if (!par) break;
                     var anyVisible = false;
                     for (var i = 0; i < par.children.length; i++) {
-                        if (par.children[i] !== el && par.children[i].style.cssText.indexOf('display:none') < 0 && par.children[i].style.cssText.indexOf('display: none') < 0) {
+                        var sc = par.children[i].style.cssText || '';
+                        if (par.children[i] !== el && sc.indexOf('display:none') < 0 && sc.indexOf('display: none') < 0 && sc.indexOf('height:0') < 0) {
                             anyVisible = true; break;
                         }
                     }
@@ -936,19 +937,20 @@ with st.sidebar:
                         "monto": float(r.get('Annual Contract Value (ACV)', r.get('Valor', r.get('Monto', 0))) or 0),
                         "categoria": "LEADS",
                         "close_date": str(parsed) if parsed else None,
-                        "partner": str(r.get('Partner', '')).strip(),
+                        "partner": str(r.get('Partner', '') or '').strip() if str(r.get('Partner', '')).lower() not in ('nan', '') else '',
                     })
                 else:
                     parsed = _parse_date(r.get('Close Date', None))
+                    _opp_id_raw = r.get('SFDC Opportunity Id', r.get('BMC Opportunity Id', ''))
                     items.append({
                         "proyecto": str(r.get('Opportunity Name', '-')),
                         "cuenta": str(r.get('Account Name', '-')),
                         "monto": float(r.get('Annual Contract Value (ACV)', r.get('Amount (USD)', r.get('Amount USD', 0))) or 0),
                         "categoria": "OFFICIAL",
-                        "opp_id": str(r.get('SFDC Opportunity Id', r.get('BMC Opportunity Id', ''))),
-                        "stage": str(r.get('Stage', '')),
+                        "opp_id": str(_opp_id_raw).strip() if str(_opp_id_raw).lower() not in ('nan', '') else '',
+                        "stage": str(r.get('Stage', '')).strip() if str(r.get('Stage', '')).lower() != 'nan' else '',
                         "close_date": str(parsed) if parsed else None,
-                        "partner": str(r.get('Partner', '')).strip(),
+                        "partner": str(r.get('Partner', '') or '').strip() if str(r.get('Partner', '')).lower() not in ('nan', '') else '',
                     })
 
             # Comparar con existentes
