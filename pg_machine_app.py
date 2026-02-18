@@ -934,6 +934,16 @@ def _act_status_order(a):
 
 
 # --- 3. SIDEBAR ---
+import pathlib as _pathlib
+_guide_path = _pathlib.Path(__file__).parent / "USER_GUIDE.md"
+
+@st.dialog("📖 Guía del Usuario", width="large")
+def _show_user_guide():
+    if _guide_path.exists():
+        st.markdown(_guide_path.read_text(encoding="utf-8"))
+    else:
+        st.info("La guía del usuario no está disponible.")
+
 with st.sidebar:
     st.title("🚀 PG Machine")
     st.caption(f"👤 {user['full_name']} ({user_role_label})")
@@ -943,6 +953,8 @@ with st.sidebar:
         st.session_state.selected_id = None
         st.session_state["_trigger_tour"] = True
         st.rerun()
+    if st.button("📖 Guía", key="guide_btn", use_container_width=True):
+        _show_user_guide()
 
     st.divider()
 
