@@ -1514,15 +1514,8 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        tab_scope = st.radio("Vista", ["📋 Mis oportunidades", "👥 Equipo"], horizontal=True, key="tab_scope")
         all_opps = dal.get_opportunities(team_id)
         all_activities = dal.get_all_activities(team_id)
-        if tab_scope == "📋 Mis oportunidades":
-            all_opps = [o for o in all_opps if o.get("owner_id") == user_id]
-        # Precargar actividades para todas las oportunidades
-        all_acts_by_opp = {}
-        for act in all_activities:
-            all_acts_by_opp.setdefault(act["opportunity_id"], []).append(act)
 
         # Category focus: show buttons to toggle
         focused = st.session_state.focused_cat
@@ -1531,8 +1524,16 @@ else:
         else:
             visible_cats = CATEGORIAS
 
-        # --- PROTECT / Growth filter ---
-        hide_protect = st.toggle("🚀 Solo Growth (ocultar Renewal/PROTECT)", key="hide_protect")
+        # --- Scope + Growth filters (same row) ---
+        _fc1, _fc2 = st.columns(2)
+        tab_scope = _fc1.radio("Vista", ["📋 Mías", "👥 Equipo"], horizontal=True, key="tab_scope")
+        hide_protect = _fc2.toggle("🚀 Solo Growth (ocultar Renewal/PROTECT)", key="hide_protect")
+        if tab_scope == "📋 Mías":
+            all_opps = [o for o in all_opps if o.get("owner_id") == user_id]
+        # Precargar actividades para todas las oportunidades
+        all_acts_by_opp = {}
+        for act in all_activities:
+            all_acts_by_opp.setdefault(act["opportunity_id"], []).append(act)
         if hide_protect:
             all_opps = [o for o in all_opps if "renewal" not in (o.get("proyecto") or "").lower()]
 
