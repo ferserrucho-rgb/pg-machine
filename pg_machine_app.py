@@ -956,7 +956,7 @@ def _outlook_event_url(activity: dict, opportunity: dict) -> str:
     body = "\n".join(body_parts)
     destinatario = (activity.get("destinatario") or "").strip()
     params = f"subject={quote(subject)}&body={quote(body)}&startdt={quote(startdt)}&enddt={quote(enddt)}"
-    if "@" in destinatario:
+    if destinatario:
         params += f"&to={quote(destinatario)}"
     return f"https://outlook.office.com/calendar/0/deeplink/compose?{params}&path=/calendar/action/compose&rru=addevent"
 
