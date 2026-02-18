@@ -947,6 +947,20 @@ with st.sidebar:
 
     with st.expander("📥 CARGA MASIVA (EXCEL)", expanded=True):
         perfil = st.radio("Formato:", ["Leads Propios", "Forecast BMC"])
+
+        # Template downloads
+        import io
+        if perfil == "Leads Propios":
+            tpl_df = pd.DataFrame(columns=["Proyecto", "Empresa", "Partner", "Annual Contract Value (ACV)", "Close Date"])
+            tpl_buf = io.BytesIO()
+            tpl_df.to_excel(tpl_buf, index=False, engine="openpyxl")
+            st.download_button("📄 Descargar plantilla Leads", tpl_buf.getvalue(), file_name="plantilla_leads.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        else:
+            tpl_df = pd.DataFrame(columns=["Opportunity Name", "Account Name", "Annual Contract Value (ACV)", "Amount (USD)", "SFDC Opportunity Id", "Stage", "Partner", "Close Date"])
+            tpl_buf = io.BytesIO()
+            tpl_df.to_excel(tpl_buf, index=False, engine="openpyxl")
+            st.download_button("📄 Descargar plantilla Official", tpl_buf.getvalue(), file_name="plantilla_official.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+
         up = st.file_uploader("Subir Archivo", type=["xlsx"])
 
         # Paso 1: Analizar archivo
