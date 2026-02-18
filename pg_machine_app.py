@@ -1007,7 +1007,7 @@ with st.sidebar:
                 nc1, nc2 = st.columns([0.8, 0.2])
                 select_all_new = nc2.checkbox("Todas", value=True, key="sel_all_new")
                 for i, item in enumerate(nuevas):
-                    monto_str = f"USD {float(item.get('monto', 0)):,.0f}"
+                    monto_str = f"USD {float(item.get('monto', 0)):,.0f} ACV"
                     partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
                     st.checkbox(
                         f"{item['cuenta']} — {item['proyecto']} ({monto_str}{partner_str})",
@@ -1023,7 +1023,7 @@ with st.sidebar:
                 select_all_chg = cc2.checkbox("Todas", value=False, key="sel_all_chg")
                 for i, (item, existing_opp, diffs) in enumerate(con_cambios):
                     diff_summary = ", ".join(f"{f}: {v['actual']} → {v['excel']}" for f, v in diffs.items())
-                    monto_str = f"USD {float(item.get('monto', 0)):,.0f}"
+                    monto_str = f"USD {float(item.get('monto', 0)):,.0f} ACV"
                     partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
                     st.checkbox(
                         f"{item['cuenta']} — {item['proyecto']} ({monto_str}{partner_str})",
@@ -1125,7 +1125,7 @@ if st.session_state.selected_id:
         meta_parts.append(f'<span class="meta-pill meta-stage">{opp["stage"]}</span>')
     if opp.get("partner"):
         meta_parts.append(f'<span class="meta-partner">🤝 {opp["partner"]}</span>')
-    meta_parts.append(f'<span class="meta-monto">USD {monto_val:,.0f}</span>')
+    meta_parts.append(f'<span class="meta-monto">USD {monto_val:,.0f} ACV</span>')
     if opp.get("opp_id"):
         meta_parts.append(f'<span class="meta-id">{opp["opp_id"]}</span>')
     if opp.get("close_date"):
@@ -1458,7 +1458,7 @@ else:
         btn_cols = st.columns(len(CATEGORIAS))
         for i, bc in enumerate(btn_cols):
             cat = CATEGORIAS[i]
-            total_str = f"USD {cat_totals[cat]:,.0f}"
+            total_str = f"USD {cat_totals[cat]:,.0f} ACV"
             if focused == cat:
                 if bc.button(f"✕ {cat} — Ver todas", key=f"unfocus_{cat}", use_container_width=True):
                     st.session_state.focused_cat = None
@@ -1505,14 +1505,14 @@ else:
             badge = f'<span class="account-badge">{len(opps)} opp{"s" if len(opps) > 1 else ""}</span>' if len(opps) > 1 else ""
             import re
             safe_cuenta = re.sub(r'[^a-zA-Z0-9]', '_', cuenta)
-            st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f}</span>{badge}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f} ACV</span>{badge}</div>', unsafe_allow_html=True)
             for o in opps:
                 opp_acts = sorted(all_acts_by_opp.get(o["id"], []), key=_act_status_order)
                 monto_val = float(o.get("monto") or 0)
                 # Build HTML card — left: name + stage/amount, right: opp_id + close date
                 name_html = f'<div class="opp-name">{o["proyecto"]}</div>'
                 stage_html = f'<span class="stage-badge">{o["stage"]}</span>' if o.get("stage") else ""
-                row2_html = f'<div class="opp-row2">{stage_html}<span class="amount">USD {monto_val:,.0f}</span></div>'
+                row2_html = f'<div class="opp-row2">{stage_html}<span class="amount">USD {monto_val:,.0f} ACV</span></div>'
                 # Right side: opp ID + close date stacked
                 right_parts = []
                 if o.get("opp_id"):
