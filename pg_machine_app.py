@@ -19,6 +19,7 @@ if not require_auth():
 user = get_current_user()
 team_id = user["team_id"]
 user_id = user["id"]
+_tour_trigger = st.session_state.pop("_trigger_tour", False)
 
 # --- 1. ESTILOS ---
 st.markdown("""
@@ -406,6 +407,311 @@ components.html("""
 </script>
 """, height=0)
 
+# --- GUIDED TOUR (Driver.js) ---
+_tour_role = user["role"]
+_tour_role_label = ROLE_LABELS.get(user["role"], user["role"])
+_tour_has_control = "true" if has_control_access() else "false"
+_tour_is_admin = "true" if is_admin() else "false"
+_tour_manual = "true" if _tour_trigger else "false"
+
+components.html(f"""
+<script>
+(function() {{
+    var doc = window.parent.document;
+
+    // Prevent re-triggering during Streamlit reruns
+    if (doc._pgmTourActive) return;
+
+    // Load Driver.js CSS + JS once
+    if (!doc._pgmTourLoaded) {{
+        var link = doc.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdn.jsdelivr.net/npm/driver.js@1.4.0/dist/driver.css';
+        doc.head.appendChild(link);
+
+        var script = doc.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/driver.js@1.4.0/dist/driver.js.iife.js';
+        script.onload = function() {{ doc._pgmDriverReady = true; }};
+        doc.head.appendChild(script);
+
+        // Custom tour styles
+        var style = doc.createElement('style');
+        style.textContent = `
+            .driver-popover {{
+                font-family: 'Inter', sans-serif !important;
+                max-width: 380px;
+                border-radius: 12px !important;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.15) !important;
+            }}
+            .driver-popover-title {{
+                font-size: 1rem !important;
+                font-weight: 700 !important;
+                color: #1e293b !important;
+            }}
+            .driver-popover-description {{
+                font-size: 0.85rem !important;
+                color: #475569 !important;
+                line-height: 1.5 !important;
+            }}
+            .driver-popover-next-btn {{
+                background: #1a73e8 !important;
+                color: white !important;
+                border: none !important;
+                border-radius: 6px !important;
+                font-weight: 600 !important;
+                padding: 6px 16px !important;
+                text-shadow: none !important;
+            }}
+            .driver-popover-prev-btn {{
+                color: #64748b !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 6px !important;
+                font-weight: 600 !important;
+                padding: 6px 16px !important;
+                text-shadow: none !important;
+            }}
+            .driver-popover-close-btn {{
+                color: #94a3b8 !important;
+            }}
+            .driver-popover-progress-text {{
+                font-size: 0.7rem !important;
+                color: #94a3b8 !important;
+            }}
+            @media (max-width: 768px) {{
+                .driver-popover {{
+                    max-width: 90vw !important;
+                }}
+            }}
+        `;
+        doc.head.appendChild(style);
+        doc._pgmTourLoaded = true;
+    }}
+
+    // Injected Python vars
+    var ROLE = "{_tour_role}";
+    var ROLE_LABEL = "{_tour_role_label}";
+    var HAS_CONTROL = {_tour_has_control};
+    var IS_ADMIN = {_tour_is_admin};
+    var MANUAL_TRIGGER = {_tour_manual};
+    var IS_MOBILE = (new URLSearchParams(window.parent.location.search)).get('_mob') === '1';
+
+    // Helper: get nth tab element
+    function nthTab(n) {{
+        return '.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(' + (n+1) + ')';
+    }}
+
+    // First-visit detection
+    var lsKey = 'pgm_tour_seen_' + ROLE;
+    function shouldAutoStart() {{
+        try {{ return !localStorage.getItem(lsKey); }} catch(e) {{ return false; }}
+    }}
+    function markTourSeen() {{
+        try {{ localStorage.setItem(lsKey, '1'); }} catch(e) {{}}
+        doc._pgmTourActive = false;
+    }}
+
+    // Should we start?
+    if (!MANUAL_TRIGGER && !shouldAutoStart()) return;
+
+    // Role descriptions
+    var roleDescs = {{
+        'admin': 'Tienes acceso completo: gestión de equipo, configuración, control y todas las oportunidades.',
+        'vp': 'Ves todas las oportunidades del equipo y tienes acceso al panel de Control.',
+        'account_manager': 'Gestionas tus oportunidades y actividades asignadas. Tienes acceso al panel de Control.',
+        'regional_sales_manager': 'Supervisas las oportunidades de tu región con acceso al panel de Control.',
+        'partner_manager': 'Gestionas oportunidades con partners y tienes acceso al panel de Control.',
+        'regional_partner_manager': 'Supervisas partners regionales con acceso al panel de Control.',
+        'presales_manager': 'Coordinas el equipo de preventa y tienes acceso al panel de Control.',
+        'presales': 'Tu foco son las actividades asignadas: seguimiento, envío y respuesta de tareas.'
+    }};
+
+    function buildSteps() {{
+        var steps = [];
+
+        // 1. Welcome
+        steps.push({{
+            popover: {{
+                title: '👋 ¡Bienvenido/a a PG Machine!',
+                description: 'Tu rol: <strong>' + ROLE_LABEL + '</strong><br><br>' + (roleDescs[ROLE] || 'Explora las funcionalidades de la plataforma.'),
+                side: 'over',
+                align: 'center'
+            }}
+        }});
+
+        // 2. Sidebar (desktop only)
+        if (!IS_MOBILE) {{
+            steps.push({{
+                element: 'section[data-testid="stSidebar"]',
+                popover: {{
+                    title: '📋 Barra Lateral',
+                    description: 'Aquí encuentras tu perfil, el botón para cerrar sesión, la carga masiva de Excel y el botón <strong>❓ Tour</strong> para repetir esta guía.',
+                    side: 'right',
+                    align: 'start'
+                }}
+            }});
+        }}
+
+        // 3. Tab bar
+        steps.push({{
+            element: '.stTabs [data-baseweb="tab-list"]',
+            popover: {{
+                title: '🗂️ Navegación por Pestañas',
+                description: 'Usa estas pestañas para moverte entre las distintas secciones de la aplicación.',
+                side: 'bottom',
+                align: 'center'
+            }}
+        }});
+
+        // 4. Tablero tab
+        steps.push({{
+            element: nthTab(0),
+            popover: {{
+                title: '📊 Tablero',
+                description: 'Vista principal con tarjetas de oportunidades. Usa los filtros de categoría arriba y haz clic en cualquier tarjeta para ver el detalle.',
+                side: 'bottom',
+                align: 'start'
+            }}
+        }});
+
+        // 5. Actividades tab
+        steps.push({{
+            element: nthTab(1),
+            popover: {{
+                title: '📋 Actividades',
+                description: 'Tabla con todas las actividades. Filtra por alcance (Todas/Mis tareas), estado y tipo. Gestiona el flujo: Pendiente → Enviada → Respondida.',
+                side: 'bottom',
+                align: 'start'
+            }}
+        }});
+
+        // Presales-specific emphasis
+        if (ROLE === 'presales') {{
+            steps.push({{
+                element: nthTab(1),
+                popover: {{
+                    title: '🎯 Tu Flujo de Trabajo',
+                    description: 'Como <strong>Presales</strong>, tu foco está aquí. Usa el filtro <em>"Mis tareas"</em> para ver solo lo asignado a ti. El flujo es: <strong>Pendiente → Enviada → Respondida</strong>.',
+                    side: 'bottom',
+                    align: 'start'
+                }}
+            }});
+        }}
+
+        // 6. Historial tab
+        steps.push({{
+            element: nthTab(2),
+            popover: {{
+                title: '📜 Historial',
+                description: 'Vista cronológica de todas las actividades, agrupadas por oportunidad. Útil para seguimiento y auditoría.',
+                side: 'bottom',
+                align: 'start'
+            }}
+        }});
+
+        // 7. Control tab (managers)
+        var tabIdx = 3;
+        if (HAS_CONTROL) {{
+            steps.push({{
+                element: nthTab(tabIdx),
+                popover: {{
+                    title: '📈 Control',
+                    description: 'Dashboard de analítica: métricas de SLA, actividad del equipo y rendimiento general.',
+                    side: 'bottom',
+                    align: 'start'
+                }}
+            }});
+            tabIdx++;
+        }}
+
+        // 8. Equipo tab
+        if (IS_ADMIN) {{
+            steps.push({{
+                element: nthTab(tabIdx),
+                popover: {{
+                    title: '👥 Equipo (Admin)',
+                    description: 'Gestiona tu equipo con 4 sub-pestañas: <strong>Miembros</strong> (roles y especialidades), <strong>Equipos</strong> (crear/mover), <strong>Configuración</strong> (SLA y categorías) e <strong>Invitaciones</strong>.',
+                    side: 'bottom',
+                    align: 'start'
+                }}
+            }});
+        }} else {{
+            steps.push({{
+                element: nthTab(tabIdx),
+                popover: {{
+                    title: '👥 Equipo',
+                    description: 'Consulta los miembros de tu equipo y gestiona invitaciones para nuevos integrantes.',
+                    side: 'bottom',
+                    align: 'start'
+                }}
+            }});
+        }}
+
+        // 9. Excel expander (desktop only)
+        if (!IS_MOBILE) {{
+            steps.push({{
+                element: 'section[data-testid="stSidebar"] details',
+                popover: {{
+                    title: '📥 Carga Masiva',
+                    description: 'Importa oportunidades desde Excel. Soporta formato Leads Propios y Forecast BMC.',
+                    side: 'right',
+                    align: 'start'
+                }}
+            }});
+        }}
+
+        // 10. Final step
+        steps.push({{
+            popover: {{
+                title: '🎉 ¡Listo!',
+                description: 'Ya conoces las secciones principales. Recuerda que puedes repetir este tour en cualquier momento desde el botón <strong>❓ Tour</strong> en la barra lateral.',
+                side: 'over',
+                align: 'center'
+            }}
+        }});
+
+        return steps;
+    }}
+
+    // Poll for DOM + Driver.js readiness
+    var attempts = 0;
+    var maxAttempts = 50; // 100ms * 50 = 5s
+    var pollTimer = setInterval(function() {{
+        attempts++;
+        var tabList = doc.querySelector('.stTabs [data-baseweb="tab-list"]');
+        var driverReady = doc._pgmDriverReady && window.parent.driver;
+
+        if (tabList && driverReady) {{
+            clearInterval(pollTimer);
+            doc._pgmTourActive = true;
+
+            var driverObj = window.parent.driver.js.driver({{
+                showProgress: true,
+                progressText: '{{current}} de {{total}}',
+                nextBtnText: 'Siguiente',
+                prevBtnText: 'Anterior',
+                doneBtnText: '¡Entendido!',
+                allowClose: true,
+                overlayColor: 'rgba(0, 0, 0, 0.5)',
+                stagePadding: 8,
+                stageRadius: 8,
+                popoverOffset: 12,
+                onDestroyed: function() {{
+                    markTourSeen();
+                }}
+            }});
+
+            driverObj.setSteps(buildSteps());
+            driverObj.drive();
+        }}
+
+        if (attempts >= maxAttempts) {{
+            clearInterval(pollTimer);
+        }}
+    }}, 100);
+}})();
+</script>
+""", height=0)
+
 is_mobile = st.query_params.get("_mob") == "1"
 
 def _fmt_date(val) -> str:
@@ -563,6 +869,10 @@ with st.sidebar:
     st.caption(f"👤 {user['full_name']} ({user_role_label})")
     if st.button("Cerrar Sesión", key="logout_btn"):
         logout()
+    if st.button("❓ Tour", key="tour_btn", use_container_width=True):
+        st.session_state.selected_id = None
+        st.session_state["_trigger_tour"] = True
+        st.rerun()
 
     st.divider()
 
