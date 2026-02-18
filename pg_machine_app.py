@@ -933,6 +933,49 @@ def _act_status_order(a):
     return (status, fecha_str)
 
 
+def _generate_ics(activity: dict, opportunity: dict, organizer_name: str, organizer_email: str) -> str:
+    """Genera un archivo .ics (iCalendar) para una actividad de tipo Reunión."""
+    now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    fecha_raw = activity.get("fecha", "")
+    try:
+        dt = datetime.strptime(str(fecha_raw)[:10], "%Y-%m-%d")
+    except (ValueError, TypeError):
+        dt = datetime.utcnow()
+    dtstart = dt.strftime("%Y%m%dT100000")
+    dtend = dt.strftime("%Y%m%dT110000")
+    cuenta = opportunity.get("cuenta", "")
+    proyecto = opportunity.get("proyecto", "")
+    summary = activity.get("objetivo") or f"Reunión — {cuenta}"
+    desc_parts = []
+    if activity.get("descripcion"):
+        desc_parts.append(activity["descripcion"])
+    if cuenta:
+        desc_parts.append(f"Cuenta: {cuenta}")
+    if proyecto:
+        desc_parts.append(f"Proyecto: {proyecto}")
+    description = "\\n".join(desc_parts)
+    uid = f'{activity.get("id", "act")}@pgmachine'
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//PG Machine//Reunion//ES",
+        "BEGIN:VEVENT",
+        f"UID:{uid}",
+        f"DTSTAMP:{now}",
+        f"DTSTART:{dtstart}",
+        f"DTEND:{dtend}",
+        f"SUMMARY:{summary}",
+        f"DESCRIPTION:{description}",
+        f"ORGANIZER;CN={organizer_name}:mailto:{organizer_email}",
+    ]
+    destinatario = (activity.get("destinatario") or "").strip()
+    if "@" in destinatario:
+        lines.append(f"ATTENDEE;CN={destinatario};RSVP=TRUE:mailto:{destinatario}")
+    lines += ["END:VEVENT", "END:VCALENDAR"]
+    return "\r\n".join(lines)
+
+
 # --- 3. SIDEBAR ---
 import pathlib as _pathlib
 _guide_path = _pathlib.Path(__file__).parent / "USER_GUIDE.md"
@@ -1291,6 +1334,11 @@ if st.session_state.selected_id:
             st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}</div>', unsafe_allow_html=True)
 
             aid = a['id']
+            # Download .ics for Reunión activities
+            if a.get("tipo") == "Reunión":
+                ics_content = _generate_ics(a, opp, user["full_name"], user["email"])
+                st.download_button("📅 Agendar Reunión", ics_content, file_name="reunion.ics",
+                                   mime="text/calendar", key=f"ics_{aid}")
             # State-specific action buttons
             if a["estado"] == "Pendiente":
                 if st.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
@@ -1415,6 +1463,18 @@ if st.session_state.selected_id:
                 st.session_state.pop("show_edit_opp", None)
                 st.rerun()
 
+    # --- Download .ics after creating a Reunión ---
+    if st.session_state.get("_ics_pending"):
+        _ics_data = st.session_state["_ics_pending"]
+        _ics_content = _generate_ics(_ics_data["activity"], _ics_data["opportunity"],
+                                     user["full_name"], user["email"])
+        st.info("Descarga el archivo .ics para agregar la reunión a tu calendario.")
+        st.download_button("📅 Agendar Reunión", _ics_content,
+                           file_name="reunion.ics", mime="text/calendar", key="ics_new")
+        if st.button("Continuar", key="ics_dismiss"):
+            st.session_state.pop("_ics_pending", None)
+            st.rerun()
+
     # --- New Activity (toggled from meta-bar) ---
     if st.session_state.get("show_new_act"):
         st.caption("➕ Nueva Actividad")
@@ -1452,6 +1512,10 @@ if st.session_state.selected_id:
                     if assignee:
                         notifications.send_assignment_notification(new_act, assignee, opp)
                         dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
+                if tipo == "Reunión" and new_act:
+                    st.session_state["_ics_pending"] = {
+                        "activity": new_act, "opportunity": opp,
+                    }
                 st.session_state.pop("show_new_act", None)
                 st.rerun()
 
