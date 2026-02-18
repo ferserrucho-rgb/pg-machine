@@ -217,6 +217,21 @@ def show_auth_page():
                             st.error(err)
                         else:
                             st.rerun()
+            if st.button("¿Olvidaste tu contraseña?", key="forgot_pw"):
+                st.session_state["_show_forgot_pw"] = True
+            if st.session_state.get("_show_forgot_pw"):
+                forgot_email = st.text_input("Ingresa tu email para restablecer la contraseña", key="forgot_email")
+                if st.button("Enviar enlace de restablecimiento", key="send_reset"):
+                    if not forgot_email:
+                        st.error("Ingresa tu email.")
+                    else:
+                        try:
+                            sb = _get_supabase()
+                            sb.auth.reset_password_email(forgot_email)
+                            st.success("Se envió un enlace de restablecimiento a tu email. Revisa tu bandeja de entrada.")
+                            st.session_state.pop("_show_forgot_pw", None)
+                        except Exception as e:
+                            st.error(f"Error al enviar el enlace: {str(e)}")
 
         with tab_register:
             with st.form("register_form"):
