@@ -771,6 +771,47 @@ def _parse_date(val):
     except Exception:
         return None
 
+def _fiscal_quarter_range(d: date):
+    """Retorna (start, end) del trimestre fiscal que contiene la fecha.
+    Q1=Abr-Jun, Q2=Jul-Sep, Q3=Oct-Dic, Q4=Ene-Mar."""
+    m = d.month
+    y = d.year
+    if 4 <= m <= 6:
+        return date(y, 4, 1), date(y, 6, 30)
+    elif 7 <= m <= 9:
+        return date(y, 7, 1), date(y, 9, 30)
+    elif 10 <= m <= 12:
+        return date(y, 10, 1), date(y, 12, 31)
+    else:  # 1-3
+        return date(y, 1, 1), date(y, 3, 31)
+
+def _fiscal_quarter_label(d: date) -> str:
+    """Retorna etiqueta como 'Q1 FY26'."""
+    m = d.month
+    y = d.year
+    if 4 <= m <= 6:
+        q, fy = 1, y + 1
+    elif 7 <= m <= 9:
+        q, fy = 2, y + 1
+    elif 10 <= m <= 12:
+        q, fy = 3, y + 1
+    else:
+        q, fy = 4, y
+    return f"Q{q} FY{fy % 100}"
+
+def _offset_quarter(start: date, offset: int):
+    """Avanza offset trimestres desde start y retorna (new_start, new_end)."""
+    # Mover start por offset * 3 meses
+    m = start.month + offset * 3
+    y = start.year
+    while m > 12:
+        m -= 12
+        y += 1
+    while m < 1:
+        m += 12
+        y -= 1
+    return _fiscal_quarter_range(date(y, m, 1))
+
 def _sla_to_hours(sla_key: str) -> int | None:
     """Convierte clave SLA a horas totales."""
     cfg = SLA_OPCIONES.get(sla_key, {})
@@ -1379,6 +1420,36 @@ else:
         hide_protect = st.toggle("🚀 Solo Growth (ocultar Renewal/PROTECT)", key="hide_protect")
         if hide_protect:
             all_opps = [o for o in all_opps if "renewal" not in (o.get("proyecto") or "").lower()]
+
+        # --- Quarter filter ---
+        today = date.today()
+        q_start, q_end = _fiscal_quarter_range(today)
+        q0_label = _fiscal_quarter_label(today)
+        q1_start, q1_end = _offset_quarter(q_start, 1)
+        q1_label = _fiscal_quarter_label(q1_start)
+        q2_start, q2_end = _offset_quarter(q_start, 2)
+        q2_label = _fiscal_quarter_label(q2_start)
+        q3_start, q3_end = _offset_quarter(q_start, 3)
+
+        q_options = [
+            "Todas",
+            f"📅 Próx. 4 Quarters ({q0_label}–{_fiscal_quarter_label(q3_start)})",
+            f"📅 Q actual ({q0_label})",
+            f"📅 Q actual + 1 ({q1_label})",
+            f"📅 Q actual + 2 ({q2_label})",
+        ]
+        q_filter = st.radio("Trimestre", q_options, horizontal=True, key="q_filter", label_visibility="collapsed")
+
+        if q_filter != "Todas":
+            if q_filter == q_options[1]:  # Next 4 quarters
+                fq_start, fq_end = q_start, q3_end
+            elif q_filter == q_options[2]:  # Current quarter
+                fq_start, fq_end = q_start, q_end
+            elif q_filter == q_options[3]:  # Current + 1
+                fq_start, fq_end = q1_start, q1_end
+            else:  # Current + 2
+                fq_start, fq_end = q2_start, q2_end
+            all_opps = [o for o in all_opps if o.get("close_date") and fq_start <= (_parse_date(o["close_date"]) or date.min) <= fq_end]
 
         # Category selector buttons (styled via JS in components.html)
         cat_totals = {}
