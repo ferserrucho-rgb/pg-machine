@@ -1755,7 +1755,7 @@ else:
         if act_scope == "📋 Mis tareas":
             all_activities_full = [a for a in all_activities_full if a.get("assigned_to") == user_id or a.get("created_by") == user_id]
         elif act_scope == "👥 Tareas del equipo":
-            all_activities_full = [a for a in all_activities_full if a.get("assigned_to") != user_id and a.get("created_by") != user_id]
+            pass  # show all team activities (already filtered by team_id)
 
         all_activities_full.sort(key=_act_status_order)
 
