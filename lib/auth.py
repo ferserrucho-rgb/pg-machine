@@ -377,4 +377,4 @@ def has_control_access() -> bool:
 
 def can_see_all_opportunities() -> bool:
     """Retorna True si el usuario puede ver todas las oportunidades del equipo."""
-    return get_current_user().get("role") in ("admin", "vp")
+    return bool(get_current_user().get("team_id"))
