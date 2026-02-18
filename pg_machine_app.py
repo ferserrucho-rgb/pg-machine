@@ -1514,16 +1514,13 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        if can_see_all_opportunities():
-            all_opps = dal.get_opportunities(team_id)
-        else:
-            all_opps = dal.get_opportunities_for_user(team_id, user_id, user["role"])
+        tab_scope = st.radio("Vista", ["📋 Mis oportunidades", "👥 Equipo"], horizontal=True, key="tab_scope")
+        all_opps = dal.get_opportunities(team_id)
+        all_activities = dal.get_all_activities(team_id)
+        if tab_scope == "📋 Mis oportunidades":
+            all_opps = [o for o in all_opps if o.get("owner_id") == user_id]
         # Precargar actividades para todas las oportunidades
         all_acts_by_opp = {}
-        if can_see_all_opportunities():
-            all_activities = dal.get_all_activities(team_id)
-        else:
-            all_activities = dal.get_all_activities_for_user(team_id, user_id, user["role"])
         for act in all_activities:
             all_acts_by_opp.setdefault(act["opportunity_id"], []).append(act)
 
