@@ -1375,6 +1375,11 @@ else:
         else:
             visible_cats = CATEGORIAS
 
+        # --- PROTECT / Growth filter ---
+        hide_protect = st.toggle("🚀 Solo Growth (ocultar Renewal/PROTECT)", key="hide_protect")
+        if hide_protect:
+            all_opps = [o for o in all_opps if "renewal" not in (o.get("proyecto") or "").lower()]
+
         # Category selector buttons (styled via JS in components.html)
         cat_totals = {}
         for cat in CATEGORIAS:
@@ -1391,11 +1396,6 @@ else:
                 if bc.button(f"{cat} — {total_str}", key=f"focus_{cat}", use_container_width=True):
                     st.session_state.focused_cat = cat
                     st.rerun()
-
-        # --- PROTECT / Growth filter ---
-        hide_protect = st.toggle("🚀 Solo Growth (ocultar Renewal/PROTECT)", key="hide_protect")
-        if hide_protect:
-            all_opps = [o for o in all_opps if "renewal" not in (o.get("proyecto") or "").lower()]
 
         # --- Bulk delete ---
         opp_options = {o["id"]: f'{o["proyecto"]} — {o["cuenta"]}' for o in all_opps}
