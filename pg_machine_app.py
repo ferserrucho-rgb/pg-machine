@@ -1525,8 +1525,8 @@ else:
             visible_cats = CATEGORIAS
 
         # --- Filters (one compact row) ---
-        _fc1, _fc2, _fc3 = st.columns([1, 1, 3])
-        tab_scope = _fc1.radio("Vista", ["📋 Mías", "👥 Equipo"], horizontal=True, key="tab_scope")
+        _fc1, _fc2, _fc3 = st.columns([2, 1, 5])
+        tab_scope = _fc1.radio("Vista", ["📋 Mías", "👥 Equipo"], horizontal=True, key="tab_scope", label_visibility="collapsed")
         hide_protect = _fc2.toggle("🚀 Solo Growth", key="hide_protect")
         today = date.today()
         q_start, q_end = _fiscal_quarter_range(today)
