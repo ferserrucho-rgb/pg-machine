@@ -976,6 +976,37 @@ def _generate_ics(activity: dict, opportunity: dict, organizer_name: str, organi
     return "\r\n".join(lines)
 
 
+def _render_ics_button(ics_content: str, key: str):
+    """Renderiza un botón que abre el .ics directamente en la app de calendario del sistema."""
+    import base64
+    b64 = base64.b64encode(ics_content.encode("utf-8")).decode("ascii")
+    components.html(f"""
+    <button id="ics-{key}" onclick="openICS()" style="
+        display:inline-flex;align-items:center;gap:6px;
+        padding:8px 18px;background:#0ea5e9;color:white;border:none;
+        border-radius:8px;font-family:Inter,sans-serif;font-size:0.85rem;
+        font-weight:600;cursor:pointer;transition:background 0.2s;">
+        📅 Agendar Reunión
+    </button>
+    <script>
+    function openICS() {{
+        var raw = atob("{b64}");
+        var bytes = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        var blob = new Blob([bytes], {{type:"text/calendar"}});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "reunion.ics";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function(){{ URL.revokeObjectURL(url); }}, 1000);
+    }}
+    </script>
+    """, height=50)
+
+
 # --- 3. SIDEBAR ---
 import pathlib as _pathlib
 _guide_path = _pathlib.Path(__file__).parent / "USER_GUIDE.md"
@@ -1334,11 +1365,10 @@ if st.session_state.selected_id:
             st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}</div>', unsafe_allow_html=True)
 
             aid = a['id']
-            # Download .ics for Reunión activities
+            # Abrir .ics en app de calendario para Reuniones
             if a.get("tipo") == "Reunión":
                 ics_content = _generate_ics(a, opp, user["full_name"], user["email"])
-                st.download_button("📅 Agendar Reunión", ics_content, file_name="reunion.ics",
-                                   mime="text/calendar", key=f"ics_{aid}")
+                _render_ics_button(ics_content, key=f"ics_{aid}")
             # State-specific action buttons
             if a["estado"] == "Pendiente":
                 if st.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
@@ -1463,14 +1493,13 @@ if st.session_state.selected_id:
                 st.session_state.pop("show_edit_opp", None)
                 st.rerun()
 
-    # --- Download .ics after creating a Reunión ---
+    # --- Abrir .ics después de crear una Reunión ---
     if st.session_state.get("_ics_pending"):
         _ics_data = st.session_state["_ics_pending"]
         _ics_content = _generate_ics(_ics_data["activity"], _ics_data["opportunity"],
                                      user["full_name"], user["email"])
-        st.info("Descarga el archivo .ics para agregar la reunión a tu calendario.")
-        st.download_button("📅 Agendar Reunión", _ics_content,
-                           file_name="reunion.ics", mime="text/calendar", key="ics_new")
+        st.info("Haz click para agendar la reunión directamente en tu calendario.")
+        _render_ics_button(_ics_content, key="ics_new")
         if st.button("Continuar", key="ics_dismiss"):
             st.session_state.pop("_ics_pending", None)
             st.rerun()
