@@ -66,26 +66,23 @@ def get_opportunity(opp_id: str) -> dict | None:
     return resp.data
 
 def create_opportunity(team_id: str, owner_id: str, data: dict) -> dict:
-    """Crea una nueva oportunidad."""
+    """Crea una nueva oportunidad. Pasa todos los campos de data dinámicamente."""
     sb = get_supabase()
-    record = {
-        "team_id": team_id,
-        "owner_id": owner_id,
-        "proyecto": data["proyecto"],
-        "cuenta": data["cuenta"],
-        "monto": float(data.get("monto", 0)),
-        "categoria": data.get("categoria", "LEADS"),
-        "opp_id": data.get("opp_id", ""),
-        "stage": data.get("stage", ""),
-        "close_date": data.get("close_date"),
-        "partner": data.get("partner", ""),
-    }
+    # Campos internos fijos
+    record = {"team_id": team_id, "owner_id": owner_id}
+    # Asegurar monto como float
+    if "monto" in data:
+        data["monto"] = float(data["monto"] or 0)
+    # Merge: data sobrescribe si hay conflicto
+    record.update(data)
     resp = sb.table("opportunities").insert(record).execute()
     return resp.data[0] if resp.data else {}
 
 def update_opportunity(opp_id: str, data: dict) -> dict:
-    """Actualiza una oportunidad existente."""
+    """Actualiza una oportunidad existente. Acepta cualquier campo dinámicamente."""
     sb = get_supabase()
+    if "monto" in data:
+        data["monto"] = float(data["monto"] or 0)
     resp = sb.table("opportunities") \
         .update(data) \
         .eq("id", opp_id) \
@@ -103,22 +100,15 @@ def delete_opportunities_by_account(team_id: str, cuenta: str):
     sb.table("opportunities").delete().eq("team_id", team_id).eq("cuenta", cuenta).execute()
 
 def bulk_create_opportunities(team_id: str, owner_id: str, items: list[dict]) -> int:
-    """Importación masiva de oportunidades. Retorna cantidad creada."""
+    """Importación masiva de oportunidades. Pasa todos los campos dinámicamente."""
     sb = get_supabase()
     records = []
     for data in items:
-        records.append({
-            "team_id": team_id,
-            "owner_id": owner_id,
-            "proyecto": data["proyecto"],
-            "cuenta": data["cuenta"],
-            "monto": float(data.get("monto", 0)),
-            "categoria": data.get("categoria", "LEADS"),
-            "opp_id": data.get("opp_id", ""),
-            "stage": data.get("stage", ""),
-            "close_date": data.get("close_date"),
-            "partner": data.get("partner", ""),
-        })
+        record = {"team_id": team_id, "owner_id": owner_id}
+        if "monto" in data:
+            data["monto"] = float(data["monto"] or 0)
+        record.update(data)
+        records.append(record)
     if records:
         sb.table("opportunities").insert(records).execute()
     return len(records)
