@@ -966,15 +966,15 @@ def _render_outlook_button(activity: dict, opportunity: dict, key: str):
     url = _outlook_event_url(activity, opportunity)
     components.html(f"""
     <a href="{url}" target="_blank" style="
-        display:inline-flex;align-items:center;gap:6px;
-        padding:8px 18px;background:#0ea5e9;color:white;border:none;
-        border-radius:8px;font-family:Inter,sans-serif;font-size:0.85rem;
+        display:inline-flex;align-items:center;gap:4px;
+        padding:3px 10px;background:#0ea5e9;color:white;border:none;
+        border-radius:6px;font-family:Inter,sans-serif;font-size:0.7rem;
         font-weight:600;cursor:pointer;text-decoration:none;transition:background 0.2s;"
         onmouseover="this.style.background='#0284c7'"
         onmouseout="this.style.background='#0ea5e9'">
         📅 Agendar Reunión
     </a>
-    """, height=50)
+    """, height=32)
 
 
 # --- 3. SIDEBAR ---
