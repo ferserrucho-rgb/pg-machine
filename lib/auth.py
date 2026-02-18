@@ -3,6 +3,7 @@ Módulo de autenticación para PG Machine.
 Login, registro, gestión de sesión con Supabase Auth.
 """
 import streamlit as st
+import streamlit.components.v1 as components
 from supabase import create_client, Client
 
 # --- Roles del sistema ---
@@ -227,7 +228,8 @@ def show_auth_page():
                     else:
                         try:
                             sb = _get_supabase()
-                            sb.auth.reset_password_email(forgot_email)
+                            app_url = st.secrets.get("APP_URL", "http://localhost:8501")
+                            sb.auth.reset_password_email(forgot_email, {"redirect_to": app_url})
                             st.success("Se envió un enlace de restablecimiento a tu email. Revisa tu bandeja de entrada.")
                             st.session_state.pop("_show_forgot_pw", None)
                         except Exception as e:
@@ -277,11 +279,76 @@ def show_auth_page():
                         else:
                             st.rerun()
 
+def _show_recovery_page():
+    """Muestra formulario para establecer nueva contraseña tras recovery."""
+    access_token = st.query_params.get("_rat")
+    refresh_token = st.query_params.get("_rrt")
+    if not access_token or not refresh_token:
+        return False
+
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    .auth-header { text-align: center; margin-bottom: 2rem; }
+    .auth-header h1 { font-size: 2.5rem; font-weight: 800; color: #1e293b; }
+    .auth-header p { color: #64748b; font-size: 1rem; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        st.markdown('<div class="auth-header"><h1>PG Machine</h1><p>Restablecer contraseña</p></div>', unsafe_allow_html=True)
+        with st.form("reset_pw_form"):
+            new_pw = st.text_input("Nueva contraseña", type="password", key="new_pw")
+            confirm_pw = st.text_input("Confirmar contraseña", type="password", key="confirm_pw")
+            if st.form_submit_button("Cambiar contraseña", use_container_width=True):
+                if not new_pw or not confirm_pw:
+                    st.error("Completa ambos campos.")
+                elif len(new_pw) < 6:
+                    st.error("La contraseña debe tener al menos 6 caracteres.")
+                elif new_pw != confirm_pw:
+                    st.error("Las contraseñas no coinciden.")
+                else:
+                    try:
+                        sb = _get_supabase()
+                        sb.auth.set_session(access_token, refresh_token)
+                        sb.auth.update_user({"password": new_pw})
+                        st.success("Contraseña actualizada. Ya puedes iniciar sesión.")
+                        st.query_params.clear()
+                    except Exception as e:
+                        st.error(f"Error al cambiar contraseña: {str(e)}")
+    return True
+
+
 def require_auth():
     """
     Auth gate: retorna True si el usuario está autenticado.
     Si no, muestra la página de login y retorna False.
     """
+    # JS: captura tokens de recovery del hash fragment de Supabase y los convierte a query params
+    params = st.query_params
+    if not params.get("_rat"):
+        components.html("""
+        <script>
+        (function() {
+            var h = window.parent.location.hash;
+            if (h && h.indexOf("type=recovery") !== -1) {
+                var p = new URLSearchParams(h.substring(1));
+                var at = p.get("access_token");
+                var rt = p.get("refresh_token");
+                if (at && rt) {
+                    window.parent.location.search = "?_rat=" + encodeURIComponent(at) + "&_rrt=" + encodeURIComponent(rt);
+                }
+            }
+        })();
+        </script>
+        """, height=0)
+
+    # Si hay tokens de recovery, mostrar formulario de nueva contraseña
+    if _show_recovery_page():
+        return False
+
     if _try_restore_session():
         return True
     if st.session_state.get("user"):
