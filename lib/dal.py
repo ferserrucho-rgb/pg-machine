@@ -55,6 +55,18 @@ def get_opportunities_for_user(team_id: str, user_id: str, role: str) -> list[di
     return own_opps + extra_opps
 
 
+def get_opportunity_extra_columns(team_id: str) -> list[str]:
+    """Descubre columnas dinámicas en opportunities (excluye las del sistema y las manejadas por la UI)."""
+    sb = get_supabase()
+    resp = sb.table("opportunities").select("*").eq("team_id", team_id).limit(1).execute()
+    if not resp.data:
+        return []
+    SYSTEM_COLS = {"id", "team_id", "owner_id", "created_at", "updated_at"}
+    UI_COLS = {"proyecto", "cuenta", "monto", "categoria", "opp_id", "stage", "close_date", "partner"}
+    all_cols = set(resp.data[0].keys())
+    extra = sorted(all_cols - SYSTEM_COLS - UI_COLS)
+    return extra
+
 def get_opportunity(opp_id: str) -> dict | None:
     """Obtiene una oportunidad por ID."""
     sb = get_supabase()

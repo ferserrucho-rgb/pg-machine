@@ -778,6 +778,7 @@ if 'historial_selected' not in st.session_state:
 SLA_OPCIONES = dal.get_sla_options(team_id)
 SLA_RESPUESTA = dal.get_sla_respuesta(team_id)
 CATEGORIAS = dal.get_categorias(team_id)
+EXTRA_OPP_COLS = dal.get_opportunity_extra_columns(team_id)
 
 # Cargar miembros del equipo para asignaciones
 team_members = dal.get_team_members(team_id)
@@ -1001,7 +1002,7 @@ with st.sidebar:
             nuevas = []
             iguales = []
             con_cambios = []  # (item_excel, opp_existente, campos_dif)
-            compare_fields = ["proyecto", "cuenta", "monto", "categoria", "opp_id", "stage", "close_date", "partner"]
+            compare_fields = ["proyecto", "cuenta", "monto", "categoria", "opp_id", "stage", "close_date", "partner"] + EXTRA_OPP_COLS
 
             for item in items:
                 match = None
@@ -1132,15 +1133,21 @@ with st.sidebar:
         n_stage = st.text_input("Stage")
         n_partner = st.text_input("Partner")
         n_close = st.date_input("Close Date", value=None)
+        # Campos dinámicos
+        extra_vals = {}
+        for ecol in EXTRA_OPP_COLS:
+            extra_vals[ecol] = st.text_input(ecol.replace("_", " ").title(), key=f"manual_{ecol}")
         if st.form_submit_button("Añadir Individual"):
             if nc and np:
                 parsed = _parse_date(n_close)
-                dal.create_opportunity(team_id, user_id, {
+                opp_data = {
                     "proyecto": np, "cuenta": nc, "monto": nm,
                     "categoria": ncat, "opp_id": n_opp_id,
                     "stage": n_stage, "partner": n_partner,
                     "close_date": str(parsed) if parsed else None,
-                })
+                }
+                opp_data.update({k: v for k, v in extra_vals.items() if v})
+                dal.create_opportunity(team_id, user_id, opp_data)
                 st.rerun()
 
 
@@ -1172,6 +1179,10 @@ if st.session_state.selected_id:
         meta_parts.append(f'<span class="meta-id">{opp["opp_id"]}</span>')
     if opp.get("close_date"):
         meta_parts.append(f'<span class="meta-close">Cierre: {_fmt_date(opp["close_date"])}</span>')
+    for ecol in EXTRA_OPP_COLS:
+        ecol_val = str(opp.get(ecol, "") or "").strip()
+        if ecol_val and ecol_val.lower() != "nan":
+            meta_parts.append(f'<span class="meta-pill meta-stage">{ecol.replace("_", " ").title()}: {ecol_val}</span>')
     action_html = '<span class="meta-actions"><span class="meta-btn meta-btn-edit-opp">✏ Editar</span><span class="meta-btn meta-btn-new-act">+ Nueva</span><span class="meta-btn meta-btn-back">⬅ Volver</span><span class="meta-btn meta-btn-del">🗑 Eliminar</span></span>'
     st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}{action_html}</div>', unsafe_allow_html=True)
 
@@ -1375,14 +1386,20 @@ if st.session_state.selected_id:
             ed_partner = st.text_input("Partner", value=opp.get("partner", ""))
             close_val = _parse_date(opp.get("close_date", ""))
             ed_close = st.date_input("Close Date", value=close_val)
+            # Campos dinámicos
+            ed_extra = {}
+            for ecol in EXTRA_OPP_COLS:
+                ed_extra[ecol] = st.text_input(ecol.replace("_", " ").title(), value=str(opp.get(ecol, "") or ""), key=f"ed_{ecol}")
             if st.form_submit_button("💾 Guardar Cambios"):
-                dal.update_opportunity(opp["id"], {
+                update_data = {
                     "cuenta": ed_cuenta, "proyecto": ed_proyecto,
                     "monto": float(ed_monto), "categoria": ed_cat,
                     "opp_id": ed_opp_id, "stage": ed_stage,
                     "partner": ed_partner,
                     "close_date": str(ed_close) if ed_close else None,
-                })
+                }
+                update_data.update(ed_extra)
+                dal.update_opportunity(opp["id"], update_data)
                 st.session_state.pop("show_edit_opp", None)
                 st.rerun()
 
@@ -1564,7 +1581,14 @@ else:
                 right_html = f'<div class="opp-right">{"".join(right_parts)}</div>' if right_parts else ""
                 header_html = f'<div class="opp-top"><div class="opp-left">{name_html}{row2_html}</div>{right_html}</div>'
                 partner_val = (o.get("partner") or "").strip()
-                meta_html = f'<div style="margin-top:4px;"><span class="partner-pill">🤝 {partner_val}</span></div>' if partner_val else ""
+                meta_pills = []
+                if partner_val:
+                    meta_pills.append(f'<span class="partner-pill">🤝 {partner_val}</span>')
+                for ecol in EXTRA_OPP_COLS:
+                    ecol_val = str(o.get(ecol, "") or "").strip()
+                    if ecol_val and ecol_val.lower() != "nan":
+                        meta_pills.append(f'<span class="partner-pill">{ecol.replace("_", " ").title()}: {ecol_val}</span>')
+                meta_html = f'<div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:4px;">{"".join(meta_pills)}</div>' if meta_pills else ""
                 # Activities
                 act_lines = []
                 for a in opp_acts:
