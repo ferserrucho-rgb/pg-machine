@@ -943,11 +943,12 @@ with st.sidebar:
                     items.append({
                         "proyecto": str(r.get('Opportunity Name', '-')),
                         "cuenta": str(r.get('Account Name', '-')),
-                        "monto": float(r.get('Annual Contract Value (ACV)', r.get('Amount USD', 0)) or 0),
+                        "monto": float(r.get('Annual Contract Value (ACV)', r.get('Amount (USD)', r.get('Amount USD', 0))) or 0),
                         "categoria": "OFFICIAL",
-                        "opp_id": str(r.get('BMC Opportunity Id', '')),
+                        "opp_id": str(r.get('SFDC Opportunity Id', r.get('BMC Opportunity Id', ''))),
                         "stage": str(r.get('Stage', '')),
                         "close_date": str(parsed) if parsed else None,
+                        "partner": str(r.get('Partner', '')).strip(),
                     })
 
             # Comparar con existentes
