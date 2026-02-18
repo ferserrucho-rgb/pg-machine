@@ -933,7 +933,7 @@ with st.sidebar:
                     items.append({
                         "proyecto": str(r.get('Proyecto', 'S/N')),
                         "cuenta": str(r.get('Empresa', r.get('Cuenta', 'S/N'))),
-                        "monto": float(r.get('Valor', r.get('Monto', 0)) or 0),
+                        "monto": float(r.get('Annual Contract Value (ACV)', r.get('Valor', r.get('Monto', 0))) or 0),
                         "categoria": "LEADS",
                         "close_date": str(parsed) if parsed else None,
                         "partner": str(r.get('Partner', '')).strip(),
@@ -943,7 +943,7 @@ with st.sidebar:
                     items.append({
                         "proyecto": str(r.get('Opportunity Name', '-')),
                         "cuenta": str(r.get('Account Name', '-')),
-                        "monto": float(r.get('Amount USD', 0) or 0),
+                        "monto": float(r.get('Annual Contract Value (ACV)', r.get('Amount USD', 0)) or 0),
                         "categoria": "OFFICIAL",
                         "opp_id": str(r.get('BMC Opportunity Id', '')),
                         "stage": str(r.get('Stage', '')),
