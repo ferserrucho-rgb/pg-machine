@@ -1524,20 +1524,10 @@ else:
         else:
             visible_cats = CATEGORIAS
 
-        # --- Scope + Growth filters (same row) ---
-        _fc1, _fc2 = st.columns(2)
+        # --- Filters (one compact row) ---
+        _fc1, _fc2, _fc3 = st.columns([1, 1, 3])
         tab_scope = _fc1.radio("Vista", ["📋 Mías", "👥 Equipo"], horizontal=True, key="tab_scope")
-        hide_protect = _fc2.toggle("🚀 Solo Growth (ocultar Renewal/PROTECT)", key="hide_protect")
-        if tab_scope == "📋 Mías":
-            all_opps = [o for o in all_opps if o.get("owner_id") == user_id]
-        # Precargar actividades para todas las oportunidades
-        all_acts_by_opp = {}
-        for act in all_activities:
-            all_acts_by_opp.setdefault(act["opportunity_id"], []).append(act)
-        if hide_protect:
-            all_opps = [o for o in all_opps if "renewal" not in (o.get("proyecto") or "").lower()]
-
-        # --- Quarter filter ---
+        hide_protect = _fc2.toggle("🚀 Solo Growth", key="hide_protect")
         today = date.today()
         q_start, q_end = _fiscal_quarter_range(today)
         q0_label = _fiscal_quarter_label(today)
@@ -1546,15 +1536,22 @@ else:
         q2_start, q2_end = _offset_quarter(q_start, 2)
         q2_label = _fiscal_quarter_label(q2_start)
         q3_start, q3_end = _offset_quarter(q_start, 3)
-
         q_options = [
             "Todas",
-            f"📅 Próx. 4 Quarters ({q0_label}–{_fiscal_quarter_label(q3_start)})",
-            f"📅 Q actual ({q0_label})",
-            f"📅 Q actual + 1 ({q1_label})",
-            f"📅 Q actual + 2 ({q2_label})",
+            f"📅 4Q ({q0_label}–{_fiscal_quarter_label(q3_start)})",
+            f"📅 {q0_label}",
+            f"📅 {q1_label}",
+            f"📅 {q2_label}",
         ]
-        q_filter = st.radio("Trimestre", q_options, horizontal=True, key="q_filter", label_visibility="collapsed")
+        q_filter = _fc3.radio("Trimestre", q_options, horizontal=True, key="q_filter", label_visibility="collapsed")
+        if tab_scope == "📋 Mías":
+            all_opps = [o for o in all_opps if o.get("owner_id") == user_id]
+        # Precargar actividades para todas las oportunidades
+        all_acts_by_opp = {}
+        for act in all_activities:
+            all_acts_by_opp.setdefault(act["opportunity_id"], []).append(act)
+        if hide_protect:
+            all_opps = [o for o in all_opps if "renewal" not in (o.get("proyecto") or "").lower()]
 
         if q_filter != "Todas":
             if q_filter == q_options[1]:  # Next 4 quarters
