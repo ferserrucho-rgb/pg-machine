@@ -42,6 +42,7 @@ st.markdown("""
     .opp-meta-bar .meta-cat-official { background: #d1fae5; color: #047857; }
     .opp-meta-bar .meta-cat-gtm { background: #fef3c7; color: #d97706; }
     .opp-meta-bar .meta-stage { background: #ede9fe; color: #7c3aed; }
+    .opp-meta-bar .meta-partner { font-size: 0.6rem; font-weight: 700; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; padding: 2px 8px; border-radius: 10px; }
     .opp-meta-bar .meta-monto { font-size: 0.8rem; font-weight: 800; color: #16a34a; }
     .opp-meta-bar .meta-id { font-family: 'Courier New', monospace; font-size: 0.55rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 5px; border-radius: 3px; }
     .opp-meta-bar .meta-close { font-size: 0.6rem; font-weight: 700; color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; padding: 1px 5px; border-radius: 3px; }
@@ -146,6 +147,7 @@ st.markdown("""
     .pgm-card-wrap .act-line .act-obj { font-weight: 600; color: #1e293b; }
     .pgm-card-wrap .act-line .act-dest { color: #7c3aed; font-weight: 500; }
     .pgm-card-wrap .act-line .act-asig { color: #0369a1; font-weight: 600; font-size: 0.65rem; background: #e0f2fe; padding: 1px 4px; border-radius: 3px; }
+    .pgm-card-wrap .partner-pill { font-size: 0.6rem; font-weight: 700; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
     .pgm-card-wrap .act-line .act-status { font-weight: 600; font-size: 0.65rem; }
     /* User identity bar */
     .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -311,9 +313,9 @@ components.html("""
         doc.querySelectorAll('button').forEach(function(btn) {
             var txt = (btn.textContent||'').trim().toUpperCase();
             var grad = null;
-            if (txt === 'LEADS' || (txt.indexOf('LEADS')>=0 && txt.indexOf('\u2715')>=0)) grad = 'linear-gradient(135deg,#3b82f6,#1d4ed8)';
-            else if (txt === 'OFFICIAL' || (txt.indexOf('OFFICIAL')>=0 && txt.indexOf('\u2715')>=0)) grad = 'linear-gradient(135deg,#10b981,#047857)';
-            else if (txt === 'GTM' || (txt.indexOf('GTM')>=0 && txt.indexOf('\u2715')>=0)) grad = 'linear-gradient(135deg,#f59e0b,#d97706)';
+            if (txt.indexOf('LEADS')>=0) grad = 'linear-gradient(135deg,#3b82f6,#1d4ed8)';
+            else if (txt.indexOf('OFFICIAL')>=0) grad = 'linear-gradient(135deg,#10b981,#047857)';
+            else if (txt.indexOf('GTM')>=0) grad = 'linear-gradient(135deg,#f59e0b,#d97706)';
             if (grad && !btn.dataset.catStyled) {
                 btn.dataset.catStyled = '1';
                 btn.style.background = grad;
@@ -893,6 +895,7 @@ with st.sidebar:
                         "monto": float(r.get('Valor', r.get('Monto', 0)) or 0),
                         "categoria": "LEADS",
                         "close_date": str(parsed) if parsed else None,
+                        "partner": str(r.get('Partner', '')).strip(),
                     })
                 else:
                     parsed = _parse_date(r.get('Close Date', None))
@@ -915,7 +918,7 @@ with st.sidebar:
             nuevas = []
             iguales = []
             con_cambios = []  # (item_excel, opp_existente, campos_dif)
-            compare_fields = ["proyecto", "cuenta", "monto", "categoria", "opp_id", "stage", "close_date"]
+            compare_fields = ["proyecto", "cuenta", "monto", "categoria", "opp_id", "stage", "close_date", "partner"]
 
             for item in items:
                 match = None
@@ -964,8 +967,9 @@ with st.sidebar:
                 select_all_new = nc2.checkbox("Todas", value=True, key="sel_all_new")
                 for i, item in enumerate(nuevas):
                     monto_str = f"USD {float(item.get('monto', 0)):,.0f}"
+                    partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
                     st.checkbox(
-                        f"{item['cuenta']} — {item['proyecto']} ({monto_str})",
+                        f"{item['cuenta']} — {item['proyecto']} ({monto_str}{partner_str})",
                         value=select_all_new,
                         key=f"imp_new_{i}",
                     )
@@ -978,8 +982,10 @@ with st.sidebar:
                 select_all_chg = cc2.checkbox("Todas", value=False, key="sel_all_chg")
                 for i, (item, existing_opp, diffs) in enumerate(con_cambios):
                     diff_summary = ", ".join(f"{f}: {v['actual']} → {v['excel']}" for f, v in diffs.items())
+                    monto_str = f"USD {float(item.get('monto', 0)):,.0f}"
+                    partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
                     st.checkbox(
-                        f"{item['cuenta']} — {item['proyecto']}",
+                        f"{item['cuenta']} — {item['proyecto']} ({monto_str}{partner_str})",
                         value=select_all_chg,
                         key=f"imp_chg_{i}",
                         help=diff_summary,
@@ -1041,6 +1047,7 @@ with st.sidebar:
         ncat = st.selectbox("Categoría", CATEGORIAS)
         n_opp_id = st.text_input("Opportunity ID")
         n_stage = st.text_input("Stage")
+        n_partner = st.text_input("Partner")
         n_close = st.date_input("Close Date", value=None)
         if st.form_submit_button("Añadir Individual"):
             if nc and np:
@@ -1048,7 +1055,7 @@ with st.sidebar:
                 dal.create_opportunity(team_id, user_id, {
                     "proyecto": np, "cuenta": nc, "monto": nm,
                     "categoria": ncat, "opp_id": n_opp_id,
-                    "stage": n_stage,
+                    "stage": n_stage, "partner": n_partner,
                     "close_date": str(parsed) if parsed else None,
                 })
                 st.rerun()
@@ -1075,6 +1082,8 @@ if st.session_state.selected_id:
     ]
     if opp.get("stage"):
         meta_parts.append(f'<span class="meta-pill meta-stage">{opp["stage"]}</span>')
+    if opp.get("partner"):
+        meta_parts.append(f'<span class="meta-partner">🤝 {opp["partner"]}</span>')
     meta_parts.append(f'<span class="meta-monto">USD {monto_val:,.0f}</span>')
     if opp.get("opp_id"):
         meta_parts.append(f'<span class="meta-id">{opp["opp_id"]}</span>')
@@ -1280,6 +1289,7 @@ if st.session_state.selected_id:
             ed_cat = ed_c4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(opp["categoria"]) if opp["categoria"] in CATEGORIAS else 0)
             ed_opp_id = ed_c5.text_input("Opportunity ID", value=opp.get("opp_id", ""))
             ed_stage = ed_c6.text_input("Stage", value=opp.get("stage", ""))
+            ed_partner = st.text_input("Partner", value=opp.get("partner", ""))
             close_val = _parse_date(opp.get("close_date", ""))
             ed_close = st.date_input("Close Date", value=close_val)
             if st.form_submit_button("💾 Guardar Cambios"):
@@ -1287,6 +1297,7 @@ if st.session_state.selected_id:
                     "cuenta": ed_cuenta, "proyecto": ed_proyecto,
                     "monto": float(ed_monto), "categoria": ed_cat,
                     "opp_id": ed_opp_id, "stage": ed_stage,
+                    "partner": ed_partner,
                     "close_date": str(ed_close) if ed_close else None,
                 })
                 st.session_state.pop("show_edit_opp", None)
@@ -1365,15 +1376,19 @@ else:
             visible_cats = CATEGORIAS
 
         # Category selector buttons (styled via JS in components.html)
+        cat_totals = {}
+        for cat in CATEGORIAS:
+            cat_totals[cat] = sum(float(o.get("monto") or 0) for o in all_opps if o["categoria"] == cat)
         btn_cols = st.columns(len(CATEGORIAS))
         for i, bc in enumerate(btn_cols):
             cat = CATEGORIAS[i]
+            total_str = f"USD {cat_totals[cat]:,.0f}"
             if focused == cat:
                 if bc.button(f"✕ {cat} — Ver todas", key=f"unfocus_{cat}", use_container_width=True):
                     st.session_state.focused_cat = None
                     st.rerun()
             else:
-                if bc.button(cat, key=f"focus_{cat}", use_container_width=True):
+                if bc.button(f"{cat} — {total_str}", key=f"focus_{cat}", use_container_width=True):
                     st.session_state.focused_cat = cat
                     st.rerun()
 
@@ -1435,7 +1450,8 @@ else:
                     right_parts.append(f'<span class="close-date">Cierre: {_fmt_date(o["close_date"])}</span>')
                 right_html = f'<div class="opp-right">{"".join(right_parts)}</div>' if right_parts else ""
                 header_html = f'<div class="opp-top"><div class="opp-left">{name_html}{row2_html}</div>{right_html}</div>'
-                meta_html = ""
+                partner_val = (o.get("partner") or "").strip()
+                meta_html = f'<div style="margin-top:4px;"><span class="partner-pill">🤝 {partner_val}</span></div>' if partner_val else ""
                 # Activities
                 act_lines = []
                 for a in opp_acts:

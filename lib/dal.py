@@ -78,6 +78,7 @@ def create_opportunity(team_id: str, owner_id: str, data: dict) -> dict:
         "opp_id": data.get("opp_id", ""),
         "stage": data.get("stage", ""),
         "close_date": data.get("close_date"),
+        "partner": data.get("partner", ""),
     }
     resp = sb.table("opportunities").insert(record).execute()
     return resp.data[0] if resp.data else {}
@@ -116,6 +117,7 @@ def bulk_create_opportunities(team_id: str, owner_id: str, items: list[dict]) ->
             "opp_id": data.get("opp_id", ""),
             "stage": data.get("stage", ""),
             "close_date": data.get("close_date"),
+            "partner": data.get("partner", ""),
         })
     if records:
         sb.table("opportunities").insert(records).execute()
