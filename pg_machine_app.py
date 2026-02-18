@@ -142,9 +142,9 @@ st.markdown("""
     .pgm-card-wrap .opp-left { flex: 1; min-width: 0; }
     .pgm-card-wrap .opp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; margin-left: 8px; }
     .pgm-card-wrap .opp-name { font-size: 0.85rem; font-weight: 700; color: #1e293b; line-height: 1.3; margin-bottom: 2px; }
-    .pgm-card-wrap .opp-row2 { display: flex; align-items: center; gap: 8px; }
+    .pgm-card-wrap .opp-row2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; }
-    .pgm-card-wrap .amount { color: #16a34a; font-size: 0.9rem; font-weight: 800; }
+    .pgm-card-wrap .amount { color: #16a34a; font-size: 0.9rem; font-weight: 800; margin-left: auto; }
     .pgm-card-wrap .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.55rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 5px; border-radius: 3px; }
     .pgm-card-wrap .close-date { font-size: 0.6rem; font-weight: 700; color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; padding: 1px 5px; border-radius: 3px; }
     .pgm-card-wrap .act-sep { border-top: 1px dashed #e2e8f0; margin: 6px 0 4px 0; }
@@ -880,9 +880,9 @@ def _traffic_light(act):
 
     hoy = date.today()
     if fecha > hoy:
-        return "🟨", f"Pendiente {fecha.strftime('%d/%m')}"
+        return "🔵", f"📅 Programada {fecha.strftime('%d/%m')}"
     if fecha == hoy:
-        return "🟨", "Hoy"
+        return "🟧", "⚡ Hoy"
 
     # SLA check
     sla_deadline_str = act.get("sla_deadline")
@@ -1568,17 +1568,17 @@ else:
             for o in opps:
                 opp_acts = sorted(all_acts_by_opp.get(o["id"], []), key=_act_status_order)
                 monto_val = float(o.get("monto") or 0)
-                # Build HTML card — left: name + stage/amount, right: opp_id + close date
+                # Build HTML card — left: name + stage, right: amount + opp_id + close date
                 name_html = f'<div class="opp-name">{o["proyecto"]}</div>'
                 stage_html = f'<span class="stage-badge">{o["stage"]}</span>' if o.get("stage") else ""
-                row2_html = f'<div class="opp-row2">{stage_html}<span class="amount">USD {monto_val:,.0f} ACV</span></div>'
-                # Right side: opp ID + close date stacked
-                right_parts = []
+                row2_html = f'<div class="opp-row2">{stage_html}</div>' if stage_html else ""
+                # Right side: amount + opp ID + close date stacked
+                right_parts = [f'<span class="amount">USD {monto_val:,.0f} ACV</span>']
                 if o.get("opp_id"):
                     right_parts.append(f'<span class="opp-id-box">{o["opp_id"]}</span>')
                 if o.get("close_date"):
                     right_parts.append(f'<span class="close-date">Cierre: {_fmt_date(o["close_date"])}</span>')
-                right_html = f'<div class="opp-right">{"".join(right_parts)}</div>' if right_parts else ""
+                right_html = f'<div class="opp-right">{"".join(right_parts)}</div>'
                 header_html = f'<div class="opp-top"><div class="opp-left">{name_html}{row2_html}</div>{right_html}</div>'
                 partner_val = (o.get("partner") or "").strip()
                 meta_pills = []
