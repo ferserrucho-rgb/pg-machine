@@ -118,7 +118,14 @@ st.markdown("""
     .historial-dot-bloqueada { background: #ef4444; }
     .timeline-header { background: #1e293b; color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; }
     .timeline-header .tl-name { font-size: 1rem; font-weight: 700; }
-    .timeline-header .tl-stats { display: flex; gap: 12px; margin-top: 6px; font-size: 0.72rem; font-weight: 600; }
+    .timeline-header .tl-stats { display: flex; gap: 12px; margin-top: 6px; font-size: 0.72rem; font-weight: 600; align-items: center; }
+    .hist-metro-toggle { display:inline-flex; align-items:center; gap:5px; margin-left:auto; cursor:pointer; user-select:none; }
+    .hist-metro-toggle .toggle-label { font-size:0.65rem; font-weight:600; color:rgba(255,255,255,0.6); }
+    .hist-metro-toggle.active .toggle-label { color:white; }
+    .hist-metro-toggle .toggle-track { width:30px; height:16px; background:rgba(255,255,255,0.2); border-radius:8px; position:relative; transition:background 0.2s; }
+    .hist-metro-toggle.active .toggle-track { background:#3b82f6; }
+    .hist-metro-toggle .toggle-knob { position:absolute; top:2px; left:2px; width:12px; height:12px; background:white; border-radius:50%; transition:transform 0.2s; }
+    .hist-metro-toggle.active .toggle-knob { transform:translateX(14px); }
     .timeline-card { background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
     .timeline-card.tipo-email { border-left-color: #3b82f6; }
     .timeline-card.tipo-llamada { border-left-color: #f59e0b; }
@@ -306,6 +313,13 @@ components.html("""
             return;
         }
 
+        // 5c. Historial metro toggle switch
+        if (e.target.closest('.hist-metro-toggle')) {
+            var hdr = e.target.closest('.timeline-header');
+            if (hdr) { var b = findBtn(hdr, 'HIST_METRO'); if (b) b.click(); }
+            return;
+        }
+
         // 6. Activity edit button
         if (e.target.closest('.act-btn-edit')) {
             var hc = e.target.closest('.hist-card');
@@ -431,6 +445,7 @@ components.html("""
             if (txt.indexOf('NEW_ACT') >= 0) hide = true;
             if (txt.indexOf('AGENDAR_') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_METRO') >= 0) hide = true;
+            if (txt.indexOf('HIST_METRO') >= 0) hide = true;
             if (hide) {
                 // Walk up hiding wrappers — use offscreen positioning to keep buttons clickable
                 var el = btn;
@@ -2171,10 +2186,9 @@ else:
                     key = "Sin asignar"
             hist_groups.setdefault(key, []).append(a)
 
-        # Search filter + metro toggle
-        _hf1, _hf2 = st.columns([0.8, 0.2])
-        hist_search = _hf1.text_input("🔍 Buscar", key="hist_search", placeholder="Filtrar grupos...")
-        hist_metro = _hf2.checkbox("🚇 Línea", key="historial_metro_view")
+        # Search filter
+        hist_search = st.text_input("🔍 Buscar", key="hist_search", placeholder="Filtrar grupos...")
+        hist_metro = st.session_state.get("historial_metro_view", False)
         if hist_search:
             hist_groups = {k: v for k, v in hist_groups.items() if hist_search.lower() in k.lower()}
 
@@ -2208,10 +2222,15 @@ else:
                         t_pend = len([a for a in timeline_acts if a.get("estado") == "Pendiente"])
                         t_env = len([a for a in timeline_acts if a.get("estado") == "Enviada"])
                         t_resp = len([a for a in timeline_acts if a.get("estado") == "Respondida"])
+                        _mt_active = " active" if hist_metro else ""
+                        _toggle_html = f'<span class="hist-metro-toggle{_mt_active}"><span class="toggle-label">🚇 Línea</span><span class="toggle-track"><span class="toggle-knob"></span></span></span>'
                         st.markdown(f'''<div class="timeline-header">
                             <div class="tl-name">{g_name}</div>
-                            <div class="tl-stats"><span>Total: {len(timeline_acts)}</span><span style="color:#fbbf24;">Pendientes: {t_pend}</span><span style="color:#a78bfa;">Enviadas: {t_env}</span><span style="color:#4ade80;">Respondidas: {t_resp}</span></div>
+                            <div class="tl-stats"><span>Total: {len(timeline_acts)}</span><span style="color:#fbbf24;">Pendientes: {t_pend}</span><span style="color:#a78bfa;">Enviadas: {t_env}</span><span style="color:#4ade80;">Respondidas: {t_resp}</span>{_toggle_html}</div>
                         </div>''', unsafe_allow_html=True)
+                        if st.button("🚇 HIST_METRO", key=f"hist_metro_mob_{g_name}"):
+                            st.session_state["historial_metro_view"] = not st.session_state.get("historial_metro_view", False)
+                            st.rerun()
                         if hist_metro:
                             def _hist_ctx(a):
                                 opp = a.get("opportunity", {}) or {}
@@ -2301,10 +2320,15 @@ else:
                         t_pend = len([a for a in timeline_acts if a.get("estado") == "Pendiente"])
                         t_env = len([a for a in timeline_acts if a.get("estado") == "Enviada"])
                         t_resp = len([a for a in timeline_acts if a.get("estado") == "Respondida"])
+                        _mt_active_d = " active" if hist_metro else ""
+                        _toggle_html_d = f'<span class="hist-metro-toggle{_mt_active_d}"><span class="toggle-label">🚇 Línea</span><span class="toggle-track"><span class="toggle-knob"></span></span></span>'
                         st.markdown(f'''<div class="timeline-header">
                             <div class="tl-name">{sel_name}</div>
-                            <div class="tl-stats"><span>Total: {len(timeline_acts)}</span><span style="color:#fbbf24;">Pendientes: {t_pend}</span><span style="color:#a78bfa;">Enviadas: {t_env}</span><span style="color:#4ade80;">Respondidas: {t_resp}</span></div>
+                            <div class="tl-stats"><span>Total: {len(timeline_acts)}</span><span style="color:#fbbf24;">Pendientes: {t_pend}</span><span style="color:#a78bfa;">Enviadas: {t_env}</span><span style="color:#4ade80;">Respondidas: {t_resp}</span>{_toggle_html_d}</div>
                         </div>''', unsafe_allow_html=True)
+                        if st.button("🚇 HIST_METRO", key="hist_metro_desk"):
+                            st.session_state["historial_metro_view"] = not st.session_state.get("historial_metro_view", False)
+                            st.rerun()
                         if hist_metro:
                             def _hist_ctx_d(a):
                                 opp = a.get("opportunity", {}) or {}
