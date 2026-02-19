@@ -89,6 +89,7 @@ st.markdown("""
     .act-estado { font-size: 0.62rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
     .act-desc { font-size: 0.68rem; color: #64748b; line-height: 1.4; margin-top: 3px; }
     .act-feedback { font-size: 0.68rem; color: #92400e; background: #fffbeb; border-left: 3px solid #f59e0b; padding: 3px 8px; margin-top: 4px; border-radius: 0 4px 4px 0; }
+    .act-meeting-audit { font-size: 0.68rem; color: #0369a1; background: #e0f2fe; border-left: 3px solid #0ea5e9; padding: 3px 8px; margin-top: 4px; border-radius: 0 4px 4px 0; }
     .hist-card.tipo-email { border-left-color: #3b82f6; }
     .hist-card.tipo-llamada { border-left-color: #f59e0b; }
     .hist-card.tipo-reunion { border-left-color: #10b981; }
@@ -309,6 +310,22 @@ components.html("""
     };
     doc.body.addEventListener('click', doc._pgmClickHandler);
 
+    // Listen for postMessage from Outlook button iframes to click hidden AGENDAR buttons
+    if (!doc._pgmAgendarListener) {
+        doc._pgmAgendarListener = true;
+        window.parent.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'pgm_agendar' && e.data.key) {
+                var btns = doc.querySelectorAll('button');
+                for (var i = 0; i < btns.length; i++) {
+                    if ((btns[i].textContent||'').indexOf(e.data.key) >= 0) {
+                        btns[i].click();
+                        return;
+                    }
+                }
+            }
+        });
+    }
+
     function pgmFix() {
         // Full-width layout
         doc.querySelectorAll('section.main > div').forEach(function(el) {
@@ -379,6 +396,7 @@ components.html("""
             if (txt.indexOf('REENVIAR') >= 0) hide = true;
             if (txt.indexOf('EDIT_OPP') >= 0) hide = true;
             if (txt.indexOf('NEW_ACT') >= 0) hide = true;
+            if (txt.indexOf('AGENDAR_') >= 0) hide = true;
             if (hide) {
                 // Walk up hiding wrappers — use offscreen positioning to keep buttons clickable
                 var el = btn;
@@ -990,11 +1008,50 @@ def _outlook_event_url(activity: dict, opportunity: dict) -> str:
     return f"https://outlook.office.com/calendar/0/deeplink/compose?{params}&path=/calendar/action/compose&rru=addevent"
 
 
+def _meeting_audit_html(activity: dict) -> str:
+    """Genera HTML de auditoría para reuniones agendadas."""
+    mm = activity.get("meeting_metadata")
+    if not mm:
+        return ""
+    if isinstance(mm, str):
+        try:
+            mm = json.loads(mm)
+        except (json.JSONDecodeError, TypeError):
+            return ""
+    scheduled_at = mm.get("scheduled_at", "")
+    start_time = mm.get("start_time", "")
+    end_time = mm.get("end_time", "")
+    attendees = mm.get("attendees", "")
+    try:
+        sched_dt = datetime.fromisoformat(scheduled_at)
+        sched_str = sched_dt.strftime("%d/%m")
+    except (ValueError, TypeError):
+        sched_str = ""
+    try:
+        start_str = datetime.fromisoformat(start_time).strftime("%H:%M")
+        end_str = datetime.fromisoformat(end_time).strftime("%H:%M")
+        time_range = f"{start_str}\u2013{end_str}"
+    except (ValueError, TypeError):
+        time_range = ""
+    parts = ["\U0001f4c5 Agendada"]
+    if sched_str:
+        parts[0] += f" el {sched_str}"
+    if time_range:
+        parts.append(time_range)
+    if attendees:
+        parts.append(f"\u2192 {attendees}")
+    text = " \u2014 ".join(parts)
+    return f'<div class="act-meeting-audit">{text}</div>'
+
+
 def _render_outlook_button(activity: dict, opportunity: dict, key: str):
     """Renderiza un botón que abre Outlook Web para crear el evento directamente."""
     url = _outlook_event_url(activity, opportunity)
+    btn_marker = f"AGENDAR_{key}"
     components.html(f"""
-    <a href="{url}" target="_blank" style="
+    <a href="{url}" target="_blank" onclick="
+        try {{ window.parent.postMessage({{type:'pgm_agendar', key:'{btn_marker}'}}, '*'); }} catch(e) {{}}
+    " style="
         display:inline-flex;align-items:center;gap:4px;
         padding:3px 10px;background:#0ea5e9;color:white;border:none;
         border-radius:6px;font-family:Inter,sans-serif;font-size:0.7rem;
@@ -1366,13 +1423,33 @@ if st.session_state.selected_id:
 
             # Build meta-row: assignee first, then → destinatario, then description
             meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{estado_pill}{fecha_html}'
+            meeting_html = _meeting_audit_html(a) if a.get("tipo") == "Reunión" else ''
 
-            st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}{meeting_html}</div>', unsafe_allow_html=True)
 
             aid = a['id']
             # Abrir Outlook Web para agendar Reuniones
             if a.get("tipo") == "Reunión":
                 _render_outlook_button(a, opp, key=f"cal_{aid}")
+                if st.button(f"AGENDAR_cal_{aid}", key=f"agendar_{aid}"):
+                    fecha_raw = a.get("fecha", "")
+                    try:
+                        dt = datetime.strptime(str(fecha_raw)[:10], "%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        dt = datetime.now()
+                    metadata = {
+                        "scheduled_at": datetime.now().isoformat(),
+                        "subject": a.get("objetivo") or f"Reunión — {opp.get('cuenta', '')}",
+                        "start_time": dt.strftime("%Y-%m-%dT10:00:00"),
+                        "end_time": dt.strftime("%Y-%m-%dT11:00:00"),
+                        "attendees": a.get("destinatario", ""),
+                        "description": a.get("descripcion", ""),
+                        "cuenta": opp.get("cuenta", ""),
+                        "proyecto": opp.get("proyecto", ""),
+                        "outlook_url": _outlook_event_url(a, opp),
+                    }
+                    dal.update_activity(aid, {"meeting_metadata": json.dumps(metadata)})
+                    st.rerun()
             # State-specific action buttons
             if a["estado"] == "Pendiente":
                 if a.get("tipo") == "Reunión":
@@ -2072,8 +2149,9 @@ else:
                                 ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
                             elif hist_group != "Cuenta":
                                 ctx_html = f'<div class="timeline-opp-ctx">🏢 {opp.get("cuenta", "")}</div>'
+                            meeting_html = _meeting_audit_html(a) if a.get("tipo") == "Reunión" else ''
                             meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{est_pill}{fecha_html}'
-                            st.markdown(f'<div class="{card_cls}"><div class="act-top"><div class="act-meta-row">{meta_row}</div></div>{desc_html}{fb_html}{ctx_html}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="{card_cls}"><div class="act-top"><div class="act-meta-row">{meta_row}</div></div>{desc_html}{fb_html}{meeting_html}{ctx_html}</div>', unsafe_allow_html=True)
             else:
                 # --- Desktop: side-by-side ---
                 col_list, col_timeline = st.columns([0.3, 0.7])
@@ -2153,8 +2231,9 @@ else:
                                 ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
                             elif hist_group != "Cuenta":
                                 ctx_html = f'<div class="timeline-opp-ctx">🏢 {opp.get("cuenta", "")}</div>'
+                            meeting_html = _meeting_audit_html(a) if a.get("tipo") == "Reunión" else ''
                             meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{est_pill}{fecha_html}'
-                            st.markdown(f'<div class="{card_cls}"><div class="act-top"><div class="act-meta-row">{meta_row}</div></div>{desc_html}{fb_html}{ctx_html}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="{card_cls}"><div class="act-top"><div class="act-meta-row">{meta_row}</div></div>{desc_html}{fb_html}{meeting_html}{ctx_html}</div>', unsafe_allow_html=True)
                     else:
                         st.markdown('<div style="text-align:center;color:#94a3b8;padding:40px;font-size:0.9rem;">← Seleccioná un grupo para ver su historial cronológico</div>', unsafe_allow_html=True)
 
