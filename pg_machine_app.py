@@ -400,9 +400,34 @@ components.html("""
         });
     }
 
-    doc._pgmObs = new MutationObserver(pgmFix);
+    function pgmVolverBlink() {
+        var btn = doc.querySelector('.meta-btn-back');
+        if (btn) {
+            if (!doc._pgmBackFirstSeen) doc._pgmBackFirstSeen = Date.now();
+            var elapsed = Date.now() - doc._pgmBackFirstSeen;
+            if (elapsed >= 5000 && !doc._pgmBackBlinked) {
+                doc._pgmBackBlinked = true;
+                var count = 0;
+                var step = function() {
+                    var b = doc.querySelector('.meta-btn-back');
+                    if (!b || count >= 6) { if (b) b.style.cssText = ''; return; }
+                    b.style.cssText = (count % 2 === 0)
+                        ? 'background:#1a73e8 !important;color:white !important;box-shadow:0 0 10px rgba(26,115,232,0.6) !important;'
+                        : '';
+                    count++;
+                    setTimeout(step, 300);
+                };
+                step();
+            }
+        } else {
+            doc._pgmBackFirstSeen = null;
+            doc._pgmBackBlinked = false;
+        }
+    }
+
+    doc._pgmObs = new MutationObserver(function() { pgmFix(); pgmVolverBlink(); });
     doc._pgmObs.observe(doc.body, {childList: true, subtree: true});
-    pgmFix();
+    pgmFix(); pgmVolverBlink();
 
     if (window.parent.innerWidth <= 768) {
         var params = new URLSearchParams(window.parent.location.search);
@@ -1298,10 +1323,14 @@ if st.session_state.selected_id:
             elif a["estado"] == "Respondida":
                 card_class = f"hist-card {tipo_class} respondida"
                 resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
-                estado_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida{resp_date}</span>'
+                resp_label = "Reunión Completada" if a.get("tipo") == "Reunión" else "Respondida"
+                estado_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 {resp_label}{resp_date}</span>'
             elif a["estado"] == "Pendiente":
                 card_class = f"hist-card {tipo_class} pendiente"
-                estado_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
+                if a.get("tipo") == "Reunión" and "Programada" in label:
+                    estado_pill = f'<span class="act-estado" style="color:#1d4ed8;background:#dbeafe;">{label}</span>'
+                else:
+                    estado_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
             else:
                 card_class = f"hist-card {tipo_class}"
                 estado_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
@@ -1319,12 +1348,14 @@ if st.session_state.selected_id:
             asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
             fecha_html = f'<span class="act-fecha">{fecha_display}</span>'
             desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
-            fb_html = f'<div class="act-feedback"><b>Feedback:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+            fb_label = "Resumen de la Reunión" if a.get("tipo") == "Reunión" else "Feedback"
+            fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
 
             # Action buttons
             estado_btns = ''
             if a["estado"] == "Pendiente":
-                estado_btns = '<span class="act-btn act-btn-send">✅ Enviado</span>'
+                send_label = "✅ Reunión Realizada" if a.get("tipo") == "Reunión" else "✅ Enviado"
+                estado_btns = f'<span class="act-btn act-btn-send">{send_label}</span>'
             elif a["estado"] == "Enviada":
                 estado_btns = '<span class="act-btn act-btn-resp">📩 Respondida</span><span class="act-btn act-btn-resend">🔄 Reenviar</span>'
             act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
@@ -1340,9 +1371,38 @@ if st.session_state.selected_id:
                 _render_outlook_button(a, opp, key=f"cal_{aid}")
             # State-specific action buttons
             if a["estado"] == "Pendiente":
-                if st.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
-                    dal.update_activity(aid, {"estado": "Enviada"})
-                    st.rerun()
+                if a.get("tipo") == "Reunión":
+                    if st.session_state.get(f"show_reunion_{aid}"):
+                        with st.form(f"reunion_form_{aid}"):
+                            resumen = st.text_area("Resumen de la Reunión")
+                            reunion_fecha = st.date_input("Fecha de la reunión", value=date.today(), key=f"reunion_fecha_{aid}")
+                            st.divider()
+                            crear_seguimiento = st.checkbox("🔁 Crear reunión de seguimiento", value=False, key=f"seg_reunion_{aid}")
+                            seg_fecha = st.date_input("Fecha seguimiento", value=date.today() + timedelta(days=7), key=f"segf_reunion_{aid}")
+                            if st.form_submit_button("Confirmar"):
+                                dal.update_activity(aid, {"estado": "Respondida", "feedback": resumen, "respondida_ts": str(reunion_fecha)})
+                                if crear_seguimiento:
+                                    dal.create_activity(a["opportunity_id"], a["team_id"], user_id, {
+                                        "tipo": "Reunión",
+                                        "fecha": str(seg_fecha),
+                                        "objetivo": a.get("objetivo", ""),
+                                        "descripcion": f'Seguimiento: {resumen}' if resumen else a.get("descripcion", ""),
+                                        "sla_key": a.get("sla_key", ""),
+                                        "sla_hours": a.get("sla_hours"),
+                                        "sla_respuesta_dias": a.get("sla_respuesta_dias", 7),
+                                        "destinatario": a.get("destinatario", ""),
+                                        "assigned_to": a.get("assigned_to"),
+                                    })
+                                st.session_state.pop(f"show_reunion_{aid}", None)
+                                st.rerun()
+                    else:
+                        if st.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
+                            st.session_state[f"show_reunion_{aid}"] = True
+                            st.rerun()
+                else:
+                    if st.button("✅ ENVIADO", key=f"d_{aid}", use_container_width=True):
+                        dal.update_activity(aid, {"estado": "Enviada"})
+                        st.rerun()
             elif a["estado"] == "Enviada":
                 if st.session_state.get(f"show_fb_{aid}"):
                     with st.form(f"fb_form_{aid}"):
@@ -1658,7 +1718,8 @@ else:
                     asig_init = _get_initials(asig_name) if asig_name else ""
                     asig = f' <span class="act-asig">{asig_init}</span>' if asig_init else ""
                     resp_dt = f' — {_fmt_date(a["respondida_ts"])}' if a.get("estado") == "Respondida" and a.get("respondida_ts") else ''
-                    status_html = f'<span class="act-status">{label}{resp_dt}</span>'
+                    display_label = "Reunión Completada" if a.get("tipo") == "Reunión" and a.get("estado") == "Respondida" else label
+                    status_html = f'<span class="act-status">{display_label}{resp_dt}</span>'
                     # Color border-left by activity type
                     tipo = a.get("tipo", "")
                     border_colors = {"Email": "#3b82f6", "Llamada": "#f59e0b", "Reunión": "#10b981", "Asignación": "#8b5cf6"}
@@ -1867,7 +1928,8 @@ else:
                         ea_sla_rpta = ea_c6.selectbox("SLA Respuesta", sla_rpta_keys, index=cur_sla_idx)
                         ea_estado = st.selectbox("Estado", ["Pendiente", "Enviada", "Respondida"],
                             index=["Pendiente", "Enviada", "Respondida"].index(a_ref.get("estado", "Pendiente")) if a_ref.get("estado") in ["Pendiente", "Enviada", "Respondida"] else 0)
-                        ea_feedback = st.text_area("Feedback", value=a_ref.get("feedback", ""))
+                        ea_fb_label = "Resumen de la Reunión" if a_ref.get("tipo") == "Reunión" else "Feedback"
+                        ea_feedback = st.text_area(ea_fb_label, value=a_ref.get("feedback", ""))
                         ea_desc = st.text_area("Descripción", value=a_ref.get("descripcion", ""))
                         if st.form_submit_button("💾 Guardar"):
                             new_assigned = recurso_ids_tab[ea_asig_idx] if ea_asig_idx > 0 else None
@@ -1973,10 +2035,14 @@ else:
                             elif a["estado"] == "Respondida":
                                 card_cls = f"timeline-card {tipo_class} respondida"
                                 resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
-                                est_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida{resp_date}</span>'
+                                resp_label = "Reunión Completada" if a.get("tipo") == "Reunión" else "Respondida"
+                                est_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 {resp_label}{resp_date}</span>'
                             elif a["estado"] == "Pendiente":
                                 card_cls = f"timeline-card {tipo_class} pendiente"
-                                est_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
+                                if a.get("tipo") == "Reunión" and "Programada" in label:
+                                    est_pill = f'<span class="act-estado" style="color:#1d4ed8;background:#dbeafe;">{label}</span>'
+                                else:
+                                    est_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
                             else:
                                 card_cls = f"timeline-card {tipo_class}"
                                 est_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
@@ -1995,7 +2061,8 @@ else:
                             asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                             fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
                             desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
-                            fb_html = f'<div class="act-feedback"><b>Feedback:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+                            fb_label = "Resumen de la Reunión" if a.get("tipo") == "Reunión" else "Feedback"
+                            fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
                             ctx_html = ""
                             if hist_group != "Proyecto":
                                 ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
@@ -2049,10 +2116,14 @@ else:
                             elif a["estado"] == "Respondida":
                                 card_cls = f"timeline-card {tipo_class} respondida"
                                 resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
-                                est_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 Respondida{resp_date}</span>'
+                                resp_label = "Reunión Completada" if a.get("tipo") == "Reunión" else "Respondida"
+                                est_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 {resp_label}{resp_date}</span>'
                             elif a["estado"] == "Pendiente":
                                 card_cls = f"timeline-card {tipo_class} pendiente"
-                                est_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
+                                if a.get("tipo") == "Reunión" and "Programada" in label:
+                                    est_pill = f'<span class="act-estado" style="color:#1d4ed8;background:#dbeafe;">{label}</span>'
+                                else:
+                                    est_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
                             else:
                                 card_cls = f"timeline-card {tipo_class}"
                                 est_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
@@ -2071,7 +2142,8 @@ else:
                             asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                             fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
                             desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
-                            fb_html = f'<div class="act-feedback"><b>Feedback:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+                            fb_label = "Resumen de la Reunión" if a.get("tipo") == "Reunión" else "Feedback"
+                            fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
                             ctx_html = ""
                             if hist_group != "Proyecto":
                                 ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
