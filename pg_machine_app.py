@@ -400,29 +400,33 @@ components.html("""
         });
     }
 
+    var pwin = window.parent;
+    function pgmVolverBlinkCycle() {
+        var b = doc.querySelector('.meta-btn-back');
+        if (!b) { doc._pgmBackTimer = null; return; }
+        var count = 0;
+        var blinkStep = function() {
+            var el = doc.querySelector('.meta-btn-back');
+            if (!el) { doc._pgmBackTimer = null; return; }
+            if (count < 4) {
+                el.style.cssText = (count % 2 === 0)
+                    ? 'background:#1a73e8 !important;color:white !important;box-shadow:0 0 10px rgba(26,115,232,0.6) !important;'
+                    : '';
+                count++;
+                pwin.setTimeout(blinkStep, 300);
+            } else {
+                el.style.cssText = '';
+                doc._pgmBackTimer = pwin.setTimeout(pgmVolverBlinkCycle, 5000);
+            }
+        };
+        blinkStep();
+    }
     function pgmVolverBlink() {
         var btn = doc.querySelector('.meta-btn-back');
-        if (btn) {
-            if (!doc._pgmBackFirstSeen) doc._pgmBackFirstSeen = Date.now();
-            var elapsed = Date.now() - doc._pgmBackFirstSeen;
-            if (elapsed >= 5000 && !doc._pgmBackBlinked) {
-                doc._pgmBackBlinked = true;
-                var count = 0;
-                var step = function() {
-                    var b = doc.querySelector('.meta-btn-back');
-                    if (!b || count >= 6) { if (b) b.style.cssText = ''; return; }
-                    b.style.cssText = (count % 2 === 0)
-                        ? 'background:#1a73e8 !important;color:white !important;box-shadow:0 0 10px rgba(26,115,232,0.6) !important;'
-                        : '';
-                    count++;
-                    setTimeout(step, 300);
-                };
-                step();
-            }
-        } else {
-            doc._pgmBackFirstSeen = null;
-            doc._pgmBackBlinked = false;
+        if (btn && !doc._pgmBackTimer) {
+            doc._pgmBackTimer = pwin.setTimeout(pgmVolverBlinkCycle, 5000);
         }
+        if (!btn && doc._pgmBackTimer) { pwin.clearTimeout(doc._pgmBackTimer); doc._pgmBackTimer = null; }
     }
 
     doc._pgmObs = new MutationObserver(function() { pgmFix(); pgmVolverBlink(); });
