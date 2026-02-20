@@ -1778,7 +1778,8 @@ if st.session_state.selected_id:
 
 else:
     # --- VISTAS PRINCIPALES ---
-    tabs = ["📊 Tablero", "📋 Actividades", "📜 Historial"]
+    _cal_tab_label = f"📅 Calendario ({_cal_inbox_count})" if _cal_inbox_count > 0 else "📅 Calendario"
+    tabs = ["📊 Tablero", "📋 Actividades", "📜 Historial", _cal_tab_label]
     if has_control_access():
         tabs.append("📈 Control")
     tabs.append("👥 Equipo")
@@ -1790,117 +1791,6 @@ else:
         st.markdown(user_bar_html, unsafe_allow_html=True)
         all_opps = dal.get_opportunities(team_id)
         all_activities = dal.get_all_activities(team_id)
-
-        # --- Calendar Inbox ---
-        _cal_events = dal.get_pending_calendar_events_for_user(team_id, user_id, user["role"]) if _cal_inbox_count > 0 else []
-        _cal_label = f"📅 Bandeja de Calendario ({len(_cal_events)} pendientes)" if _cal_events else "📅 Bandeja de Calendario"
-        with st.expander(_cal_label, expanded=False):
-            # Manual entry form
-            if st.session_state.get("_show_cal_form"):
-                with st.form("cal_manual_form"):
-                    st.caption("📅 Nueva Reunión de Calendario")
-                    _cm_c1, _cm_c2 = st.columns(2)
-                    _cm_subject = _cm_c1.text_input("Asunto")
-                    _cm_organizer = _cm_c2.text_input("Organizador")
-                    _cm_c3, _cm_c4, _cm_c5 = st.columns(3)
-                    _cm_fecha = _cm_c3.date_input("Fecha", value=date.today())
-                    _cm_hora_inicio = _cm_c4.time_input("Hora inicio", value=datetime.now().replace(hour=10, minute=0).time())
-                    _cm_hora_fin = _cm_c5.time_input("Hora fin", value=datetime.now().replace(hour=11, minute=0).time())
-                    _cm_c6, _cm_c7 = st.columns(2)
-                    _cm_attendees = _cm_c6.text_input("Asistentes (separados por coma)")
-                    _cm_location = _cm_c7.text_input("Ubicación")
-                    _cm_body = st.text_area("Notas", height=60)
-                    _cm_cols = st.columns([1, 1, 4])
-                    _cm_submit = _cm_cols[0].form_submit_button("💾 Guardar")
-                    _cm_cancel = _cm_cols[1].form_submit_button("Cancelar")
-                    if _cm_submit and _cm_subject:
-                        _cm_start = datetime.combine(_cm_fecha, _cm_hora_inicio).isoformat()
-                        _cm_end = datetime.combine(_cm_fecha, _cm_hora_fin).isoformat()
-                        _cm_att_list = [a.strip() for a in _cm_attendees.split(",") if a.strip()]
-                        dal.create_calendar_event(team_id, user_id, user.get("email", ""), {
-                            "subject": _cm_subject,
-                            "start_time": _cm_start,
-                            "end_time": _cm_end,
-                            "organizer": _cm_organizer,
-                            "attendees": _cm_att_list,
-                            "location": _cm_location,
-                            "body": _cm_body,
-                        })
-                        st.session_state.pop("_show_cal_form", None)
-                        st.rerun()
-                    if _cm_cancel:
-                        st.session_state.pop("_show_cal_form", None)
-                        st.rerun()
-            else:
-                if st.button("+ Agregar Reunión de Calendario", key="cal_manual_add"):
-                    st.session_state["_show_cal_form"] = True
-                    st.rerun()
-
-            # Pending events list
-            if _cal_events:
-                for _ce in _cal_events:
-                    _ce_id = _ce["id"]
-                    _ce_start = _ce.get("start_time", "")
-                    _ce_end = _ce.get("end_time", "")
-                    _ce_start_fmt = _ce_start[:16].replace("T", " ") if _ce_start else ""
-                    _ce_end_fmt = _ce_end[11:16] if _ce_end and len(_ce_end) > 11 else ""
-                    _ce_time_str = f"{_ce_start_fmt}–{_ce_end_fmt}" if _ce_end_fmt else _ce_start_fmt
-                    _ce_attendees = _ce.get("attendees", [])
-                    _ce_att_str = ", ".join(_ce_attendees) if isinstance(_ce_attendees, list) else str(_ce_attendees)
-                    _ce_loc = _ce.get("location", "")
-                    _ce_org = _ce.get("organizer", "")
-
-                    _card_html = f'''<div class="cal-inbox-card">
-                        <div class="cal-subj">{_ce.get("subject", "(sin asunto)")}</div>
-                        <div class="cal-time">🕐 {_ce_time_str}</div>'''
-                    if _ce_org:
-                        _card_html += f'<div class="cal-meta">👤 Organizador: {_ce_org}</div>'
-                    if _ce_att_str:
-                        _card_html += f'<div><span class="cal-attendees">👥 {_ce_att_str}</span></div>'
-                    if _ce_loc:
-                        _card_html += f'<div class="cal-meta">📍 {_ce_loc}</div>'
-                    _card_html += '</div>'
-                    st.markdown(_card_html, unsafe_allow_html=True)
-
-                    _ce_cols = st.columns([4, 1, 1])
-                    _opp_options = ["— Seleccionar oportunidad —"] + [f'{o["cuenta"]} / {o["proyecto"]}' for o in all_opps]
-                    _sel_opp_idx = _ce_cols[0].selectbox("Oportunidad", range(len(_opp_options)), format_func=lambda i: _opp_options[i], key=f"cal_opp_{_ce_id}", label_visibility="collapsed")
-
-                    if _ce_cols[1].button("✅ Asignar", key=f"cal_assign_{_ce_id}"):
-                        if _sel_opp_idx > 0:
-                            _target_opp = all_opps[_sel_opp_idx - 1]
-                            _ce_fecha = str(_ce_start[:10]) if _ce_start else str(date.today())
-                            _meeting_metadata = json.dumps({
-                                "source": "calendar_sync",
-                                "outlook_event_id": _ce.get("outlook_event_id", ""),
-                                "organizer": _ce_org,
-                                "attendees": _ce_attendees,
-                                "location": _ce_loc,
-                                "original_subject": _ce.get("subject", ""),
-                                "synced_at": datetime.now().isoformat(),
-                            })
-                            _new_act = dal.create_activity(_target_opp["id"], team_id, user_id, {
-                                "tipo": "Reunión",
-                                "fecha": _ce_fecha,
-                                "objetivo": _ce.get("subject", ""),
-                                "descripcion": _ce.get("body", ""),
-                                "destinatario": _ce_att_str,
-                                "sla_key": "",
-                                "sla_hours": None,
-                                "sla_respuesta_dias": 7,
-                            })
-                            if _new_act:
-                                dal.update_activity(_new_act["id"], {"meeting_metadata": _meeting_metadata})
-                                dal.assign_calendar_event(_ce_id, _target_opp["id"], _new_act["id"], user_id)
-                            st.rerun()
-                        else:
-                            st.toast("Selecciona una oportunidad primero", icon="⚠️")
-
-                    if _ce_cols[2].button("❌ Descartar", key=f"cal_dismiss_{_ce_id}"):
-                        dal.dismiss_calendar_event(_ce_id)
-                        st.rerun()
-
-                    st.divider()
 
         # Category focus: show buttons to toggle
         focused = st.session_state.focused_cat
@@ -2514,9 +2404,127 @@ else:
                     else:
                         st.markdown('<div style="text-align:center;color:#94a3b8;padding:40px;font-size:0.9rem;">← Seleccioná un grupo para ver su historial cronológico</div>', unsafe_allow_html=True)
 
+    # --- TAB: CALENDARIO ---
+    with selected_tabs[3]:
+        st.markdown(user_bar_html, unsafe_allow_html=True)
+        _cal_all_opps = dal.get_opportunities(team_id)
+        _cal_events = dal.get_pending_calendar_events_for_user(team_id, user_id, user["role"])
+
+        # Header + manual add button
+        _cal_hdr_cols = st.columns([5, 1])
+        _cal_hdr_cols[0].markdown(f"### 📅 Bandeja de Calendario — {len(_cal_events)} pendientes")
+        if _cal_hdr_cols[1].button("+ Agregar", key="cal_manual_add"):
+            st.session_state["_show_cal_form"] = True
+            st.rerun()
+
+        # Manual entry form
+        if st.session_state.get("_show_cal_form"):
+            with st.form("cal_manual_form"):
+                st.caption("📅 Nueva Reunión de Calendario")
+                _cm_c1, _cm_c2 = st.columns(2)
+                _cm_subject = _cm_c1.text_input("Asunto")
+                _cm_organizer = _cm_c2.text_input("Organizador")
+                _cm_c3, _cm_c4, _cm_c5 = st.columns(3)
+                _cm_fecha = _cm_c3.date_input("Fecha", value=date.today())
+                _cm_hora_inicio = _cm_c4.time_input("Hora inicio", value=datetime.now().replace(hour=10, minute=0).time())
+                _cm_hora_fin = _cm_c5.time_input("Hora fin", value=datetime.now().replace(hour=11, minute=0).time())
+                _cm_c6, _cm_c7 = st.columns(2)
+                _cm_attendees = _cm_c6.text_input("Asistentes (separados por coma)")
+                _cm_location = _cm_c7.text_input("Ubicación")
+                _cm_body = st.text_area("Notas", height=60)
+                _cm_cols = st.columns([1, 1, 4])
+                _cm_submit = _cm_cols[0].form_submit_button("💾 Guardar")
+                _cm_cancel = _cm_cols[1].form_submit_button("Cancelar")
+                if _cm_submit and _cm_subject:
+                    _cm_start = datetime.combine(_cm_fecha, _cm_hora_inicio).isoformat()
+                    _cm_end = datetime.combine(_cm_fecha, _cm_hora_fin).isoformat()
+                    _cm_att_list = [a.strip() for a in _cm_attendees.split(",") if a.strip()]
+                    dal.create_calendar_event(team_id, user_id, user.get("email", ""), {
+                        "subject": _cm_subject,
+                        "start_time": _cm_start,
+                        "end_time": _cm_end,
+                        "organizer": _cm_organizer,
+                        "attendees": _cm_att_list,
+                        "location": _cm_location,
+                        "body": _cm_body,
+                    })
+                    st.session_state.pop("_show_cal_form", None)
+                    st.rerun()
+                if _cm_cancel:
+                    st.session_state.pop("_show_cal_form", None)
+                    st.rerun()
+
+        # Pending events list
+        if _cal_events:
+            for _ce in _cal_events:
+                _ce_id = _ce["id"]
+                _ce_start = _ce.get("start_time", "")
+                _ce_end = _ce.get("end_time", "")
+                _ce_start_fmt = _ce_start[:16].replace("T", " ") if _ce_start else ""
+                _ce_end_fmt = _ce_end[11:16] if _ce_end and len(_ce_end) > 11 else ""
+                _ce_time_str = f"{_ce_start_fmt}–{_ce_end_fmt}" if _ce_end_fmt else _ce_start_fmt
+                _ce_attendees = _ce.get("attendees", [])
+                _ce_att_str = ", ".join(_ce_attendees) if isinstance(_ce_attendees, list) else str(_ce_attendees)
+                _ce_loc = _ce.get("location", "")
+                _ce_org = _ce.get("organizer", "")
+
+                _card_html = f'''<div class="cal-inbox-card">
+                    <div class="cal-subj">{_ce.get("subject", "(sin asunto)")}</div>
+                    <div class="cal-time">🕐 {_ce_time_str}</div>'''
+                if _ce_org:
+                    _card_html += f'<div class="cal-meta">👤 Organizador: {_ce_org}</div>'
+                if _ce_att_str:
+                    _card_html += f'<div><span class="cal-attendees">👥 {_ce_att_str}</span></div>'
+                if _ce_loc:
+                    _card_html += f'<div class="cal-meta">📍 {_ce_loc}</div>'
+                _card_html += '</div>'
+                st.markdown(_card_html, unsafe_allow_html=True)
+
+                _ce_cols = st.columns([4, 1, 1])
+                _opp_options = ["— Seleccionar oportunidad —"] + [f'{o["cuenta"]} / {o["proyecto"]}' for o in _cal_all_opps]
+                _sel_opp_idx = _ce_cols[0].selectbox("Oportunidad", range(len(_opp_options)), format_func=lambda i: _opp_options[i], key=f"cal_opp_{_ce_id}", label_visibility="collapsed")
+
+                if _ce_cols[1].button("✅ Asignar", key=f"cal_assign_{_ce_id}"):
+                    if _sel_opp_idx > 0:
+                        _target_opp = _cal_all_opps[_sel_opp_idx - 1]
+                        _ce_fecha = str(_ce_start[:10]) if _ce_start else str(date.today())
+                        _meeting_metadata = json.dumps({
+                            "source": "calendar_sync",
+                            "outlook_event_id": _ce.get("outlook_event_id", ""),
+                            "organizer": _ce_org,
+                            "attendees": _ce_attendees,
+                            "location": _ce_loc,
+                            "original_subject": _ce.get("subject", ""),
+                            "synced_at": datetime.now().isoformat(),
+                        })
+                        _new_act = dal.create_activity(_target_opp["id"], team_id, user_id, {
+                            "tipo": "Reunión",
+                            "fecha": _ce_fecha,
+                            "objetivo": _ce.get("subject", ""),
+                            "descripcion": _ce.get("body", ""),
+                            "destinatario": _ce_att_str,
+                            "sla_key": "",
+                            "sla_hours": None,
+                            "sla_respuesta_dias": 7,
+                        })
+                        if _new_act:
+                            dal.update_activity(_new_act["id"], {"meeting_metadata": _meeting_metadata})
+                            dal.assign_calendar_event(_ce_id, _target_opp["id"], _new_act["id"], user_id)
+                        st.rerun()
+                    else:
+                        st.toast("Selecciona una oportunidad primero", icon="⚠️")
+
+                if _ce_cols[2].button("❌ Descartar", key=f"cal_dismiss_{_ce_id}"):
+                    dal.dismiss_calendar_event(_ce_id)
+                    st.rerun()
+
+                st.divider()
+        else:
+            st.info("No hay reuniones pendientes en la bandeja.")
+
     # --- TAB: CONTROL (admin, vp, y managers) ---
     if has_control_access():
-        with selected_tabs[3]:
+        with selected_tabs[4]:
             st.markdown(user_bar_html, unsafe_allow_html=True)
             st.markdown("### 📈 Panel de Control — RSM")
 
@@ -2682,7 +2690,7 @@ else:
                     st.bar_chart(df_resp_chart.set_index("Miembro"), color=["#16a34a"])
 
     # --- TAB: EQUIPO (todos los roles) ---
-    equipo_tab_idx = 4 if has_control_access() else 3
+    equipo_tab_idx = 5 if has_control_access() else 4
     with selected_tabs[equipo_tab_idx]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
         team_info = dal.get_team(team_id)
