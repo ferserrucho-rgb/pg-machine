@@ -54,8 +54,6 @@ st.markdown("""
     section.main [class*="stElementContainer"] { margin-top: 0 !important; margin-bottom: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; }
     /* Compress tabs */
     [data-baseweb="tab-panel"] { padding-top: 0 !important; }
-    [data-baseweb="tab-panel"] > [data-testid="stVerticalBlockBorderWrapper"] { padding-top: 0 !important; margin-top: 0 !important; }
-    [data-baseweb="tab-panel"] [data-testid="stVerticalBlock"] { gap: 0 !important; }
     [data-baseweb="tab-list"] { margin-bottom: 0 !important; gap: 0 !important; }
     [data-baseweb="tab-list"] button[role="tab"] { padding: 4px 10px !important; font-size: 0.78rem !important; }
     /* Compress horizontal blocks */
@@ -249,7 +247,7 @@ st.markdown("""
     .pgm-card-wrap .partner-pill { font-size: 0.6rem; font-weight: 700; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
     .pgm-card-wrap .act-line .act-status { font-weight: 600; font-size: 0.65rem; }
     /* User identity bar */
-    .user-bar { background: #1e293b; color: white; padding: 4px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: -4px; }
+    .user-bar { background: #1e293b; color: white; padding: 4px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
     .user-bar .user-role { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
     /* Scope toggle (Mías/Equipo) inside user bar */
@@ -2063,19 +2061,6 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        # Toggle buttons (hidden by MutationObserver, clicked via JS event delegation)
-        if st.button("TOGGLE_SCOPE", key="btn_toggle_scope"):
-            st.session_state["scope_team"] = not st.session_state.get("scope_team", False)
-            st.rerun()
-        if st.button("TOGGLE_GROWTH", key="btn_toggle_growth"):
-            st.session_state["growth_only"] = not st.session_state.get("growth_only", False)
-            st.rerun()
-        if st.button("TOGGLE_Q", key="btn_toggle_q"):
-            st.session_state["q_4q"] = not st.session_state.get("q_4q", False)
-            st.rerun()
-        if st.button("TOGGLE_EDIT", key="toggle_edit_mode"):
-            st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
-            st.rerun()
 
         all_opps = _cached_opportunities(team_id, st.session_state._data_v)
         all_activities = _cached_all_activities(team_id, st.session_state._data_v)
@@ -2300,6 +2285,20 @@ else:
                 if st.button(f"focus_{cat}", key=f"focus_{cat}"):
                     st.session_state.focused_cat = cat
                     st.rerun()
+
+        # Toggle buttons at bottom (hidden by MutationObserver, clicked via JS event delegation)
+        if st.button("TOGGLE_SCOPE", key="btn_toggle_scope"):
+            st.session_state["scope_team"] = not st.session_state.get("scope_team", False)
+            st.rerun()
+        if st.button("TOGGLE_GROWTH", key="btn_toggle_growth"):
+            st.session_state["growth_only"] = not st.session_state.get("growth_only", True)
+            st.rerun()
+        if st.button("TOGGLE_Q", key="btn_toggle_q"):
+            st.session_state["q_4q"] = not st.session_state.get("q_4q", False)
+            st.rerun()
+        if st.button("TOGGLE_EDIT", key="toggle_edit_mode"):
+            st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
+            st.rerun()
 
     # --- TAB: ACTIVIDADES ---
     with selected_tabs[1]:
