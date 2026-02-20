@@ -54,7 +54,7 @@ st.markdown("""
     /* Compress tabs */
     [data-baseweb="tab-panel"] { padding-top: 0 !important; }
     [data-baseweb="tab-list"] { margin-bottom: 0 !important; gap: 0 !important; background: #0f172a; border-radius: 6px; padding: 2px 4px !important; }
-    [data-baseweb="tab-list"] button[role="tab"] { padding: 6px 14px !important; font-size: 0.72rem !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-style: italic !important; letter-spacing: 0.04em !important; text-transform: uppercase !important; color: rgba(255,255,255,0.5) !important; border-bottom: none !important; transition: color 0.15s, background 0.15s !important; border-radius: 4px !important; }
+    [data-baseweb="tab-list"] button[role="tab"] { padding: 6px 14px !important; font-size: 0.72rem !important; font-family: 'DM Sans', sans-serif !important; font-weight: 600 !important; font-style: italic !important; letter-spacing: 0.04em !important; text-transform: none !important; color: rgba(255,255,255,0.5) !important; border-bottom: none !important; transition: color 0.15s, background 0.15s !important; border-radius: 4px !important; }
     [data-baseweb="tab-list"] button[role="tab"]:hover { color: rgba(255,255,255,0.85) !important; background: rgba(255,255,255,0.08) !important; }
     [data-baseweb="tab-list"] button[role="tab"][aria-selected="true"] { color: white !important; background: rgba(255,255,255,0.12) !important; font-weight: 700 !important; }
     [data-baseweb="tab-highlight"] { display: none !important; }
