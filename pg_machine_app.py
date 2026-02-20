@@ -334,17 +334,6 @@ components.html("""
             }
         }
     }
-    // Bind click handler to a toggle element by id
-    function bindToggle(id, labelText) {
-        var el = doc.getElementById(id);
-        if (el && !el._pgmBound) {
-            el._pgmBound = true;
-            el.addEventListener('click', function() { clickHiddenCb(labelText); });
-        }
-    }
-    bindToggle('pgm-scope-toggle', '__scope_team__');
-    bindToggle('pgm-growth-toggle', '__growth_only__');
-    bindToggle('pgm-q-toggle', '__q_4q__');
 
     // Helper: walk up DOM from startEl, search subsequent siblings for button matching text
     function findBtn(startEl, textMatch) {
@@ -366,6 +355,18 @@ components.html("""
     // Event delegation for all custom click handlers
     if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
     doc._pgmClickHandler = function(e) {
+        // 0. User-bar toggles (scope, growth, quarter)
+        var toggleMap = {
+            'pgm-scope-toggle': '__scope_team__',
+            'pgm-growth-toggle': '__growth_only__',
+            'pgm-q-toggle': '__q_4q__'
+        };
+        for (var tid in toggleMap) {
+            if (e.target.closest('#' + tid)) {
+                clickHiddenCb(toggleMap[tid]);
+                return;
+            }
+        }
         // 1. Dashboard card click (open)
         var card = e.target.closest('.pgm-card-wrap');
         if (card) {
