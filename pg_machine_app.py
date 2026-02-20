@@ -33,13 +33,11 @@ st.markdown("""
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
-    /* Compress top header area and sidebar toggle zone */
-    header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; padding: 0 !important; }
-    [data-testid="stSidebarCollapsedControl"],
-    [data-testid="collapsedControl"] { top: 0.25rem !important; }
+    /* Reduce empty space in top header bar */
+    header[data-testid="stHeader"] { height: 2rem !important; min-height: 2rem !important; }
+    /* Reduce space inside sidebar */
     [data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem !important; }
     [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.2rem !important; }
-    [data-testid="stAppViewBlockContainer"] { padding-top: 0.5rem !important; }
     /* Compress ALL vertical gaps — broad selectors for Streamlit compatibility */
     section.main [data-testid="stVerticalBlock"],
     section.main [class*="stVerticalBlock"],
