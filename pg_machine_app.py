@@ -269,8 +269,8 @@ st.markdown("""
     .q-toggle.mode-4q .scope-track { background: #8b5cf6; }
     .q-toggle .scope-knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
     .q-toggle.mode-4q .scope-knob { transform: translateX(14px); }
-    /* Hidden toggle buttons row (marker + buttons column) */
-    [data-testid="stHorizontalBlock"]:has(.pgm-hid-mark) { position: fixed !important; left: -9999px !important; opacity: 0 !important; }
+    /* Hidden toggle text input */
+    [data-testid="stTextInput"]:has(input[aria-label="__pgm_toggle__"]) { position: fixed !important; left: -9999px !important; opacity: 0 !important; }
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
     /* Calendar inbox badge */
@@ -321,12 +321,14 @@ components.html("""
     var doc = window.parent.document;
     if (doc._pgmObs) { try { doc._pgmObs.disconnect(); } catch(e){} }
 
-    // Find a hidden toggle button by label text and click it
-    function clickHiddenBtn(labelText) {
-        var allBtns = doc.querySelectorAll('button');
-        for (var i = 0; i < allBtns.length; i++) {
-            if ((allBtns[i].textContent || '').trim() === labelText) {
-                allBtns[i].click();
+    // Trigger a toggle by setting the hidden text input value (React-compatible)
+    function triggerToggle(toggleName) {
+        var inputs = doc.querySelectorAll('input[type="text"]');
+        for (var i = 0; i < inputs.length; i++) {
+            if (inputs[i].getAttribute('aria-label') === '__pgm_toggle__') {
+                var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                setter.call(inputs[i], toggleName);
+                inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
                 return;
             }
         }
@@ -353,17 +355,9 @@ components.html("""
     if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
     doc._pgmClickHandler = function(e) {
         // 0. User-bar toggles (scope, growth, quarter)
-        var toggleMap = {
-            'pgm-scope-toggle': '__scope_team__',
-            'pgm-growth-toggle': '__growth_only__',
-            'pgm-q-toggle': '__q_4q__'
-        };
-        for (var tid in toggleMap) {
-            if (e.target.closest('#' + tid)) {
-                clickHiddenBtn(toggleMap[tid]);
-                return;
-            }
-        }
+        if (e.target.closest('#pgm-scope-toggle')) { triggerToggle('scope_team'); return; }
+        if (e.target.closest('#pgm-growth-toggle')) { triggerToggle('growth_only'); return; }
+        if (e.target.closest('#pgm-q-toggle')) { triggerToggle('q_4q'); return; }
         // 1. Dashboard card click (open)
         var card = e.target.closest('.pgm-card-wrap');
         if (card) {
@@ -2060,19 +2054,14 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        # Hidden buttons driven by JS toggles in user bar
-        _hcol1, _hcol2 = st.columns([99, 1])
-        _hcol1.markdown('<div class="pgm-hid-mark"></div>', unsafe_allow_html=True)
-        with _hcol2:
-            if st.button("__scope_team__", key="btn_scope_team"):
-                st.session_state["scope_team"] = not st.session_state.get("scope_team", False)
-                st.rerun()
-            if st.button("__growth_only__", key="btn_growth_only"):
-                st.session_state["growth_only"] = not st.session_state.get("growth_only", False)
-                st.rerun()
-            if st.button("__q_4q__", key="btn_q_4q"):
-                st.session_state["q_4q"] = not st.session_state.get("q_4q", False)
-                st.rerun()
+        # Hidden text input for JS toggle communication
+        _toggle_cmd = st.text_input("__pgm_toggle__", key="pgm_toggle_input", label_visibility="collapsed")
+        if _toggle_cmd:
+            _valid = {"scope_team", "growth_only", "q_4q"}
+            if _toggle_cmd in _valid:
+                st.session_state[_toggle_cmd] = not st.session_state.get(_toggle_cmd, False)
+            st.session_state["pgm_toggle_input"] = ""
+            st.rerun()
         _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
         if st.button(_edit_label, key="toggle_edit_mode"):
             st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
