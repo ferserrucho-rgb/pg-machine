@@ -33,11 +33,6 @@ st.markdown("""
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
-    /* Compress top: hide toolbar, shrink header to just fit the sidebar arrow */
-    [data-testid="stToolbar"],
-    [data-testid="stDecoration"],
-    .stDeployButton { display: none !important; }
-    header[data-testid="stHeader"] { padding: 0 !important; height: auto !important; min-height: 1.5rem !important; max-height: 1.5rem !important; }
     /* Place sidebar toggle on the right side */
     [data-testid="stSidebarCollapsedControl"],
     [data-testid="collapsedControl"] { left: auto !important; right: 0.5rem !important; }
