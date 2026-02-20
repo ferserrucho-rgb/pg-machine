@@ -269,10 +269,7 @@ st.markdown("""
     .q-toggle.mode-4q .scope-track { background: #8b5cf6; }
     .q-toggle .scope-knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
     .q-toggle.mode-4q .scope-knob { transform: translateX(14px); }
-    /* Hidden checkboxes (triggered by JS from user bar toggles) */
-    [data-testid="stElementContainer"]:has(input[aria-label="__scope_team__"]) { height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
-    [data-testid="stElementContainer"]:has(input[aria-label="__growth_only__"]) { height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
-    [data-testid="stElementContainer"]:has(input[aria-label="__q_4q__"]) { height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
+    /* (toggle buttons hidden via JS — see components.html) */
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
     /* Calendar inbox badge */
@@ -323,15 +320,40 @@ components.html("""
     var doc = window.parent.document;
     if (doc._pgmObs) { try { doc._pgmObs.disconnect(); } catch(e){} }
 
-    // Generic: find hidden checkbox by label text and click it
-    function clickHiddenCb(labelText) {
-        var allCbs = doc.querySelectorAll('input[type="checkbox"]');
-        for (var i = 0; i < allCbs.length; i++) {
-            var lbl = allCbs[i].closest('label');
-            if (lbl && lbl.textContent.indexOf(labelText) !== -1) {
-                allCbs[i].click();
-                return;
+    // Find toggle buttons, hide their containers, cache references
+    var _toggleLabels = ['__scope_team__', '__growth_only__', '__q_4q__'];
+    function hideToggleBtns() {
+        var found = 0;
+        var allBtns = doc.querySelectorAll('button');
+        doc._pgmToggleBtns = doc._pgmToggleBtns || {};
+        for (var i = 0; i < allBtns.length; i++) {
+            var txt = (allBtns[i].textContent || '').trim();
+            for (var j = 0; j < _toggleLabels.length; j++) {
+                if (txt === _toggleLabels[j]) {
+                    found++;
+                    doc._pgmToggleBtns[txt] = allBtns[i];
+                    var ct = allBtns[i].closest('[data-testid="stElementContainer"]');
+                    if (ct) { ct.style.cssText = 'position:fixed!important;left:-9999px!important;opacity:0!important;'; }
+                }
             }
+        }
+        return found;
+    }
+    // Try now, retry until all 3 found
+    if (hideToggleBtns() < 3) {
+        var _hRetries = 0;
+        var _hTimer = setInterval(function() {
+            _hRetries++;
+            if (hideToggleBtns() >= 3 || _hRetries > 30) clearInterval(_hTimer);
+        }, 150);
+    }
+    // Click a hidden toggle button
+    function clickHiddenBtn(labelText) {
+        var btn = (doc._pgmToggleBtns || {})[labelText];
+        if (btn) {
+            var ct = btn.closest('[data-testid="stElementContainer"]');
+            if (ct) ct.style.pointerEvents = 'auto';
+            btn.click();
         }
     }
 
@@ -363,7 +385,7 @@ components.html("""
         };
         for (var tid in toggleMap) {
             if (e.target.closest('#' + tid)) {
-                clickHiddenCb(toggleMap[tid]);
+                clickHiddenBtn(toggleMap[tid]);
                 return;
             }
         }
@@ -2063,10 +2085,16 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        # Hidden checkboxes driven by JS toggles in user bar
-        st.checkbox("__scope_team__", key="scope_team", label_visibility="collapsed")
-        st.checkbox("__growth_only__", key="growth_only", label_visibility="collapsed")
-        st.checkbox("__q_4q__", key="q_4q", label_visibility="collapsed")
+        # Hidden buttons driven by JS toggles in user bar (hidden via JS)
+        if st.button("__scope_team__", key="btn_scope_team"):
+            st.session_state["scope_team"] = not st.session_state.get("scope_team", False)
+            st.rerun()
+        if st.button("__growth_only__", key="btn_growth_only"):
+            st.session_state["growth_only"] = not st.session_state.get("growth_only", False)
+            st.rerun()
+        if st.button("__q_4q__", key="btn_q_4q"):
+            st.session_state["q_4q"] = not st.session_state.get("q_4q", False)
+            st.rerun()
         _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
         if st.button(_edit_label, key="toggle_edit_mode"):
             st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
