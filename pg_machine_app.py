@@ -1979,25 +1979,11 @@ else:
                 fq_start, fq_end = q2_start, q2_end
             all_opps = [o for o in all_opps if o.get("close_date") and fq_start <= (_parse_date(o["close_date"]) or date.min) <= fq_end]
 
-        # Category selector — compact HTML chips + hidden buttons
+        # Category totals (used by column headers below)
         cat_totals = {}
         for cat in CATEGORIAS:
             cat_totals[cat] = sum(float(o.get("monto") or 0) for o in all_opps if o["categoria"] == cat)
-        _chips_html = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">'
-        for cat in CATEGORIAS:
-            _is_gtm_cat = "GTM" in cat.strip().upper()
-            if _is_gtm_cat:
-                _gtm_count = len([o for o in all_opps if o["categoria"] == cat])
-                total_str = f"{_gtm_count} items"
-            else:
-                total_str = f"USD {cat_totals[cat]:,.0f}"
-            if focused == cat:
-                _chips_html += f'<span class="cat-chip cat-chip-active" data-cat="{cat}">✕ {cat}</span>'
-            else:
-                _chips_html += f'<span class="cat-chip" data-cat="{cat}">{cat} <span style="opacity:0.7;font-weight:400;">{total_str}</span></span>'
-        _chips_html += '</div>'
-        st.markdown(_chips_html, unsafe_allow_html=True)
-        # Hidden buttons for click handling
+        # Hidden buttons for category focus click handling
         for cat in CATEGORIAS:
             if focused == cat:
                 if st.button(f"unfocus_{cat}", key=f"unfocus_{cat}"):
@@ -2128,6 +2114,18 @@ else:
                 return (0, _URG_SORT.get(o.get("urgency") or "", 9))
             return (0, -float(o.get("monto") or 0))
 
+        def _cat_chip_html(cat):
+            """Render category chip header aligned with its column."""
+            _is_gtm = "GTM" in cat.strip().upper()
+            if _is_gtm:
+                _cnt = len([o for o in all_opps if o["categoria"] == cat])
+                total_str = f"{_cnt} items"
+            else:
+                total_str = f"USD {cat_totals[cat]:,.0f}"
+            if focused == cat:
+                return f'<div style="margin-bottom:6px;"><span class="cat-chip cat-chip-active" data-cat="{cat}">✕ {cat}</span></div>'
+            return f'<div style="margin-bottom:6px;"><span class="cat-chip" data-cat="{cat}">{cat} <span style="opacity:0.7;font-weight:400;">{total_str}</span></span></div>'
+
         if focused:
             # Focused mode: single category
             cat = visible_cats[0]
@@ -2137,10 +2135,13 @@ else:
                 accounts.setdefault(o['cuenta'], []).append(o)
             account_list = list(accounts.items())
             if is_mobile:
+                st.markdown(_cat_chip_html(cat), unsafe_allow_html=True)
                 for cuenta, opps in account_list:
                     _render_account_group(cuenta, opps, all_acts_by_opp)
             else:
                 col_left, col_right = st.columns(2)
+                with col_left:
+                    st.markdown(_cat_chip_html(cat), unsafe_allow_html=True)
                 for idx, (cuenta, opps) in enumerate(account_list):
                     with col_left if idx % 2 == 0 else col_right:
                         _render_account_group(cuenta, opps, all_acts_by_opp)
@@ -2149,6 +2150,7 @@ else:
                 # Mobile: single column, categories stacked
                 for cat in visible_cats:
                     items = [o for o in all_opps if o['categoria'] == cat]
+                    st.markdown(_cat_chip_html(cat), unsafe_allow_html=True)
                     if items:
                         accounts = OrderedDict()
                         for o in sorted(items, key=_opp_sort_key):
@@ -2156,11 +2158,12 @@ else:
                         for cuenta, opps in accounts.items():
                             _render_account_group(cuenta, opps, all_acts_by_opp)
             else:
-                # Desktop: one column per category
+                # Desktop: one column per category — chip header + cards
                 cols = st.columns(len(visible_cats))
                 for i, col in enumerate(cols):
                     with col:
                         cat = visible_cats[i]
+                        st.markdown(_cat_chip_html(cat), unsafe_allow_html=True)
                         items = [o for o in all_opps if o['categoria'] == cat]
                         accounts = OrderedDict()
                         for o in sorted(items, key=_opp_sort_key):
