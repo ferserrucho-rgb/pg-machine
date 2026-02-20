@@ -269,8 +269,7 @@ st.markdown("""
     .q-toggle.mode-4q .scope-track { background: #8b5cf6; }
     .q-toggle .scope-knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
     .q-toggle.mode-4q .scope-knob { transform: translateX(14px); }
-    /* Hidden toggle text input */
-    [data-testid="stTextInput"]:has(input[aria-label="__pgm_toggle__"]) { position: fixed !important; left: -9999px !important; opacity: 0 !important; }
+    /* Toggle buttons hidden by MutationObserver (same pattern as card/activity buttons) */
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
     /* Calendar inbox badge */
@@ -321,16 +320,12 @@ components.html("""
     var doc = window.parent.document;
     if (doc._pgmObs) { try { doc._pgmObs.disconnect(); } catch(e){} }
 
-    // Trigger a toggle by setting the hidden text input value (React-compatible)
-    function triggerToggle(toggleName) {
-        var inputs = doc.querySelectorAll('input[type="text"]');
-        for (var i = 0; i < inputs.length; i++) {
-            if (inputs[i].getAttribute('aria-label') === '__pgm_toggle__') {
-                var setter = Object.getOwnPropertyDescriptor(
-                    window.parent.HTMLInputElement.prototype, 'value').set;
-                setter.call(inputs[i], toggleName);
-                inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
-                inputs[i].dispatchEvent(new Event('change', { bubbles: true }));
+    // Click a hidden Streamlit button by its text label
+    function clickToggleBtn(btnText) {
+        var allBtns = doc.querySelectorAll('button');
+        for (var i = 0; i < allBtns.length; i++) {
+            if ((allBtns[i].textContent || '').trim() === btnText) {
+                allBtns[i].click();
                 return;
             }
         }
@@ -357,9 +352,9 @@ components.html("""
     if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
     doc._pgmClickHandler = function(e) {
         // 0. User-bar toggles (scope, growth, quarter) — use class selectors (Streamlit strips id attrs)
-        if (e.target.closest('.pgm-toggle-scope')) { triggerToggle('scope_team'); return; }
-        if (e.target.closest('.pgm-toggle-growth')) { triggerToggle('growth_only'); return; }
-        if (e.target.closest('.pgm-toggle-q')) { triggerToggle('q_4q'); return; }
+        if (e.target.closest('.pgm-toggle-scope')) { clickToggleBtn('TOGGLE_SCOPE'); return; }
+        if (e.target.closest('.pgm-toggle-growth')) { clickToggleBtn('TOGGLE_GROWTH'); return; }
+        if (e.target.closest('.pgm-toggle-q')) { clickToggleBtn('TOGGLE_Q'); return; }
         // 1. Dashboard card click (open)
         var card = e.target.closest('.pgm-card-wrap');
         if (card) {
@@ -577,6 +572,9 @@ components.html("""
             if (txt.indexOf('AGENDAR_') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_METRO') >= 0) hide = true;
             if (txt.indexOf('HIST_METRO') >= 0) hide = true;
+            if (txt.indexOf('TOGGLE_SCOPE') >= 0) hide = true;
+            if (txt.indexOf('TOGGLE_GROWTH') >= 0) hide = true;
+            if (txt.indexOf('TOGGLE_Q') >= 0) hide = true;
             if (hide) {
                 // Walk up hiding wrappers — use offscreen positioning to keep buttons clickable
                 var el = btn;
@@ -2056,13 +2054,15 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        # Hidden text input for JS toggle communication
-        _toggle_cmd = st.text_input("__pgm_toggle__", key="pgm_toggle_input", label_visibility="collapsed")
-        if _toggle_cmd:
-            _valid = {"scope_team", "growth_only", "q_4q"}
-            if _toggle_cmd in _valid:
-                st.session_state[_toggle_cmd] = not st.session_state.get(_toggle_cmd, False)
-            st.session_state["pgm_toggle_input"] = ""
+        # Toggle buttons (hidden by MutationObserver, clicked via JS event delegation)
+        if st.button("TOGGLE_SCOPE", key="btn_toggle_scope"):
+            st.session_state["scope_team"] = not st.session_state.get("scope_team", False)
+            st.rerun()
+        if st.button("TOGGLE_GROWTH", key="btn_toggle_growth"):
+            st.session_state["growth_only"] = not st.session_state.get("growth_only", False)
+            st.rerun()
+        if st.button("TOGGLE_Q", key="btn_toggle_q"):
+            st.session_state["q_4q"] = not st.session_state.get("q_4q", False)
             st.rerun()
         _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
         if st.button(_edit_label, key="toggle_edit_mode"):
