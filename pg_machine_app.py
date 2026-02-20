@@ -1981,15 +1981,11 @@ else:
 
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
-        _ub1, _ub2 = st.columns([7, 1])
-        _ub1.markdown(user_bar_html, unsafe_allow_html=True)
-        with _ub2:
-            st.markdown('<div class="user-bar-actions">', unsafe_allow_html=True)
-            _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
-            if st.button(_edit_label, key="toggle_edit_mode", use_container_width=True):
-                st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(user_bar_html, unsafe_allow_html=True)
+        _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
+        if st.button(_edit_label, key="toggle_edit_mode"):
+            st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
+            st.rerun()
 
         all_opps = _cached_opportunities(team_id, st.session_state._data_v)
         all_activities = _cached_all_activities(team_id, st.session_state._data_v)
