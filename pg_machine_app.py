@@ -24,13 +24,12 @@ _tour_trigger = st.session_state.pop("_trigger_tour", False)
 # --- 1. ESTILOS ---
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+    html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; background-color: #f8fafc; }
     /* --- Loading overlay --- */
     .pgm-loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(248,250,252,0.75); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; backdrop-filter: blur(2px); pointer-events: none; }
     .pgm-loading-icon { font-size: 2.5rem; animation: pgm-bounce 0.8s ease-in-out infinite; }
-    .pgm-loading-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
+    .pgm-loading-text { font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
@@ -132,7 +131,7 @@ st.markdown("""
     .hist-card.respondida { background: #f0fdf4; }
     .hist-card.pendiente { background: #fffbeb; }
     .activity-line { font-size: 0.72rem; color: #475569; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cat-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 12px; border-radius:14px; font-size:0.7rem; font-weight:600; color:#475569; background:#f1f5f9; border:1px solid #e2e8f0; cursor:pointer; user-select:none; transition:all 0.15s; letter-spacing:0.02em; text-transform:uppercase; }
+    .cat-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 18px; border-radius:14px; font-size:0.78rem; font-weight:700; color:#475569; background:#f1f5f9; border:1px solid #e2e8f0; cursor:pointer; user-select:none; transition:all 0.15s; letter-spacing:0.03em; text-transform:uppercase; font-family:'DM Sans',sans-serif; }
     .cat-chip:hover { background:#e2e8f0; color:#1e293b; }
     .cat-chip-active { background:#1e293b; color:#fff; border-color:#1e293b; }
     .cat-chip-active:hover { background:#334155; }
@@ -235,7 +234,7 @@ st.markdown("""
     .pgm-card-wrap .opp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; margin-left: 8px; }
     .pgm-card-wrap .opp-name { font-size: 0.85rem; font-weight: 700; color: #1e293b; line-height: 1.3; margin-bottom: 2px; }
     .pgm-card-wrap .opp-row2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: Georgia, serif; letter-spacing: 0.03em; }
+    .pgm-card-wrap .stage-badge { color: white; font-size: 0.58rem; font-weight: 600; font-style: normal; background: #8b5cf6; padding: 2px 7px; border-radius: 10px; font-family: 'DM Sans', sans-serif; letter-spacing: 0.03em; }
     .pgm-card-wrap .amount { color: #16a34a; font-size: 0.9rem; font-weight: 800; margin-left: auto; }
     .pgm-card-wrap .opp-id-box { font-family: 'Courier New', monospace; font-size: 0.55rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 5px; border-radius: 3px; }
     .pgm-card-wrap .close-date { font-size: 0.6rem; font-weight: 700; color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; padding: 1px 5px; border-radius: 3px; }
@@ -247,7 +246,7 @@ st.markdown("""
     .pgm-card-wrap .partner-pill { font-size: 0.6rem; font-weight: 700; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
     .pgm-card-wrap .act-line .act-status { font-weight: 600; font-size: 0.65rem; }
     /* User identity bar */
-    .user-bar { background: #1e293b; color: white; padding: 4px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
+    .user-bar { background: #1e293b; color: white; padding: 4px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; font-family: 'DM Sans', sans-serif; display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
     .user-bar .user-role { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
     /* Scope toggle (Mías/Equipo) inside user bar */
@@ -694,7 +693,7 @@ components.html(f"""
         var style = doc.createElement('style');
         style.textContent = `
             .driver-popover {{
-                font-family: 'Inter', sans-serif !important;
+                font-family: 'DM Sans', sans-serif !important;
                 max-width: 380px;
                 border-radius: 12px !important;
                 box-shadow: 0 20px 60px rgba(0,0,0,0.15) !important;
@@ -1373,7 +1372,7 @@ def _render_outlook_button(activity: dict, opportunity: dict, key: str):
     " style="
         display:inline-flex;align-items:center;gap:4px;
         padding:3px 10px;background:#0ea5e9;color:white;border:none;
-        border-radius:6px;font-family:Inter,sans-serif;font-size:0.7rem;
+        border-radius:6px;font-family:DM Sans,sans-serif;font-size:0.7rem;
         font-weight:600;cursor:pointer;text-decoration:none;transition:background 0.2s;"
         onmouseover="this.style.background='#0284c7'"
         onmouseout="this.style.background='#0ea5e9'">
@@ -2789,7 +2788,7 @@ else:
         for i, fd in enumerate(_funnel_data):
             _w = _widths[i] if i < len(_widths) else 50
             _color = _funnel_colors.get(fd["cat"].upper(), "#64748b")
-            _funnel_html += f'<div style="width:{_w}%;margin:0 auto 6px auto;background:{_color};color:white;border-radius:6px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;font-family:Inter,sans-serif;"><span style="font-weight:700;font-size:0.8rem;">{fd["cat"]}</span><span style="font-size:0.75rem;">{fd["count"]} ops</span><span style="font-weight:800;font-size:0.85rem;">USD {fd["amount"]:,.0f}</span></div>'
+            _funnel_html += f'<div style="width:{_w}%;margin:0 auto 6px auto;background:{_color};color:white;border-radius:6px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;font-family:DM Sans,sans-serif;"><span style="font-weight:700;font-size:0.8rem;">{fd["cat"]}</span><span style="font-size:0.75rem;">{fd["count"]} ops</span><span style="font-weight:800;font-size:0.85rem;">USD {fd["amount"]:,.0f}</span></div>'
         st.markdown(_funnel_html, unsafe_allow_html=True)
 
         st.divider()
@@ -3538,7 +3537,7 @@ else:
                                         from_email=Email(st.secrets.get("SENDGRID_FROM_EMAIL", "noreply@pgmachine.com"), st.secrets.get("SENDGRID_FROM_NAME", "PG Machine")),
                                         to_emails=To(inv_email),
                                         subject=f"Invitación a PG Machine — {invite_target_name}",
-                                        html_content=Content("text/html", f'<div style="font-family:Inter,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>Invitación a PG Machine</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>Hola{" " + inv_name if inv_name else ""},</p><p>Te han invitado a unirte al equipo <b>{invite_target_name}</b> en PG Machine.</p><p>Para registrarte, abre la app y selecciona "Unirse a Equipo":</p><p><b>ID del equipo:</b> <code>{invite_target_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Ir a PG Machine</a></div></div></div>')
+                                        html_content=Content("text/html", f'<div style="font-family:DM Sans,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>Invitación a PG Machine</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>Hola{" " + inv_name if inv_name else ""},</p><p>Te han invitado a unirte al equipo <b>{invite_target_name}</b> en PG Machine.</p><p>Para registrarte, abre la app y selecciona "Unirse a Equipo":</p><p><b>ID del equipo:</b> <code>{invite_target_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Ir a PG Machine</a></div></div></div>')
                                     )
                                     sg.send(message)
                                     st.success(f"Invitación enviada a {inv_email} para el equipo **{invite_target_name}**")
