@@ -2410,10 +2410,12 @@ else:
         _cal_all_opps = dal.get_opportunities(team_id)
         _cal_events = dal.get_pending_calendar_events_for_user(team_id, user_id, user["role"])
 
-        # Header + manual add button
-        _cal_hdr_cols = st.columns([5, 1])
+        # Header + refresh + manual add button
+        _cal_hdr_cols = st.columns([5, 1, 1])
         _cal_hdr_cols[0].markdown(f"### 📅 Bandeja de Calendario — {len(_cal_events)} pendientes")
-        if _cal_hdr_cols[1].button("+ Agregar", key="cal_manual_add"):
+        if _cal_hdr_cols[1].button("🔄 Actualizar", key="cal_refresh"):
+            st.rerun()
+        if _cal_hdr_cols[2].button("+ Agregar", key="cal_manual_add"):
             st.session_state["_show_cal_form"] = True
             st.rerun()
 
