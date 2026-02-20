@@ -4,6 +4,7 @@ import pandas as pd
 import json
 from collections import OrderedDict
 from datetime import datetime, date, timedelta
+from urllib.parse import urlencode
 
 # --- AUTH GATE (must be before any other UI) ---
 from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_admin, has_control_access, can_see_all_opportunities, logout, get_supabase, ALL_ROLES, ROLE_LABELS
@@ -160,10 +161,9 @@ st.markdown("""
     .metro-card .metro-fecha { font-size:0.68rem; font-weight:700; color:#475569; margin-bottom:2px; }
     .metro-card .metro-meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
     /* Clickable card — whole card opens detail, × inside for delete */
-    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; text-decoration: none; color: inherit; display: block; }
     .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); background: #f8faff; }
-    .card-del-trigger { position: absolute; bottom: 6px; right: 8px; font-size: 0.75rem; color: #cbd5e1; cursor: pointer; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
-    .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
+
     .bulk-del-bar { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
     div[data-testid="stMultiSelect"] { margin-top: -8px !important; margin-bottom: -8px !important; }
     div[data-testid="stMultiSelect"] > div { min-height: 0 !important; }
@@ -257,20 +257,7 @@ components.html("""
     // Event delegation for all custom click handlers
     if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
     doc._pgmClickHandler = function(e) {
-        // 1. Dashboard card click (open / delete) — via query params
-        var card = e.target.closest('.pgm-card-wrap');
-        if (card) {
-            var oppId = card.getAttribute('data-opp-id');
-            if (!oppId) return;
-            var url = new URL(window.parent.location);
-            if (e.target.closest('.card-del-trigger')) {
-                url.searchParams.set('_qdel', oppId);
-            } else {
-                url.searchParams.set('_sel', oppId);
-            }
-            window.parent.location.href = url.href;
-            return;
-        }
+        // 1. Dashboard card click — handled by native <a> links now (no JS needed)
 
         // 2. Meta-bar back button
         if (e.target.closest('.meta-btn-back')) {
@@ -842,15 +829,10 @@ user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials
 if 'selected_id' not in st.session_state:
     st.session_state.selected_id = None
 
-# Handle card navigation via query params (set by JS click on scorecards)
+# Handle card navigation via query params (set by <a> links on scorecards)
 if '_sel' in st.query_params:
     st.session_state.selected_id = st.query_params['_sel']
     del st.query_params['_sel']
-    st.rerun()
-if '_qdel' in st.query_params:
-    _qdel_id = st.query_params['_qdel']
-    st.session_state[f"quick_del_{_qdel_id}"] = True
-    del st.query_params['_qdel']
     st.rerun()
 if 'focused_cat' not in st.session_state:
     st.session_state.focused_cat = None
@@ -1824,6 +1806,13 @@ else:
 
     selected_tabs = st.tabs(tabs)
 
+    # Compute base URL params for card navigation links (preserves auth tokens)
+    _nav_base = {}
+    if '_rt' in st.query_params:
+        _nav_base['_rt'] = st.query_params['_rt']
+    if '_at' in st.query_params:
+        _nav_base['_at'] = st.query_params['_at']
+
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
@@ -1981,20 +1970,9 @@ else:
                 acts_html = ""
                 if act_lines:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
-                del_icon = '<span class="card-del-trigger">&times;</span>'
-                card_html = f'<div class="pgm-card-wrap" data-opp-id="{o["id"]}">{del_icon}{header_html}{meta_html}{acts_html}</div>'
+                _sel_url = '?' + urlencode({**_nav_base, '_sel': o['id']})
+                card_html = f'<a href="{_sel_url}" class="pgm-card-wrap" data-opp-id="{o["id"]}">{header_html}{meta_html}{acts_html}</a>'
                 st.markdown(card_html, unsafe_allow_html=True)
-                # Delete confirmation
-                if st.session_state.get(f"quick_del_{o['id']}"):
-                    st.warning(f"Eliminar **{o['proyecto']}**?")
-                    qd1, qd2 = st.columns(2)
-                    if qd1.button("Confirmar", key=f"qdy_{o['id']}", use_container_width=True):
-                        dal.delete_opportunity(o["id"])
-                        st.session_state.pop(f"quick_del_{o['id']}", None)
-                        st.rerun()
-                    if qd2.button("Cancelar", key=f"qdn_{o['id']}", use_container_width=True):
-                        st.session_state.pop(f"quick_del_{o['id']}", None)
-                        st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         if focused:
