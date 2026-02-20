@@ -387,25 +387,24 @@ components.html("""
         doc.querySelectorAll('section.main > div').forEach(function(el) {
             if (el.style.maxWidth) { el.style.maxWidth='100%'; el.style.paddingLeft='1rem'; el.style.paddingRight='1rem'; }
         });
-        // Style category buttons with colored gradients
+        // Style category buttons — uniform, compact pills
         doc.querySelectorAll('button').forEach(function(btn) {
             var txt = (btn.textContent||'').trim().toUpperCase();
-            var grad = null;
-            if (txt.indexOf('LEADS')>=0) grad = 'linear-gradient(135deg,#3b82f6,#1d4ed8)';
-            else if (txt.indexOf('OFFICIAL')>=0) grad = 'linear-gradient(135deg,#10b981,#047857)';
-            else if (txt.indexOf('GTM')>=0) grad = 'linear-gradient(135deg,#f59e0b,#d97706)';
-            if (grad && !btn.dataset.catStyled) {
+            var isCat = (txt.indexOf('LEADS')>=0 || txt.indexOf('OFFICIAL')>=0 || txt.indexOf('GTM')>=0);
+            if (isCat && !btn.dataset.catStyled) {
                 btn.dataset.catStyled = '1';
-                btn.style.background = grad;
-                btn.style.color = 'white';
-                btn.style.fontWeight = '800';
-                btn.style.fontSize = '0.8rem';
-                btn.style.letterSpacing = '0.05em';
+                var isActive = txt.indexOf('\u2715')>=0;
+                btn.style.background = isActive ? '#1e293b' : '#f1f5f9';
+                btn.style.color = isActive ? '#ffffff' : '#334155';
+                btn.style.fontWeight = '700';
+                btn.style.fontSize = '0.72rem';
+                btn.style.letterSpacing = '0.03em';
                 btn.style.textTransform = 'uppercase';
-                btn.style.border = 'none';
-                btn.style.borderRadius = '6px';
+                btn.style.border = isActive ? 'none' : '1px solid #cbd5e1';
+                btn.style.borderRadius = '16px';
                 btn.style.minHeight = '0';
-                if (txt.indexOf('\u2715')>=0) btn.style.opacity = '0.75';
+                btn.style.padding = '4px 14px';
+                btn.style.lineHeight = '1.4';
             }
         });
         // Hide open-button rows below dashboard cards
@@ -1977,8 +1976,9 @@ else:
         cat_totals = {}
         for cat in CATEGORIAS:
             cat_totals[cat] = sum(float(o.get("monto") or 0) for o in all_opps if o["categoria"] == cat)
-        btn_cols = st.columns(len(CATEGORIAS))
-        for i, bc in enumerate(btn_cols):
+        _cat_col_spec = [1] * len(CATEGORIAS) + [max(1, 6 - len(CATEGORIAS))]
+        btn_cols = st.columns(_cat_col_spec)
+        for i in range(len(CATEGORIAS)):
             cat = CATEGORIAS[i]
             _is_gtm_cat = "GTM" in cat.strip().upper()
             if _is_gtm_cat:
@@ -1987,11 +1987,11 @@ else:
             else:
                 total_str = f"USD {cat_totals[cat]:,.0f} ACV"
             if focused == cat:
-                if bc.button(f"✕ {cat} — Ver todas", key=f"unfocus_{cat}", use_container_width=True):
+                if btn_cols[i].button(f"✕ {cat} — Ver todas", key=f"unfocus_{cat}", use_container_width=True):
                     st.session_state.focused_cat = None
                     st.rerun()
             else:
-                if bc.button(f"{cat} — {total_str}", key=f"focus_{cat}", use_container_width=True):
+                if btn_cols[i].button(f"{cat} · {total_str}", key=f"focus_{cat}", use_container_width=True):
                     st.session_state.focused_cat = cat
                     st.rerun()
 
