@@ -61,6 +61,8 @@ st.markdown("""
     .meta-btn-edit-opp:hover { background: #047857; color: white; }
     .meta-btn-new-act { color: #1a73e8; background: #eff6ff; }
     .meta-btn-new-act:hover { background: #1a73e8; color: white; }
+    .meta-btn-kill { color: #991b1b; background: #fef2f2; border: 1px solid #fca5a5; }
+    .meta-btn-kill:hover { background: #991b1b; color: white; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
     .hist-card { background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
     .act-top { display: flex; align-items: flex-start; gap: 8px; }
@@ -306,7 +308,14 @@ components.html("""
             return;
         }
 
-        // 5b. Meta-bar timeline toggle
+        // 5b. Meta-bar kill (cerrar) button
+        if (e.target.closest('.meta-btn-kill')) {
+            var bar = e.target.closest('.opp-meta-bar');
+            if (bar) { var b = findBtn(bar, 'KILL_OPP'); if (b) b.click(); }
+            return;
+        }
+
+        // 5c. Meta-bar timeline toggle
         if (e.target.closest('.meta-btn-timeline')) {
             var bar = e.target.closest('.opp-meta-bar');
             if (bar) { var b = findBtn(bar, 'TOGGLE_METRO'); if (b) b.click(); }
@@ -913,7 +922,8 @@ def _mark_dirty():
 for _fn_name in ("create_opportunity", "update_opportunity", "delete_opportunity",
                  "delete_opportunities_by_account", "bulk_create_opportunities",
                  "create_activity", "update_activity", "delete_activity",
-                 "assign_calendar_event", "dismiss_calendar_event", "create_calendar_event"):
+                 "assign_calendar_event", "dismiss_calendar_event", "create_calendar_event",
+                 "kill_opportunity", "upsert_pipeline_snapshot"):
     _orig = getattr(dal, _fn_name)
     def _make_wrapper(fn):
         def _wrapper(*args, **kwargs):
@@ -1495,7 +1505,7 @@ if st.session_state.selected_id:
         if ecol_val and ecol_val.lower() != "nan":
             meta_parts.append(f'<span class="meta-pill meta-stage">{ecol.replace("_", " ").title()}: {ecol_val}</span>')
     _metro_active = " active" if st.session_state.get("metro_view") else ""
-    action_html = f'<span class="meta-actions"><span class="meta-btn meta-btn-timeline{_metro_active}">🚇 Línea</span><span class="meta-btn meta-btn-edit-opp">✏ Editar</span><span class="meta-btn meta-btn-new-act">+ Nueva</span><span class="meta-btn meta-btn-back">⬅ Volver</span><span class="meta-btn meta-btn-del">🗑 Eliminar</span></span>'
+    action_html = f'<span class="meta-actions"><span class="meta-btn meta-btn-timeline{_metro_active}">🚇 Línea</span><span class="meta-btn meta-btn-edit-opp">✏ Editar</span><span class="meta-btn meta-btn-new-act">+ Nueva</span><span class="meta-btn meta-btn-kill">☠ Cerrar</span><span class="meta-btn meta-btn-back">⬅ Volver</span><span class="meta-btn meta-btn-del">🗑 Eliminar</span></span>'
     st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}{action_html}</div>', unsafe_allow_html=True)
 
     # --- Hidden action buttons (wired via JS) ---
@@ -1529,6 +1539,39 @@ if st.session_state.selected_id:
     if st.button("🚇 TOGGLE_METRO", key="toggle_metro_view"):
         st.session_state["metro_view"] = not st.session_state.get("metro_view", False)
         st.rerun()
+    if st.button("☠ KILL_OPP", key="toggle_kill_opp"):
+        st.session_state["show_kill_opp"] = not st.session_state.get("show_kill_opp", False)
+        st.rerun()
+
+    # --- Kill panel ---
+    if st.session_state.get("show_kill_opp"):
+        _is_gtm = "GTM" in opp.get("categoria", "").strip().upper()
+        st.markdown('<div class="action-panel" style="border-top-color:#991b1b;">', unsafe_allow_html=True)
+        st.markdown("#### ☠ Cerrar Oportunidad" if not _is_gtm else "#### ☠ Cerrar GTM")
+        if _is_gtm:
+            kill_reason = st.radio("Motivo de cierre:", [
+                "✅ Done — Objetivo logrado",
+                "📅 No prioritario este año",
+                "🚫 Creada por error",
+            ], key="kill_reason_radio")
+            _reason_map = {"✅ Done — Objetivo logrado": "done", "📅 No prioritario este año": "not_priority", "🚫 Creada por error": "error"}
+        else:
+            kill_reason = st.radio("Motivo de cierre:", [
+                "🏆 Ganada!",
+                "❌ Perdida",
+                "🚫 Creada por error",
+            ], key="kill_reason_radio")
+            _reason_map = {"🏆 Ganada!": "ganada", "❌ Perdida": "perdida", "🚫 Creada por error": "error"}
+        _kr_c1, _kr_c2, _kr_c3 = st.columns([1, 1, 4])
+        if _kr_c1.button("✅ Confirmar", key="confirm_kill", use_container_width=True):
+            dal.kill_opportunity(opp["id"], _reason_map[kill_reason])
+            st.session_state.selected_id = None
+            st.session_state.pop("show_kill_opp", None)
+            st.rerun()
+        if _kr_c2.button("Cancelar", key="cancel_kill", use_container_width=True):
+            st.session_state.pop("show_kill_opp", None)
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # --- History ---
     st.caption("📜 Historial e Interacción")
@@ -1832,9 +1875,9 @@ if st.session_state.selected_id:
 else:
     # --- VISTAS PRINCIPALES ---
     _cal_tab_label = f"📅 Calendario ({_cal_inbox_count})" if _cal_inbox_count > 0 else "📅 Calendario"
-    tabs = ["📊 Tablero", "📋 Actividades", "📜 Historial", _cal_tab_label]
+    tabs = ["📊 Tablero", "📋 Actividades", "📜 Historial", "📈 Performance", _cal_tab_label]
     if has_control_access():
-        tabs.append("📈 Control")
+        tabs.append("📊 Control")
     tabs.append("👥 Equipo")
 
     selected_tabs = st.tabs(tabs)
@@ -2442,8 +2485,233 @@ else:
                     else:
                         st.markdown('<div style="text-align:center;color:#94a3b8;padding:40px;font-size:0.9rem;">← Seleccioná un grupo para ver su historial cronológico</div>', unsafe_allow_html=True)
 
-    # --- TAB: CALENDARIO ---
+    # --- TAB: PERFORMANCE ---
     with selected_tabs[3]:
+        st.markdown(user_bar_html, unsafe_allow_html=True)
+
+        # --- Helpers ---
+        def _get_current_week_friday():
+            """Devuelve el viernes de la semana actual."""
+            today = date.today()
+            days_until_friday = (4 - today.weekday()) % 7
+            return today + timedelta(days=days_until_friday)
+
+        def _compute_current_snapshot(t_id, categorias_list):
+            """Agrega estado actual del pipeline por categoría (pipeline + GTM separados)."""
+            all_opps = dal.get_all_opportunities_for_snapshot(t_id)
+            snap = {}
+            for cat in categorias_list:
+                cat_opps = [o for o in all_opps if o.get("categoria", "").strip().upper() == cat.strip().upper()]
+                active = [o for o in cat_opps if not o.get("killed_at")]
+                is_gtm = "GTM" in cat.strip().upper()
+                if is_gtm:
+                    done = [o for o in cat_opps if o.get("kill_reason") == "done"]
+                    not_pri = [o for o in cat_opps if o.get("kill_reason") == "not_priority"]
+                    errors = [o for o in cat_opps if o.get("kill_reason") == "error"]
+                    snap[cat] = {
+                        "active_count": len(active),
+                        "done_count": len(done),
+                        "not_priority_count": len(not_pri),
+                        "error_count": len(errors),
+                    }
+                else:
+                    ganadas = [o for o in cat_opps if o.get("kill_reason") == "ganada"]
+                    perdidas = [o for o in cat_opps if o.get("kill_reason") == "perdida"]
+                    snap[cat] = {
+                        "active_count": len(active),
+                        "active_amount": sum(float(o.get("monto") or 0) for o in active),
+                        "ganada_count": len(ganadas),
+                        "ganada_amount": sum(float(o.get("monto") or 0) for o in ganadas),
+                        "perdida_count": len(perdidas),
+                        "perdida_amount": sum(float(o.get("monto") or 0) for o in perdidas),
+                    }
+            return snap
+
+        def _ensure_current_snapshot():
+            """Upsert snapshot para la semana actual."""
+            wf = str(_get_current_week_friday())
+            snap_data = _compute_current_snapshot(team_id, CATEGORIAS)
+            dal.upsert_pipeline_snapshot(team_id, wf, snap_data)
+            return wf, snap_data
+
+        # Auto-snapshot on tab load
+        _perf_week, _perf_current = _ensure_current_snapshot()
+        _perf_snapshots = dal.get_pipeline_snapshots(team_id, weeks=12)
+
+        # Separate pipeline cats (LEADS/OFFICIAL) from GTM
+        _pipeline_cats = [c for c in CATEGORIAS if "GTM" not in c.strip().upper()]
+        _gtm_cats = [c for c in CATEGORIAS if "GTM" in c.strip().upper()]
+
+        st.markdown("### 📈 Performance")
+        _perf_hide_protect = st.toggle("🚀 Solo Growth", key="perf_hide_protect", value=st.session_state.get("hide_protect", True))
+
+        def _is_protect(o):
+            return "renewal" in (o.get("proyecto") or "").lower()
+
+        # Live opps for display (respects protect toggle)
+        _all_opps_snap = dal.get_all_opportunities_for_snapshot(team_id)
+        if _perf_hide_protect:
+            _all_opps_snap = [o for o in _all_opps_snap if not _is_protect(o)]
+
+        # =============================================
+        # PIPELINE SECTION (LEADS → OFFICIAL → Ganada)
+        # =============================================
+        st.markdown("##### 🔻 Pipeline de Ventas — LEADS → OFFICIAL → Ganada")
+
+        # ---- Funnel (live data) ----
+        _funnel_colors = {"LEADS": "#3b82f6", "OFFICIAL": "#10b981", "GANADA": "#16a34a"}
+        _pipe_live = [o for o in _all_opps_snap if "GTM" not in o.get("categoria", "").strip().upper()]
+        _funnel_data = []
+        for cat in _pipeline_cats:
+            _cat_active = [o for o in _pipe_live if o.get("categoria", "").strip().upper() == cat.strip().upper() and not o.get("killed_at")]
+            _funnel_data.append({"cat": cat, "count": len(_cat_active), "amount": sum(float(o.get("monto") or 0) for o in _cat_active)})
+        # Ganada totals (only from pipeline cats)
+        _ganada_live = [o for o in _pipe_live if o.get("kill_reason") == "ganada"]
+        _ganada_cnt = len(_ganada_live)
+        _ganada_amt = sum(float(o.get("monto") or 0) for o in _ganada_live)
+        _funnel_data.append({"cat": "GANADA", "count": _ganada_cnt, "amount": _ganada_amt})
+
+        _funnel_html = ""
+        _widths = [100, 75, 50]
+        for i, fd in enumerate(_funnel_data):
+            _w = _widths[i] if i < len(_widths) else 50
+            _color = _funnel_colors.get(fd["cat"].upper(), "#64748b")
+            _funnel_html += f'<div style="width:{_w}%;margin:0 auto 6px auto;background:{_color};color:white;border-radius:6px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;font-family:Inter,sans-serif;"><span style="font-weight:700;font-size:0.8rem;">{fd["cat"]}</span><span style="font-size:0.75rem;">{fd["count"]} ops</span><span style="font-weight:800;font-size:0.85rem;">USD {fd["amount"]:,.0f}</span></div>'
+        st.markdown(_funnel_html, unsafe_allow_html=True)
+
+        st.divider()
+
+        # ---- Week-over-Week Deltas (from live vs prev snapshot) ----
+        st.markdown("##### 📊 Semana vs Semana")
+        _prev_snap = None
+        if len(_perf_snapshots) >= 2:
+            _prev_snap = _perf_snapshots[1].get("snapshot_data", {})
+
+        _delta_cols = st.columns(len(_pipeline_cats) + 1)
+        for i, cat in enumerate(_pipeline_cats):
+            _cat_active = [o for o in _pipe_live if o.get("categoria", "").strip().upper() == cat.strip().upper() and not o.get("killed_at")]
+            curr_amt = sum(float(o.get("monto") or 0) for o in _cat_active)
+            delta = None
+            if _prev_snap and cat in _prev_snap:
+                prev_amt = _prev_snap[cat].get("active_amount", 0)
+                delta = curr_amt - prev_amt
+            _delta_cols[i].metric(cat, f"USD {curr_amt:,.0f}", delta=f"USD {delta:,.0f}" if delta is not None else None)
+        # Ganada delta
+        _g_delta = None
+        if _prev_snap:
+            _g_prev = sum(_prev_snap.get(c, {}).get("ganada_amount", 0) for c in _pipeline_cats)
+            _g_delta = _ganada_amt - _g_prev
+        _delta_cols[-1].metric("🏆 Ganadas", f"USD {_ganada_amt:,.0f}", delta=f"USD {_g_delta:,.0f}" if _g_delta is not None else None)
+
+        st.divider()
+
+        # ---- Weekly Trend (from snapshots — full data, no protect filter) ----
+        st.markdown("##### 📈 Tendencia Semanal (últimas 12 semanas)")
+        if _perf_snapshots:
+            _trend_rows = []
+            for snap in reversed(_perf_snapshots):
+                week = snap.get("week_ending", "")
+                sd = snap.get("snapshot_data", {})
+                row = {"Semana": week}
+                for cat in _pipeline_cats:
+                    row[cat] = sd.get(cat, {}).get("active_amount", 0)
+                row["Ganadas"] = sum(sd.get(c, {}).get("ganada_amount", 0) for c in _pipeline_cats)
+                _trend_rows.append(row)
+            _trend_df = pd.DataFrame(_trend_rows)
+            if not _trend_df.empty:
+                _chart_cols = [c for c in _pipeline_cats if c in _trend_df.columns] + (["Ganadas"] if "Ganadas" in _trend_df.columns else [])
+                if _chart_cols:
+                    st.bar_chart(_trend_df.set_index("Semana")[_chart_cols])
+        else:
+            st.info("Aún no hay datos históricos. Volvé la próxima semana para ver tendencias.")
+
+        st.divider()
+
+        # ---- Conversion Metrics (pipeline only, respects toggle) ----
+        st.markdown("##### 🎯 Métricas de Conversión")
+        _total_pipe = len(_pipe_live)
+        _total_ganadas = _ganada_cnt
+        _monto_ganado = _ganada_amt
+        _total_perdidas = len([o for o in _pipe_live if o.get("kill_reason") == "perdida"])
+        _tasa_conversion = (_total_ganadas / _total_pipe * 100) if _total_pipe > 0 else 0
+
+        _conv_c1, _conv_c2, _conv_c3, _conv_c4 = st.columns(4)
+        _conv_c1.metric("🏆 Ganadas", _total_ganadas)
+        _conv_c2.metric("💰 Monto Ganado", f"USD {_monto_ganado:,.0f}")
+        _conv_c3.metric("📊 Tasa Conversión", f"{_tasa_conversion:.1f}%")
+        _conv_c4.metric("❌ Perdidas", _total_perdidas)
+        st.progress(min(_tasa_conversion / 100, 1.0))
+
+        st.divider()
+
+        # ---- Closed Pipeline List (respects toggle) ----
+        _killed_pipeline = [o for o in _pipe_live if o.get("killed_at")]
+        with st.expander(f"☠ Oportunidades Cerradas ({len(_killed_pipeline)})", expanded=False):
+            if _killed_pipeline:
+                for ko in _killed_pipeline:
+                    _kr = ko.get("kill_reason", "")
+                    _kr_badge = {"ganada": "🏆 Ganada", "perdida": "❌ Perdida", "error": "🚫 Error"}.get(_kr, _kr)
+                    _kr_color = {"ganada": "#16a34a", "perdida": "#ef4444", "error": "#64748b"}.get(_kr, "#64748b")
+                    _kr_bg = {"ganada": "#f0fdf4", "perdida": "#fef2f2", "error": "#f8fafc"}.get(_kr, "#f8fafc")
+                    _ko_monto = float(ko.get("monto") or 0)
+                    _ko_date = ko.get("killed_at", "")[:10] if ko.get("killed_at") else ""
+                    st.markdown(f'<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:{_kr_bg};border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;font-size:0.78rem;"><span style="font-weight:700;color:#1e293b;flex:1;">{ko.get("proyecto", "")}</span><span style="color:#64748b;font-size:0.7rem;">{ko.get("cuenta", "")}</span><span style="font-weight:800;color:#16a34a;">USD {_ko_monto:,.0f}</span><span style="font-weight:700;color:{_kr_color};background:white;padding:2px 8px;border-radius:10px;font-size:0.65rem;border:1px solid {_kr_color};">{_kr_badge}</span><span style="color:#94a3b8;font-size:0.65rem;">{_ko_date}</span></div>', unsafe_allow_html=True)
+            else:
+                st.info("No hay oportunidades de pipeline cerradas aún.")
+
+        # =============================================
+        # GTM SECTION (Goals Tracker)
+        # =============================================
+        if _gtm_cats:
+            st.divider()
+            st.markdown("##### 🎯 GTM — Objetivos & Actividades")
+
+            _gtm_opps = [o for o in _all_opps_snap if "GTM" in o.get("categoria", "").strip().upper()]
+            _gtm_active = [o for o in _gtm_opps if not o.get("killed_at")]
+            _gtm_done = [o for o in _gtm_opps if o.get("kill_reason") == "done"]
+            _gtm_not_pri = [o for o in _gtm_opps if o.get("kill_reason") == "not_priority"]
+            _gtm_error = [o for o in _gtm_opps if o.get("kill_reason") == "error"]
+
+            # Summary metrics
+            _gtm_c1, _gtm_c2, _gtm_c3, _gtm_c4 = st.columns(4)
+            _gtm_c1.metric("🔄 Activos", len(_gtm_active))
+            _gtm_c2.metric("✅ Done", len(_gtm_done))
+            _gtm_c3.metric("📅 No Prioritario", len(_gtm_not_pri))
+            _gtm_c4.metric("🚫 Error", len(_gtm_error))
+
+            _gtm_total = len(_gtm_opps)
+            _gtm_completion = (len(_gtm_done) / _gtm_total * 100) if _gtm_total > 0 else 0
+            st.progress(min(_gtm_completion / 100, 1.0))
+            st.caption(f"Tasa de completitud: **{_gtm_completion:.0f}%** ({len(_gtm_done)}/{_gtm_total})")
+
+            # Active GTM items by urgency
+            if _gtm_active:
+                _urg_colors = {"alta": "#ef4444", "media": "#f59e0b", "baja": "#3b82f6"}
+                _urg_labels = {"alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
+                _gtm_html = ""
+                for go in sorted(_gtm_active, key=lambda x: {"alta": 0, "media": 1, "baja": 2}.get(x.get("urgency", ""), 3)):
+                    _urg = go.get("urgency", "")
+                    _gtype = go.get("gtm_type", "") or ""
+                    _urg_badge = _urg_labels.get(_urg, "⚪ —")
+                    _urg_c = _urg_colors.get(_urg, "#94a3b8")
+                    _type_html = f'<span style="font-size:0.62rem;font-weight:600;color:#7c3aed;background:#ede9fe;padding:1px 6px;border-radius:8px;">{_gtype}</span>' if _gtype else ""
+                    _gtm_html += f'<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:white;border:1px solid #e2e8f0;border-left:4px solid {_urg_c};border-radius:6px;margin-bottom:4px;font-size:0.78rem;"><span style="font-weight:600;font-size:0.7rem;color:{_urg_c};">{_urg_badge}</span><span style="font-weight:700;color:#1e293b;flex:1;">{go.get("proyecto", "")}</span><span style="color:#64748b;font-size:0.7rem;">{go.get("cuenta", "")}</span>{_type_html}</div>'
+                st.markdown(_gtm_html, unsafe_allow_html=True)
+
+            # Closed GTM (from already-filtered _all_opps_snap)
+            _killed_gtm = [o for o in _gtm_opps if o.get("killed_at")]
+            if _killed_gtm:
+                with st.expander(f"☠ GTM Cerrados ({len(_killed_gtm)})", expanded=False):
+                    for ko in _killed_gtm:
+                        _kr = ko.get("kill_reason", "")
+                        _kr_badge = {"done": "✅ Done", "not_priority": "📅 No Prioritario", "error": "🚫 Error"}.get(_kr, _kr)
+                        _kr_color = {"done": "#16a34a", "not_priority": "#d97706", "error": "#64748b"}.get(_kr, "#64748b")
+                        _kr_bg = {"done": "#f0fdf4", "not_priority": "#fffbeb", "error": "#f8fafc"}.get(_kr, "#f8fafc")
+                        _ko_date = ko.get("killed_at", "")[:10] if ko.get("killed_at") else ""
+                        st.markdown(f'<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:{_kr_bg};border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;font-size:0.78rem;"><span style="font-weight:700;color:#1e293b;flex:1;">{ko.get("proyecto", "")}</span><span style="color:#64748b;font-size:0.7rem;">{ko.get("cuenta", "")}</span><span style="font-weight:700;color:{_kr_color};background:white;padding:2px 8px;border-radius:10px;font-size:0.65rem;border:1px solid {_kr_color};">{_kr_badge}</span><span style="color:#94a3b8;font-size:0.65rem;">{_ko_date}</span></div>', unsafe_allow_html=True)
+
+    # --- TAB: CALENDARIO ---
+    with selected_tabs[4]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
         _cal_all_opps = _cached_opportunities(team_id, st.session_state._data_v)
         _cal_events = _cached_calendar_events(team_id, user_id, user["role"], st.session_state._data_v)
@@ -2566,7 +2834,7 @@ else:
 
     # --- TAB: CONTROL (admin, vp, y managers) ---
     if has_control_access():
-        with selected_tabs[4]:
+        with selected_tabs[5]:
             st.markdown(user_bar_html, unsafe_allow_html=True)
             st.markdown("### 📈 Panel de Control — RSM")
 
@@ -2732,7 +3000,7 @@ else:
                     st.bar_chart(df_resp_chart.set_index("Miembro"), color=["#16a34a"])
 
     # --- TAB: EQUIPO (todos los roles) ---
-    equipo_tab_idx = 5 if has_control_access() else 4
+    equipo_tab_idx = 6 if has_control_access() else 5
     with selected_tabs[equipo_tab_idx]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
         team_info = _cached_team_info(team_id)

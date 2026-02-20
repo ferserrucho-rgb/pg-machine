@@ -12,29 +12,31 @@ from lib.auth import get_supabase
 # OPPORTUNITIES
 # ============================================================
 
-def get_opportunities(team_id: str) -> list[dict]:
-    """Obtiene todas las oportunidades del equipo."""
+def get_opportunities(team_id: str, include_killed: bool = False) -> list[dict]:
+    """Obtiene oportunidades del equipo (por defecto solo activas)."""
     sb = get_supabase()
-    resp = sb.table("opportunities") \
+    query = sb.table("opportunities") \
         .select("*") \
-        .eq("team_id", team_id) \
-        .order("monto", desc=True) \
-        .execute()
+        .eq("team_id", team_id)
+    if not include_killed:
+        query = query.is_("killed_at", "null")
+    resp = query.order("monto", desc=True).execute()
     return resp.data or []
 
-def get_opportunities_for_user(team_id: str, user_id: str, role: str) -> list[dict]:
+def get_opportunities_for_user(team_id: str, user_id: str, role: str, include_killed: bool = False) -> list[dict]:
     """Obtiene oportunidades según el rol del usuario.
     Admin/VP ven todas; otros ven las que poseen o tienen actividades asignadas."""
     if role in ("admin", "vp"):
-        return get_opportunities(team_id)
+        return get_opportunities(team_id, include_killed=include_killed)
     sb = get_supabase()
     # Oportunidades propias
-    own_resp = sb.table("opportunities") \
+    query = sb.table("opportunities") \
         .select("*") \
         .eq("team_id", team_id) \
-        .eq("owner_id", user_id) \
-        .order("monto", desc=True) \
-        .execute()
+        .eq("owner_id", user_id)
+    if not include_killed:
+        query = query.is_("killed_at", "null")
+    own_resp = query.order("monto", desc=True).execute()
     own_opps = own_resp.data or []
     own_ids = {o["id"] for o in own_opps}
     # Oportunidades con actividades asignadas al usuario
@@ -46,11 +48,12 @@ def get_opportunities_for_user(team_id: str, user_id: str, role: str) -> list[di
     assigned_opp_ids = {a["opportunity_id"] for a in (act_resp.data or [])} - own_ids
     extra_opps = []
     if assigned_opp_ids:
-        extra_resp = sb.table("opportunities") \
+        extra_query = sb.table("opportunities") \
             .select("*") \
-            .in_("id", list(assigned_opp_ids)) \
-            .order("monto", desc=True) \
-            .execute()
+            .in_("id", list(assigned_opp_ids))
+        if not include_killed:
+            extra_query = extra_query.is_("killed_at", "null")
+        extra_resp = extra_query.order("monto", desc=True).execute()
         extra_opps = extra_resp.data or []
     return own_opps + extra_opps
 
@@ -61,7 +64,7 @@ def get_opportunity_extra_columns(team_id: str) -> list[str]:
     resp = sb.table("opportunities").select("*").eq("team_id", team_id).limit(1).execute()
     if not resp.data:
         return []
-    SYSTEM_COLS = {"id", "team_id", "owner_id", "created_at", "updated_at"}
+    SYSTEM_COLS = {"id", "team_id", "owner_id", "created_at", "updated_at", "killed_at", "kill_reason", "urgency", "gtm_type"}
     UI_COLS = {"proyecto", "cuenta", "monto", "categoria", "opp_id", "stage", "close_date", "partner"}
     all_cols = set(resp.data[0].keys())
     extra = sorted(all_cols - SYSTEM_COLS - UI_COLS)
@@ -110,6 +113,71 @@ def delete_opportunities_by_account(team_id: str, cuenta: str):
     """Elimina todas las oportunidades de una cuenta."""
     sb = get_supabase()
     sb.table("opportunities").delete().eq("team_id", team_id).eq("cuenta", cuenta).execute()
+
+def kill_opportunity(opp_id: str, kill_reason: str) -> dict:
+    """Cierra (kill) una oportunidad con razón: ganada, perdida, error."""
+    sb = get_supabase()
+    resp = sb.table("opportunities") \
+        .update({"killed_at": datetime.now().isoformat(), "kill_reason": kill_reason}) \
+        .eq("id", opp_id) \
+        .execute()
+    return resp.data[0] if resp.data else {}
+
+def get_killed_opportunities(team_id: str) -> list[dict]:
+    """Obtiene oportunidades cerradas del equipo, ordenadas por fecha de cierre desc."""
+    sb = get_supabase()
+    resp = sb.table("opportunities") \
+        .select("*") \
+        .eq("team_id", team_id) \
+        .not_.is_("killed_at", "null") \
+        .order("killed_at", desc=True) \
+        .execute()
+    return resp.data or []
+
+def get_all_opportunities_for_snapshot(team_id: str) -> list[dict]:
+    """Obtiene TODAS las oportunidades (activas + cerradas) para computar snapshots."""
+    return get_opportunities(team_id, include_killed=True)
+
+
+# ============================================================
+# PIPELINE SNAPSHOTS
+# ============================================================
+
+def get_pipeline_snapshot(team_id: str, week_ending: str) -> dict | None:
+    """Obtiene un snapshot de pipeline por semana."""
+    sb = get_supabase()
+    resp = sb.table("pipeline_snapshots") \
+        .select("*") \
+        .eq("team_id", team_id) \
+        .eq("week_ending", week_ending) \
+        .maybe_single() \
+        .execute()
+    return resp.data
+
+def upsert_pipeline_snapshot(team_id: str, week_ending: str, data: dict) -> dict:
+    """Inserta o actualiza un snapshot semanal de pipeline."""
+    sb = get_supabase()
+    resp = sb.table("pipeline_snapshots") \
+        .upsert({
+            "team_id": team_id,
+            "week_ending": week_ending,
+            "snapshot_data": data,
+            "updated_at": datetime.now().isoformat(),
+        }, on_conflict="team_id,week_ending") \
+        .execute()
+    return resp.data[0] if resp.data else {}
+
+def get_pipeline_snapshots(team_id: str, weeks: int = 12) -> list[dict]:
+    """Obtiene los últimos N snapshots semanales de pipeline."""
+    sb = get_supabase()
+    resp = sb.table("pipeline_snapshots") \
+        .select("*") \
+        .eq("team_id", team_id) \
+        .order("week_ending", desc=True) \
+        .limit(weeks) \
+        .execute()
+    return resp.data or []
+
 
 def bulk_create_opportunities(team_id: str, owner_id: str, items: list[dict]) -> int:
     """Importación masiva de oportunidades. Pasa todos los campos dinámicamente."""
