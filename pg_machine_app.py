@@ -1449,14 +1449,12 @@ with st.sidebar:
         nc = st.text_input("Cuenta")
         np = st.text_input("Proyecto")
         ncat = st.selectbox("Categoría", CATEGORIAS)
-        _new_is_gtm = "GTM" in ncat.strip().upper()
-        if _new_is_gtm:
-            _new_urg_opts = ["", "alta", "media", "baja"]
-            _new_urg_labels = {"": "— Sin prioridad —", "alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
-            n_urgency = st.selectbox("Prioridad", _new_urg_opts, format_func=lambda x: _new_urg_labels[x])
-            n_gtm_type = st.text_input("Tipo GTM")
-        else:
-            nm = st.number_input("Monto USD", value=0)
+        # Always render both sets of fields (Streamlit forms can't conditionally render)
+        nm = st.number_input("Monto USD", value=0)
+        _new_urg_opts = ["", "alta", "media", "baja"]
+        _new_urg_labels = {"": "— Sin prioridad —", "alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
+        n_urgency = st.selectbox("Prioridad (GTM)", _new_urg_opts, format_func=lambda x: _new_urg_labels[x])
+        n_gtm_type = st.text_input("Tipo GTM")
         n_opp_id = st.text_input("Opportunity ID")
         n_stage = st.text_input("Stage")
         n_partner = st.text_input("Partner")
@@ -1468,6 +1466,7 @@ with st.sidebar:
         if st.form_submit_button("Añadir Individual"):
             if nc and np:
                 parsed = _parse_date(n_close)
+                _new_is_gtm = "GTM" in ncat.strip().upper()
                 opp_data = {
                     "proyecto": np, "cuenta": nc,
                     "categoria": ncat, "opp_id": n_opp_id,
@@ -1510,7 +1509,7 @@ if st.session_state.selected_id:
         meta_parts.append(f'<span class="meta-partner">🤝 {opp["partner"]}</span>')
     _detail_is_gtm = "GTM" in cat_upper
     if _detail_is_gtm:
-        _d_urg = opp.get("urgency", "")
+        _d_urg = opp.get("urgency") or ""
         _d_urg_labels = {"alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
         _d_urg_colors = {"alta": "#ef4444", "media": "#f59e0b", "baja": "#3b82f6"}
         _d_urg_lbl = _d_urg_labels.get(_d_urg, "⚪ Sin prioridad")
@@ -1835,7 +1834,7 @@ if st.session_state.selected_id:
             if _edit_is_gtm:
                 _urg_opts = ["", "alta", "media", "baja"]
                 _urg_labels_edit = {"": "— Sin prioridad —", "alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
-                _cur_urg = opp.get("urgency", "") or ""
+                _cur_urg = opp.get("urgency") or ""
                 _cur_urg_idx = _urg_opts.index(_cur_urg) if _cur_urg in _urg_opts else 0
                 ed_urgency = ed_c3.selectbox("Prioridad", _urg_opts, index=_cur_urg_idx, format_func=lambda x: _urg_labels_edit[x])
                 ed_gtm_type = st.text_input("Tipo GTM", value=opp.get("gtm_type", "") or "")
@@ -2053,7 +2052,7 @@ else:
                 row2_html = f'<div class="opp-row2">{stage_html}</div>' if stage_html else ""
                 # Right side: GTM shows urgency badge; pipeline shows amount
                 if _card_is_gtm:
-                    _urg = o.get("urgency", "")
+                    _urg = o.get("urgency") or ""
                     _urg_lbl = _URG_LABELS.get(_urg, "⚪ Sin prioridad")
                     _urg_clr = _URG_COLORS.get(_urg, "#94a3b8")
                     _gtype = o.get("gtm_type", "") or ""
@@ -2113,7 +2112,7 @@ else:
         def _opp_sort_key(o):
             """Sort key: GTM by urgency priority, pipeline by monto desc."""
             if "GTM" in o.get("categoria", "").strip().upper():
-                return (0, _URG_SORT.get(o.get("urgency", ""), 9))
+                return (0, _URG_SORT.get(o.get("urgency") or "", 9))
             return (0, -float(o.get("monto") or 0))
 
         if focused:
@@ -2758,8 +2757,8 @@ else:
                 _urg_colors = {"alta": "#ef4444", "media": "#f59e0b", "baja": "#3b82f6"}
                 _urg_labels = {"alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
                 _gtm_html = ""
-                for go in sorted(_gtm_active, key=lambda x: {"alta": 0, "media": 1, "baja": 2}.get(x.get("urgency", ""), 3)):
-                    _urg = go.get("urgency", "")
+                for go in sorted(_gtm_active, key=lambda x: {"alta": 0, "media": 1, "baja": 2}.get(x.get("urgency") or "", 3)):
+                    _urg = go.get("urgency") or ""
                     _gtype = go.get("gtm_type", "") or ""
                     _urg_badge = _urg_labels.get(_urg, "⚪ —")
                     _urg_c = _urg_colors.get(_urg, "#94a3b8")

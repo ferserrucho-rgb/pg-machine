@@ -12,6 +12,15 @@ from lib.auth import get_supabase
 # OPPORTUNITIES
 # ============================================================
 
+def _ensure_new_cols(rows: list[dict]) -> list[dict]:
+    """Ensure new columns exist in each row (PostgREST schema cache may omit them)."""
+    for r in rows:
+        r.setdefault("urgency", None)
+        r.setdefault("gtm_type", None)
+        r.setdefault("killed_at", None)
+        r.setdefault("kill_reason", None)
+    return rows
+
 def get_opportunities(team_id: str, include_killed: bool = False) -> list[dict]:
     """Obtiene oportunidades del equipo (por defecto solo activas)."""
     sb = get_supabase()
@@ -21,7 +30,7 @@ def get_opportunities(team_id: str, include_killed: bool = False) -> list[dict]:
     if not include_killed:
         query = query.is_("killed_at", "null")
     resp = query.order("monto", desc=True).execute()
-    return resp.data or []
+    return _ensure_new_cols(resp.data or [])
 
 def get_opportunities_for_user(team_id: str, user_id: str, role: str, include_killed: bool = False) -> list[dict]:
     """Obtiene oportunidades según el rol del usuario.
@@ -55,7 +64,7 @@ def get_opportunities_for_user(team_id: str, user_id: str, role: str, include_ki
             extra_query = extra_query.is_("killed_at", "null")
         extra_resp = extra_query.order("monto", desc=True).execute()
         extra_opps = extra_resp.data or []
-    return own_opps + extra_opps
+    return _ensure_new_cols(own_opps + extra_opps)
 
 
 def get_opportunity_extra_columns(team_id: str) -> list[str]:
@@ -78,6 +87,8 @@ def get_opportunity(opp_id: str) -> dict | None:
         .eq("id", opp_id) \
         .maybe_single() \
         .execute()
+    if resp.data:
+        _ensure_new_cols([resp.data])
     return resp.data
 
 def create_opportunity(team_id: str, owner_id: str, data: dict) -> dict:
@@ -132,7 +143,7 @@ def get_killed_opportunities(team_id: str) -> list[dict]:
         .not_.is_("killed_at", "null") \
         .order("killed_at", desc=True) \
         .execute()
-    return resp.data or []
+    return _ensure_new_cols(resp.data or [])
 
 def get_all_opportunities_for_snapshot(team_id: str) -> list[dict]:
     """Obtiene TODAS las oportunidades (activas + cerradas) para computar snapshots."""
