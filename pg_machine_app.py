@@ -32,8 +32,6 @@ st.markdown("""
     .pgm-loading-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
-    /* Hide Streamlit deploy toolbar */
-    [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
     /* Compress ALL vertical gaps — broad selectors for Streamlit compatibility */
     section.main [data-testid="stVerticalBlock"],
@@ -2056,17 +2054,6 @@ else:
         cat_totals = {}
         for cat in CATEGORIAS:
             cat_totals[cat] = sum(float(o.get("monto") or 0) for o in all_opps if o["categoria"] == cat)
-        # Hidden buttons for category focus click handling
-        for cat in CATEGORIAS:
-            if focused == cat:
-                if st.button(f"unfocus_{cat}", key=f"unfocus_{cat}"):
-                    st.session_state.focused_cat = None
-                    st.rerun()
-            else:
-                if st.button(f"focus_{cat}", key=f"focus_{cat}"):
-                    st.session_state.focused_cat = cat
-                    st.rerun()
-
         # --- Bulk delete ---
         opp_options = {o["id"]: f'{o["proyecto"]} — {o["cuenta"]}' for o in all_opps}
         bulk_sel_col, bulk_act_col = st.columns([0.75, 0.25])
@@ -2243,6 +2230,17 @@ else:
                             accounts.setdefault(o['cuenta'], []).append(o)
                         for cuenta, opps in accounts.items():
                             _render_account_group(cuenta, opps, all_acts_by_opp)
+
+        # Hidden buttons for category focus click handling (at bottom to avoid gaps)
+        for cat in CATEGORIAS:
+            if focused == cat:
+                if st.button(f"unfocus_{cat}", key=f"unfocus_{cat}"):
+                    st.session_state.focused_cat = None
+                    st.rerun()
+            else:
+                if st.button(f"focus_{cat}", key=f"focus_{cat}"):
+                    st.session_state.focused_cat = cat
+                    st.rerun()
 
     # --- TAB: ACTIVIDADES ---
     with selected_tabs[1]:
