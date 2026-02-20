@@ -33,6 +33,13 @@ st.markdown("""
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
+    /* Compress top header area and sidebar toggle zone */
+    header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; padding: 0 !important; }
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="collapsedControl"] { top: 0.25rem !important; }
+    [data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem !important; }
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.2rem !important; }
+    [data-testid="stAppViewBlockContainer"] { padding-top: 0.5rem !important; }
     /* Compress ALL vertical gaps — broad selectors for Streamlit compatibility */
     section.main [data-testid="stVerticalBlock"],
     section.main [class*="stVerticalBlock"],
@@ -233,13 +240,6 @@ st.markdown("""
     .cal-inbox-card .cal-attendees { font-size:0.62rem; color:#7c3aed; background:#ede9fe; padding:2px 6px; border-radius:8px; display:inline-block; margin-top:3px; }
     /* User bar action buttons */
     .user-bar-actions button { font-size: 0.7rem !important; padding: 2px 10px !important; min-height: 32px !important; }
-    /* Compact import expander */
-    [data-testid="stExpander"] details summary { font-size: 0.78rem !important; padding: 4px 8px !important; }
-    [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding: 4px 8px !important; }
-    [data-testid="stExpander"] [data-testid="stExpanderDetails"] .stRadio label,
-    [data-testid="stExpander"] [data-testid="stExpanderDetails"] .stCheckbox label { font-size: 0.72rem !important; }
-    [data-testid="stExpander"] [data-testid="stExpanderDetails"] .stDownloadButton button,
-    [data-testid="stExpander"] [data-testid="stExpanderDetails"] button { font-size: 0.7rem !important; min-height: 28px !important; padding: 2px 8px !important; }
     /* --- Mobile responsive --- */
     @media (max-width: 768px) {
         .block-container { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
@@ -1326,6 +1326,156 @@ with st.sidebar:
         _show_user_guide()
 
     st.divider()
+
+    import io
+    with st.expander("📥 CARGA MASIVA (EXCEL)", expanded=True):
+        perfil = st.radio("Formato:", ["Leads Propios", "Forecast BMC"])
+        if perfil == "Leads Propios":
+            tpl_df = pd.DataFrame(columns=["Proyecto", "Empresa", "Partner", "Annual Contract Value (ACV)", "Close Date"])
+            tpl_buf = io.BytesIO()
+            tpl_df.to_excel(tpl_buf, index=False, engine="openpyxl")
+            st.download_button("📄 Descargar plantilla Leads", tpl_buf.getvalue(), file_name="plantilla_leads.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        else:
+            tpl_df = pd.DataFrame(columns=["Opportunity Name", "Account Name", "Annual Contract Value (ACV)", "Amount (USD)", "SFDC Opportunity Id", "Stage", "Partner", "Close Date"])
+            tpl_buf = io.BytesIO()
+            tpl_df.to_excel(tpl_buf, index=False, engine="openpyxl")
+            st.download_button("📄 Descargar plantilla Official", tpl_buf.getvalue(), file_name="plantilla_official.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        up = st.file_uploader("Subir Archivo", type=["xlsx"])
+        if up and st.button("Analizar Archivo"):
+            df = pd.read_excel(up)
+            items = []
+            for _, r in df.iterrows():
+                if perfil == "Leads Propios":
+                    parsed = _parse_date(r.get('Close Date', None))
+                    items.append({
+                        "proyecto": str(r.get('Proyecto', 'S/N')),
+                        "cuenta": str(r.get('Empresa', r.get('Cuenta', 'S/N'))),
+                        "monto": float(r.get('Annual Contract Value (ACV)', r.get('Valor', r.get('Monto', 0))) or 0),
+                        "categoria": "LEADS",
+                        "close_date": str(parsed) if parsed else None,
+                        "partner": str(r.get('Partner', '') or '').strip() if str(r.get('Partner', '')).lower() not in ('nan', '') else '',
+                    })
+                else:
+                    parsed = _parse_date(r.get('Close Date', None))
+                    _opp_id_raw = r.get('SFDC Opportunity Id', r.get('BMC Opportunity Id', ''))
+                    items.append({
+                        "proyecto": str(r.get('Opportunity Name', '-')),
+                        "cuenta": str(r.get('Account Name', '-')),
+                        "monto": float(r.get('Annual Contract Value (ACV)', r.get('Amount (USD)', r.get('Amount USD', 0))) or 0),
+                        "categoria": "OFFICIAL",
+                        "opp_id": str(_opp_id_raw).strip() if str(_opp_id_raw).lower() not in ('nan', '') else '',
+                        "stage": str(r.get('Stage', '')).strip() if str(r.get('Stage', '')).lower() != 'nan' else '',
+                        "close_date": str(parsed) if parsed else None,
+                        "partner": str(r.get('Partner', '') or '').strip() if str(r.get('Partner', '')).lower() not in ('nan', '') else '',
+                    })
+            existing = _cached_opportunities(team_id, st.session_state._data_v)
+            by_opp_id = {o["opp_id"]: o for o in existing if o.get("opp_id")}
+            by_proy_cuenta = {(o["proyecto"], o["cuenta"]): o for o in existing}
+            nuevas = []
+            iguales = []
+            con_cambios = []
+            compare_fields = ["proyecto", "cuenta", "monto", "categoria", "opp_id", "stage", "close_date", "partner"] + EXTRA_OPP_COLS
+            for item in items:
+                match = None
+                if item.get("opp_id") and item["opp_id"] in by_opp_id:
+                    match = by_opp_id[item["opp_id"]]
+                elif (item["proyecto"], item["cuenta"]) in by_proy_cuenta:
+                    match = by_proy_cuenta[(item["proyecto"], item["cuenta"])]
+                if match:
+                    diffs = {}
+                    for f in compare_fields:
+                        val_new = str(item.get(f, "") or "")
+                        val_old = str(match.get(f, "") or "")
+                        if val_new != val_old and val_new:
+                            diffs[f] = {"excel": item.get(f), "actual": match.get(f)}
+                    if diffs:
+                        con_cambios.append((item, match, diffs))
+                    else:
+                        iguales.append(item)
+                else:
+                    nuevas.append(item)
+            st.session_state["import_nuevas"] = nuevas
+            st.session_state["import_iguales"] = iguales
+            st.session_state["import_con_cambios"] = con_cambios
+            st.session_state["import_analizado"] = True
+        if st.session_state.get("import_analizado"):
+            nuevas = st.session_state.get("import_nuevas", [])
+            iguales = st.session_state.get("import_iguales", [])
+            con_cambios = st.session_state.get("import_con_cambios", [])
+            st.markdown(f"**Resultado del análisis:**")
+            st.markdown(f"- 🆕 **{len(nuevas)}** nuevas")
+            st.markdown(f"- ✅ **{len(iguales)}** sin cambios (se omiten)")
+            st.markdown(f"- ⚠️ **{len(con_cambios)}** con diferencias")
+            if nuevas:
+                st.markdown("---")
+                st.markdown("**🆕 Nuevas oportunidades:**")
+                nc1, nc2 = st.columns([0.8, 0.2])
+                select_all_new = nc2.checkbox("Todas", value=True, key="sel_all_new")
+                for i, item in enumerate(nuevas):
+                    monto_str = f"USD {float(item.get('monto', 0)):,.0f} ACV"
+                    partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
+                    st.checkbox(
+                        f"{item['cuenta']} — {item['proyecto']} ({monto_str}{partner_str})",
+                        value=select_all_new,
+                        key=f"imp_new_{i}",
+                    )
+            if con_cambios:
+                st.markdown("---")
+                st.markdown("**⚠️ Con diferencias (sobrescribir con Excel):**")
+                cc1, cc2 = st.columns([0.8, 0.2])
+                select_all_chg = cc2.checkbox("Todas", value=False, key="sel_all_chg")
+                for i, (item, existing_opp, diffs) in enumerate(con_cambios):
+                    diff_summary = ", ".join(f"{f}: {v['actual']} → {v['excel']}" for f, v in diffs.items())
+                    monto_str = f"USD {float(item.get('monto', 0)):,.0f} ACV"
+                    partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
+                    st.checkbox(
+                        f"{item['cuenta']} — {item['proyecto']} ({monto_str}{partner_str})",
+                        value=select_all_chg,
+                        key=f"imp_chg_{i}",
+                        help=diff_summary,
+                    )
+            st.markdown("---")
+            bc1, bc2 = st.columns(2)
+            if bc1.button("Ejecutar Importación", key="exec_import", use_container_width=True):
+                created = 0
+                updated = 0
+                skipped_new = 0
+                selected_nuevas = [item for i, item in enumerate(nuevas) if st.session_state.get(f"imp_new_{i}")]
+                skipped_new = len(nuevas) - len(selected_nuevas)
+                if selected_nuevas:
+                    created = dal.bulk_create_opportunities(team_id, user_id, selected_nuevas)
+                for i, (item, existing_opp, diffs) in enumerate(con_cambios):
+                    if st.session_state.get(f"imp_chg_{i}"):
+                        update_data = {f: item[f] for f in diffs}
+                        dal.update_opportunity(existing_opp["id"], update_data)
+                        updated += 1
+                parts = []
+                if created:
+                    parts.append(f"{created} creadas")
+                if updated:
+                    parts.append(f"{updated} actualizadas")
+                if iguales:
+                    parts.append(f"{len(iguales)} sin cambios")
+                if skipped_new:
+                    parts.append(f"{skipped_new} omitidas")
+                st.success(f"Importación completada: {', '.join(parts)}")
+                keys_to_clear = ["import_nuevas", "import_iguales", "import_con_cambios", "import_analizado"]
+                keys_to_clear += [f"imp_new_{i}" for i in range(len(nuevas))]
+                keys_to_clear += [f"imp_chg_{i}" for i in range(len(con_cambios))]
+                keys_to_clear += ["sel_all_new", "sel_all_chg"]
+                for k in keys_to_clear:
+                    st.session_state.pop(k, None)
+                st.rerun()
+            if bc2.button("Cancelar", key="cancel_import", use_container_width=True):
+                keys_to_clear = ["import_nuevas", "import_iguales", "import_con_cambios", "import_analizado"]
+                keys_to_clear += [f"imp_new_{i}" for i in range(len(nuevas))]
+                keys_to_clear += [f"imp_chg_{i}" for i in range(len(con_cambios))]
+                keys_to_clear += ["sel_all_new", "sel_all_chg"]
+                for k in keys_to_clear:
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+    st.divider()
     st.write("✍️ **ALTA MANUAL**")
     with st.form("manual_entry"):
         nc = st.text_input("Cuenta")
@@ -1830,133 +1980,9 @@ else:
 
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
-        import io
-        _ub1, _ub2, _ub3 = st.columns([3, 4, 1])
+        _ub1, _ub2 = st.columns([7, 1])
         _ub1.markdown(user_bar_html, unsafe_allow_html=True)
         with _ub2:
-            with st.expander("📥 Carga Masiva (Excel)", expanded=False):
-                perfil = st.radio("Formato:", ["Leads Propios", "Forecast BMC"], horizontal=True)
-                if perfil == "Leads Propios":
-                    tpl_df = pd.DataFrame(columns=["Proyecto", "Empresa", "Partner", "Annual Contract Value (ACV)", "Close Date"])
-                    tpl_buf = io.BytesIO()
-                    tpl_df.to_excel(tpl_buf, index=False, engine="openpyxl")
-                    st.download_button("📄 Plantilla Leads", tpl_buf.getvalue(), file_name="plantilla_leads.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                else:
-                    tpl_df = pd.DataFrame(columns=["Opportunity Name", "Account Name", "Annual Contract Value (ACV)", "Amount (USD)", "SFDC Opportunity Id", "Stage", "Partner", "Close Date"])
-                    tpl_buf = io.BytesIO()
-                    tpl_df.to_excel(tpl_buf, index=False, engine="openpyxl")
-                    st.download_button("📄 Plantilla Official", tpl_buf.getvalue(), file_name="plantilla_official.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                up = st.file_uploader("Subir Archivo", type=["xlsx"])
-                if up and st.button("Analizar Archivo"):
-                    df = pd.read_excel(up)
-                    items = []
-                    for _, r in df.iterrows():
-                        if perfil == "Leads Propios":
-                            parsed = _parse_date(r.get('Close Date', None))
-                            items.append({
-                                "proyecto": str(r.get('Proyecto', 'S/N')),
-                                "cuenta": str(r.get('Empresa', r.get('Cuenta', 'S/N'))),
-                                "monto": float(r.get('Annual Contract Value (ACV)', r.get('Valor', r.get('Monto', 0))) or 0),
-                                "categoria": "LEADS",
-                                "close_date": str(parsed) if parsed else None,
-                                "partner": str(r.get('Partner', '') or '').strip() if str(r.get('Partner', '')).lower() not in ('nan', '') else '',
-                            })
-                        else:
-                            parsed = _parse_date(r.get('Close Date', None))
-                            _opp_id_raw = r.get('SFDC Opportunity Id', r.get('BMC Opportunity Id', ''))
-                            items.append({
-                                "proyecto": str(r.get('Opportunity Name', '-')),
-                                "cuenta": str(r.get('Account Name', '-')),
-                                "monto": float(r.get('Annual Contract Value (ACV)', r.get('Amount (USD)', r.get('Amount USD', 0))) or 0),
-                                "categoria": "OFFICIAL",
-                                "opp_id": str(_opp_id_raw).strip() if str(_opp_id_raw).lower() not in ('nan', '') else '',
-                                "stage": str(r.get('Stage', '')).strip() if str(r.get('Stage', '')).lower() != 'nan' else '',
-                                "close_date": str(parsed) if parsed else None,
-                                "partner": str(r.get('Partner', '') or '').strip() if str(r.get('Partner', '')).lower() not in ('nan', '') else '',
-                            })
-                    existing = _cached_opportunities(team_id, st.session_state._data_v)
-                    by_opp_id = {o["opp_id"]: o for o in existing if o.get("opp_id")}
-                    by_proy_cuenta = {(o["proyecto"], o["cuenta"]): o for o in existing}
-                    nuevas, iguales, con_cambios = [], [], []
-                    compare_fields = ["proyecto", "cuenta", "monto", "categoria", "opp_id", "stage", "close_date", "partner"] + EXTRA_OPP_COLS
-                    for item in items:
-                        match = None
-                        if item.get("opp_id") and item["opp_id"] in by_opp_id:
-                            match = by_opp_id[item["opp_id"]]
-                        elif (item["proyecto"], item["cuenta"]) in by_proy_cuenta:
-                            match = by_proy_cuenta[(item["proyecto"], item["cuenta"])]
-                        if match:
-                            diffs = {}
-                            for f in compare_fields:
-                                val_new = str(item.get(f, "") or "")
-                                val_old = str(match.get(f, "") or "")
-                                if val_new != val_old and val_new:
-                                    diffs[f] = {"excel": item.get(f), "actual": match.get(f)}
-                            if diffs:
-                                con_cambios.append((item, match, diffs))
-                            else:
-                                iguales.append(item)
-                        else:
-                            nuevas.append(item)
-                    st.session_state["import_nuevas"] = nuevas
-                    st.session_state["import_iguales"] = iguales
-                    st.session_state["import_con_cambios"] = con_cambios
-                    st.session_state["import_analizado"] = True
-                if st.session_state.get("import_analizado"):
-                    nuevas = st.session_state.get("import_nuevas", [])
-                    iguales = st.session_state.get("import_iguales", [])
-                    con_cambios = st.session_state.get("import_con_cambios", [])
-                    st.markdown(f"**Resultado:** 🆕 {len(nuevas)} nuevas · ✅ {len(iguales)} sin cambios · ⚠️ {len(con_cambios)} con diferencias")
-                    if nuevas:
-                        nc1, nc2 = st.columns([0.8, 0.2])
-                        nc1.markdown("**🆕 Nuevas:**")
-                        select_all_new = nc2.checkbox("Todas", value=True, key="sel_all_new")
-                        for i, item in enumerate(nuevas):
-                            monto_str = f"USD {float(item.get('monto', 0)):,.0f}"
-                            partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
-                            st.checkbox(f"{item['cuenta']} — {item['proyecto']} ({monto_str}{partner_str})", value=select_all_new, key=f"imp_new_{i}")
-                    if con_cambios:
-                        cc1, cc2 = st.columns([0.8, 0.2])
-                        cc1.markdown("**⚠️ Con diferencias:**")
-                        select_all_chg = cc2.checkbox("Todas", value=False, key="sel_all_chg")
-                        for i, (item, existing_opp, diffs) in enumerate(con_cambios):
-                            diff_summary = ", ".join(f"{f}: {v['actual']} → {v['excel']}" for f, v in diffs.items())
-                            monto_str = f"USD {float(item.get('monto', 0)):,.0f}"
-                            partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
-                            st.checkbox(f"{item['cuenta']} — {item['proyecto']} ({monto_str}{partner_str})", value=select_all_chg, key=f"imp_chg_{i}", help=diff_summary)
-                    bc1, bc2 = st.columns(2)
-                    if bc1.button("Ejecutar Importación", key="exec_import", use_container_width=True):
-                        created, updated, skipped_new = 0, 0, 0
-                        selected_nuevas = [item for i, item in enumerate(nuevas) if st.session_state.get(f"imp_new_{i}")]
-                        skipped_new = len(nuevas) - len(selected_nuevas)
-                        if selected_nuevas:
-                            created = dal.bulk_create_opportunities(team_id, user_id, selected_nuevas)
-                        for i, (item, existing_opp, diffs) in enumerate(con_cambios):
-                            if st.session_state.get(f"imp_chg_{i}"):
-                                dal.update_opportunity(existing_opp["id"], {f: item[f] for f in diffs})
-                                updated += 1
-                        parts = []
-                        if created: parts.append(f"{created} creadas")
-                        if updated: parts.append(f"{updated} actualizadas")
-                        if iguales: parts.append(f"{len(iguales)} sin cambios")
-                        if skipped_new: parts.append(f"{skipped_new} omitidas")
-                        st.success(f"Importación: {', '.join(parts)}")
-                        keys_to_clear = ["import_nuevas", "import_iguales", "import_con_cambios", "import_analizado"]
-                        keys_to_clear += [f"imp_new_{i}" for i in range(len(nuevas))]
-                        keys_to_clear += [f"imp_chg_{i}" for i in range(len(con_cambios))]
-                        keys_to_clear += ["sel_all_new", "sel_all_chg"]
-                        for k in keys_to_clear:
-                            st.session_state.pop(k, None)
-                        st.rerun()
-                    if bc2.button("Cancelar", key="cancel_import", use_container_width=True):
-                        keys_to_clear = ["import_nuevas", "import_iguales", "import_con_cambios", "import_analizado"]
-                        keys_to_clear += [f"imp_new_{i}" for i in range(len(nuevas))]
-                        keys_to_clear += [f"imp_chg_{i}" for i in range(len(con_cambios))]
-                        keys_to_clear += ["sel_all_new", "sel_all_chg"]
-                        for k in keys_to_clear:
-                            st.session_state.pop(k, None)
-                        st.rerun()
-        with _ub3:
             st.markdown('<div class="user-bar-actions">', unsafe_allow_html=True)
             _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
             if st.button(_edit_label, key="toggle_edit_mode", use_container_width=True):
