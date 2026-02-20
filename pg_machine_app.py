@@ -32,13 +32,11 @@ st.markdown("""
     .pgm-loading-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
-    header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; padding: 0 !important; }
-    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
-    /* Compress Streamlit default vertical gaps */
-    [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlockBorderWrapper"],
-    [data-testid="stVerticalBlock"] > [data-testid="element-container"],
-    [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] { margin-bottom: -0.4rem; }
-    [data-testid="stTabs"] [data-baseweb="tab-panel"] { padding-top: 0.25rem !important; }
+    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1rem !important; padding-bottom: 0.5rem !important; }
+    /* Compress Streamlit default vertical gaps (main area only) */
+    section.main [data-testid="stVerticalBlock"] { gap: 0.35rem !important; }
+    [data-testid="stTabs"] [data-baseweb="tab-panel"] { padding-top: 0.2rem !important; }
+    section.main [data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
     .cat-styled { color: white !important; font-weight: 800 !important; font-size: 0.8rem !important; letter-spacing: 0.05em !important; text-transform: uppercase !important; border: none !important; border-radius: 6px !important; padding: 6px 10px !important; min-height: 0 !important; }
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .badge { float:right; font-size:0.6rem; font-weight:bold; padding:2px 6px; border-radius:8px; text-transform: uppercase; border: 1.2px solid; }
