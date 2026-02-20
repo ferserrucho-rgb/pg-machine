@@ -257,32 +257,18 @@ components.html("""
     // Event delegation for all custom click handlers
     if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
     doc._pgmClickHandler = function(e) {
-        // 1. Dashboard card click (open / delete)
+        // 1. Dashboard card click (open / delete) — via query params
         var card = e.target.closest('.pgm-card-wrap');
         if (card) {
-            var el = card.parentElement;
-            var btnRow = null;
-            while (el) {
-                var sib = el.nextElementSibling;
-                if (sib) {
-                    var hasOpen = false;
-                    sib.querySelectorAll('button').forEach(function(b) {
-                        if ((b.textContent||'').trim() === '\u25b8') hasOpen = true;
-                    });
-                    if (hasOpen) { btnRow = sib; break; }
-                }
-                el = el.parentElement;
-            }
-            if (!btnRow) return;
+            var oppId = card.getAttribute('data-opp-id');
+            if (!oppId) return;
+            var url = new URL(window.parent.location);
             if (e.target.closest('.card-del-trigger')) {
-                btnRow.querySelectorAll('button').forEach(function(b) {
-                    if ((b.textContent||'').trim() === '\u00d7') b.click();
-                });
-                return;
+                url.searchParams.set('_qdel', oppId);
+            } else {
+                url.searchParams.set('_sel', oppId);
             }
-            btnRow.querySelectorAll('button').forEach(function(b) {
-                if ((b.textContent||'').trim() === '\u25b8') b.click();
-            });
+            window.parent.location.href = url.href;
             return;
         }
 
@@ -405,25 +391,6 @@ components.html("""
                 btn.style.borderRadius = '6px';
                 btn.style.minHeight = '0';
                 if (txt.indexOf('\u2715')>=0) btn.style.opacity = '0.75';
-            }
-        });
-        // Hide button rows below dashboard cards
-        doc.querySelectorAll('.pgm-card-wrap').forEach(function(card) {
-            var el = card.parentElement;
-            while (el) {
-                var sib = el.nextElementSibling;
-                if (sib) {
-                    var hasCardBtn = false;
-                    sib.querySelectorAll('button').forEach(function(b) {
-                        var t = (b.textContent||'').trim();
-                        if (t === '\u25b8' || t === '\u00d7') hasCardBtn = true;
-                    });
-                    if (hasCardBtn) {
-                        sib.style.cssText = 'position:absolute !important;left:-9999px !important;height:0 !important;overflow:hidden !important;';
-                        break;
-                    }
-                }
-                el = el.parentElement;
             }
         });
         // Hide Volver/Eliminar row in detail view (replaced by meta-bar buttons)
@@ -874,6 +841,17 @@ user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
     st.session_state.selected_id = None
+
+# Handle card navigation via query params (set by JS click on scorecards)
+if '_sel' in st.query_params:
+    st.session_state.selected_id = st.query_params['_sel']
+    del st.query_params['_sel']
+    st.rerun()
+if '_qdel' in st.query_params:
+    _qdel_id = st.query_params['_qdel']
+    st.session_state[f"quick_del_{_qdel_id}"] = True
+    del st.query_params['_qdel']
+    st.rerun()
 if 'focused_cat' not in st.session_state:
     st.session_state.focused_cat = None
 if 'hide_protect' not in st.session_state:
@@ -2004,15 +1982,8 @@ else:
                 if act_lines:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
                 del_icon = '<span class="card-del-trigger">&times;</span>'
-                card_html = f'<div class="pgm-card-wrap">{del_icon}{header_html}{meta_html}{acts_html}</div>'
+                card_html = f'<div class="pgm-card-wrap" data-opp-id="{o["id"]}">{del_icon}{header_html}{meta_html}{acts_html}</div>'
                 st.markdown(card_html, unsafe_allow_html=True)
-                c_open, c_del = st.columns([0.92, 0.08])
-                if c_open.button("▸", key=f"g_{o['id']}", use_container_width=True):
-                    st.session_state.selected_id = o['id']
-                    st.rerun()
-                if c_del.button("×", key=f"qd_{o['id']}", use_container_width=True):
-                    st.session_state[f"quick_del_{o['id']}"] = True
-                    st.rerun()
                 # Delete confirmation
                 if st.session_state.get(f"quick_del_{o['id']}"):
                     st.warning(f"Eliminar **{o['proyecto']}**?")
