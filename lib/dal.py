@@ -468,3 +468,70 @@ def move_member_to_team(profile_id: str, new_team_id: str) -> dict:
         .eq("id", profile_id) \
         .execute()
     return resp.data[0] if resp.data else {}
+
+
+# ============================================================
+# CALENDAR INBOX
+# ============================================================
+
+def get_pending_calendar_events(team_id: str) -> list[dict]:
+    """Obtiene todos los eventos pendientes del equipo."""
+    sb = get_supabase()
+    resp = sb.table("calendar_inbox") \
+        .select("*") \
+        .eq("team_id", team_id) \
+        .eq("status", "pending") \
+        .order("start_time", desc=False) \
+        .execute()
+    return resp.data or []
+
+def get_pending_calendar_events_for_user(team_id: str, user_id: str, role: str) -> list[dict]:
+    """Obtiene eventos pendientes según el rol.
+    Admin/VP ven todos; otros ven solo los propios."""
+    if role in ("admin", "vp"):
+        return get_pending_calendar_events(team_id)
+    sb = get_supabase()
+    resp = sb.table("calendar_inbox") \
+        .select("*") \
+        .eq("team_id", team_id) \
+        .eq("profile_id", user_id) \
+        .eq("status", "pending") \
+        .order("start_time", desc=False) \
+        .execute()
+    return resp.data or []
+
+def get_pending_calendar_count(team_id: str, user_id: str, role: str) -> int:
+    """Cuenta eventos pendientes (optimizado para badge)."""
+    sb = get_supabase()
+    query = sb.table("calendar_inbox") \
+        .select("id", count="exact") \
+        .eq("team_id", team_id) \
+        .eq("status", "pending")
+    if role not in ("admin", "vp"):
+        query = query.eq("profile_id", user_id)
+    resp = query.execute()
+    return resp.count or 0
+
+def assign_calendar_event(inbox_id: str, opp_id: str, activity_id: str, assigned_by: str) -> dict:
+    """Marca un evento como asignado y lo vincula a una actividad."""
+    sb = get_supabase()
+    resp = sb.table("calendar_inbox") \
+        .update({
+            "status": "assigned",
+            "assigned_opportunity_id": opp_id,
+            "assigned_activity_id": activity_id,
+            "assigned_at": datetime.now().isoformat(),
+            "assigned_by": assigned_by,
+        }) \
+        .eq("id", inbox_id) \
+        .execute()
+    return resp.data[0] if resp.data else {}
+
+def dismiss_calendar_event(inbox_id: str) -> dict:
+    """Marca un evento como descartado."""
+    sb = get_supabase()
+    resp = sb.table("calendar_inbox") \
+        .update({"status": "dismissed"}) \
+        .eq("id", inbox_id) \
+        .execute()
+    return resp.data[0] if resp.data else {}

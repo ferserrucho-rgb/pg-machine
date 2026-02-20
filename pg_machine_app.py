@@ -191,6 +191,14 @@ st.markdown("""
     .user-bar .user-role { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
+    /* Calendar inbox badge */
+    .cal-badge { background:#ef4444; color:white; font-size:0.6rem; font-weight:700; padding:2px 6px; border-radius:10px; margin-left:auto; animation:cal-pulse 2s infinite; }
+    @keyframes cal-pulse { 0%,100%{opacity:1;} 50%{opacity:0.6;} }
+    .cal-inbox-card { background:white; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; margin-bottom:8px; border-left:4px solid #10b981; }
+    .cal-inbox-card .cal-subj { font-size:0.82rem; font-weight:700; color:#1e293b; margin-bottom:3px; }
+    .cal-inbox-card .cal-time { font-size:0.7rem; font-weight:600; color:#3b82f6; }
+    .cal-inbox-card .cal-meta { font-size:0.65rem; color:#64748b; margin-top:2px; }
+    .cal-inbox-card .cal-attendees { font-size:0.62rem; color:#7c3aed; background:#ede9fe; padding:2px 6px; border-radius:8px; display:inline-block; margin-top:3px; }
     /* --- Mobile responsive --- */
     @media (max-width: 768px) {
         .block-container { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
@@ -856,7 +864,9 @@ def _get_initials(full_name: str) -> str:
 
 user_initials = _get_initials(user["full_name"])
 user_role_label = ROLE_LABELS.get(user["role"], user["role"])
-user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span></div>'
+_cal_inbox_count = dal.get_pending_calendar_count(team_id, user_id, user["role"])
+_cal_badge_html = f' <span class="cal-badge">📅 {_cal_inbox_count}</span>' if _cal_inbox_count > 0 else ""
+user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}</div>'
 
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
@@ -1780,6 +1790,76 @@ else:
         st.markdown(user_bar_html, unsafe_allow_html=True)
         all_opps = dal.get_opportunities(team_id)
         all_activities = dal.get_all_activities(team_id)
+
+        # --- Calendar Inbox ---
+        _cal_events = dal.get_pending_calendar_events_for_user(team_id, user_id, user["role"]) if _cal_inbox_count > 0 else []
+        if _cal_events:
+            with st.expander(f"📅 Bandeja de Calendario ({len(_cal_events)} pendientes)", expanded=False):
+                for _ce in _cal_events:
+                    _ce_id = _ce["id"]
+                    # Card con info del evento
+                    _ce_start = _ce.get("start_time", "")
+                    _ce_end = _ce.get("end_time", "")
+                    _ce_start_fmt = _ce_start[:16].replace("T", " ") if _ce_start else ""
+                    _ce_end_fmt = _ce_end[11:16] if _ce_end and len(_ce_end) > 11 else ""
+                    _ce_time_str = f"{_ce_start_fmt}–{_ce_end_fmt}" if _ce_end_fmt else _ce_start_fmt
+                    _ce_attendees = _ce.get("attendees", [])
+                    _ce_att_str = ", ".join(_ce_attendees) if isinstance(_ce_attendees, list) else str(_ce_attendees)
+                    _ce_loc = _ce.get("location", "")
+                    _ce_org = _ce.get("organizer", "")
+
+                    _card_html = f'''<div class="cal-inbox-card">
+                        <div class="cal-subj">{_ce.get("subject", "(sin asunto)")}</div>
+                        <div class="cal-time">🕐 {_ce_time_str}</div>'''
+                    if _ce_org:
+                        _card_html += f'<div class="cal-meta">👤 Organizador: {_ce_org}</div>'
+                    if _ce_att_str:
+                        _card_html += f'<div><span class="cal-attendees">👥 {_ce_att_str}</span></div>'
+                    if _ce_loc:
+                        _card_html += f'<div class="cal-meta">📍 {_ce_loc}</div>'
+                    _card_html += '</div>'
+                    st.markdown(_card_html, unsafe_allow_html=True)
+
+                    # Selector de oportunidad + botones
+                    _ce_cols = st.columns([4, 1, 1])
+                    _opp_options = ["— Seleccionar oportunidad —"] + [f'{o["cuenta"]} / {o["proyecto"]}' for o in all_opps]
+                    _sel_opp_idx = _ce_cols[0].selectbox("Oportunidad", range(len(_opp_options)), format_func=lambda i: _opp_options[i], key=f"cal_opp_{_ce_id}", label_visibility="collapsed")
+
+                    if _ce_cols[1].button("✅ Asignar", key=f"cal_assign_{_ce_id}"):
+                        if _sel_opp_idx > 0:
+                            _target_opp = all_opps[_sel_opp_idx - 1]
+                            _ce_fecha = str(_ce_start[:10]) if _ce_start else str(date.today())
+                            _meeting_metadata = json.dumps({
+                                "source": "calendar_sync",
+                                "outlook_event_id": _ce.get("outlook_event_id", ""),
+                                "organizer": _ce_org,
+                                "attendees": _ce_attendees,
+                                "location": _ce_loc,
+                                "original_subject": _ce.get("subject", ""),
+                                "synced_at": datetime.now().isoformat(),
+                            })
+                            _new_act = dal.create_activity(_target_opp["id"], team_id, user_id, {
+                                "tipo": "Reunión",
+                                "fecha": _ce_fecha,
+                                "objetivo": _ce.get("subject", ""),
+                                "descripcion": _ce.get("body", ""),
+                                "destinatario": _ce_att_str,
+                                "sla_key": "",
+                                "sla_hours": None,
+                                "sla_respuesta_dias": 7,
+                            })
+                            if _new_act:
+                                dal.update_activity(_new_act["id"], {"meeting_metadata": _meeting_metadata})
+                                dal.assign_calendar_event(_ce_id, _target_opp["id"], _new_act["id"], user_id)
+                            st.rerun()
+                        else:
+                            st.toast("Selecciona una oportunidad primero", icon="⚠️")
+
+                    if _ce_cols[2].button("❌ Descartar", key=f"cal_dismiss_{_ce_id}"):
+                        dal.dismiss_calendar_event(_ce_id)
+                        st.rerun()
+
+                    st.divider()
 
         # Category focus: show buttons to toggle
         focused = st.session_state.focused_cat
