@@ -887,14 +887,22 @@ if 'metro_view' not in st.session_state:
 if 'historial_metro_view' not in st.session_state:
     st.session_state.historial_metro_view = False
 
-# Cargar configuración del equipo
-SLA_OPCIONES = dal.get_sla_options(team_id)
-SLA_RESPUESTA = dal.get_sla_respuesta(team_id)
-CATEGORIAS = dal.get_categorias(team_id)
-EXTRA_OPP_COLS = dal.get_opportunity_extra_columns(team_id)
-
-# Cargar miembros del equipo para asignaciones
-team_members = dal.get_team_members(team_id)
+# Cargar configuración del equipo (cacheado 60s para reducir roundtrips)
+@st.cache_data(ttl=60)
+def _cached_team_config(_team_id):
+    return {
+        "sla_opciones": dal.get_sla_options(_team_id),
+        "sla_respuesta": dal.get_sla_respuesta(_team_id),
+        "categorias": dal.get_categorias(_team_id),
+        "extra_cols": dal.get_opportunity_extra_columns(_team_id),
+        "members": dal.get_team_members(_team_id),
+    }
+_tc = _cached_team_config(team_id)
+SLA_OPCIONES = _tc["sla_opciones"]
+SLA_RESPUESTA = _tc["sla_respuesta"]
+CATEGORIAS = _tc["categorias"]
+EXTRA_OPP_COLS = _tc["extra_cols"]
+team_members = _tc["members"]
 RECURSOS_PRESALES = {m["id"]: f'{m["full_name"]} ({m["specialty"]})' if m.get("specialty") else m["full_name"] for m in team_members}
 
 def _parse_date(val):
