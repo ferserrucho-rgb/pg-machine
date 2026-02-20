@@ -270,7 +270,7 @@ st.markdown("""
     .q-toggle .scope-knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
     .q-toggle.mode-4q .scope-knob { transform: translateX(14px); }
     /* Hidden toggle buttons row (marker + buttons column) */
-    [data-testid="stHorizontalBlock"]:has(.pgm-hid-mark) { height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
+    [data-testid="stHorizontalBlock"]:has(.pgm-hid-mark) { position: fixed !important; left: -9999px !important; opacity: 0 !important; }
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
     /* Calendar inbox badge */
@@ -2107,7 +2107,7 @@ else:
             fq_start, fq_end = q_start, q3_end
         else:
             fq_start, fq_end = q_start, q1_end
-        all_opps = [o for o in all_opps if o.get("close_date") and fq_start <= (_parse_date(o["close_date"]) or date.min) <= fq_end]
+        all_opps = [o for o in all_opps if not o.get("close_date") or (fq_start <= (_parse_date(o["close_date"]) or date.min) <= fq_end)]
 
         # Category totals (used by column headers below)
         cat_totals = {}
