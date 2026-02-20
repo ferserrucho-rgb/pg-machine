@@ -33,11 +33,6 @@ st.markdown("""
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
-    /* Hide Streamlit toolbar (deploy/menu) to reclaim the header space */
-    [data-testid="stToolbar"],
-    [data-testid="stDecoration"],
-    .stDeployButton { display: none !important; }
-    header[data-testid="stHeader"] { background: transparent !important; }
     /* Place sidebar toggle on the right side */
     [data-testid="stSidebarCollapsedControl"],
     [data-testid="collapsedControl"] { left: auto !important; right: 0.5rem !important; }
@@ -283,19 +278,6 @@ components.html("""
 (function() {
     var doc = window.parent.document;
     if (doc._pgmObs) { try { doc._pgmObs.disconnect(); } catch(e){} }
-
-    // Position sidebar toggle at the tab bar level
-    function alignSidebarToggle() {
-        var tabList = doc.querySelector('[data-baseweb="tab-list"]');
-        var toggle = doc.querySelector('[data-testid="stSidebarCollapsedControl"], [data-testid="collapsedControl"]');
-        if (tabList && toggle) {
-            var tabRect = tabList.getBoundingClientRect();
-            toggle.style.top = tabRect.top + 'px';
-        }
-    }
-    alignSidebarToggle();
-    setTimeout(alignSidebarToggle, 500);
-    setTimeout(alignSidebarToggle, 1500);
 
     // Helper: walk up DOM from startEl, search subsequent siblings for button matching text
     function findBtn(startEl, textMatch) {
