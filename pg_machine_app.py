@@ -33,16 +33,9 @@ st.markdown("""
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
-    /* Collapse header so tabs go to the top */
-    header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; overflow: visible !important; }
-    /* Move sidebar expand arrow (">" when collapsed) to right at tab level */
+    /* Move sidebar arrows to the right side (keep default vertical position) */
     [data-testid="stSidebarCollapsedControl"],
-    [data-testid="collapsedControl"] { left: auto !important; right: 0.5rem !important; top: 0.2rem !important; z-index: 999 !important; }
-    /* Move sidebar close arrow ("X" when open) to right at tab level */
-    [data-testid="stSidebar"] [data-testid="stSidebarNavCollapseButton"],
-    [data-testid="stSidebar"] button[kind="header"],
-    [data-testid="stSidebar"] > div > button:first-child,
-    [data-testid="stSidebarCollapseButton"] { position: fixed !important; left: auto !important; right: 0.5rem !important; top: 0.2rem !important; z-index: 999 !important; }
+    [data-testid="collapsedControl"] { left: auto !important; right: 0.5rem !important; }
     /* Reduce internal spacing inside sidebar */
     [data-testid="stSidebar"] > div:first-child { padding-top: 0.25rem !important; }
     [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.2rem !important; }
