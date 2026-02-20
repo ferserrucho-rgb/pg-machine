@@ -504,13 +504,13 @@ def get_pending_calendar_count(team_id: str, user_id: str, role: str) -> int:
     """Cuenta eventos pendientes (optimizado para badge)."""
     sb = get_supabase()
     query = sb.table("calendar_inbox") \
-        .select("id", count="exact") \
+        .select("id") \
         .eq("team_id", team_id) \
         .eq("status", "pending")
     if role not in ("admin", "vp"):
         query = query.eq("profile_id", user_id)
     resp = query.execute()
-    return resp.count or 0
+    return len(resp.data) if resp.data else 0
 
 def assign_calendar_event(inbox_id: str, opp_id: str, activity_id: str, assigned_by: str) -> dict:
     """Marca un evento como asignado y lo vincula a una actividad."""
