@@ -864,7 +864,10 @@ def _get_initials(full_name: str) -> str:
 
 user_initials = _get_initials(user["full_name"])
 user_role_label = ROLE_LABELS.get(user["role"], user["role"])
-_cal_inbox_count = dal.get_pending_calendar_count(team_id, user_id, user["role"])
+@st.cache_data(ttl=30)
+def _cached_cal_count(_team_id, _user_id, _role):
+    return dal.get_pending_calendar_count(_team_id, _user_id, _role)
+_cal_inbox_count = _cached_cal_count(team_id, user_id, user["role"])
 _cal_badge_html = f' <span class="cal-badge">📅 {_cal_inbox_count}</span>' if _cal_inbox_count > 0 else ""
 user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}</div>'
 
@@ -2414,6 +2417,7 @@ else:
         _cal_hdr_cols = st.columns([5, 1, 1])
         _cal_hdr_cols[0].markdown(f"### 📅 Bandeja de Calendario — {len(_cal_events)} pendientes")
         if _cal_hdr_cols[1].button("🔄 Actualizar", key="cal_refresh"):
+            _cached_cal_count.clear()
             st.rerun()
         if _cal_hdr_cols[2].button("+ Agregar", key="cal_manual_add"):
             st.session_state["_show_cal_form"] = True
