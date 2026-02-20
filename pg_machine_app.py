@@ -261,6 +261,7 @@ st.markdown("""
     /* Growth pill toggle inside user bar */
     .bar-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.6rem; font-weight: 600; cursor: pointer; user-select: none; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.1); transition: background 0.15s, color 0.15s; color: rgba(255,255,255,0.45); }
     .bar-pill.active { background: #22c55e; color: white; }
+    .bar-pill.pgm-toggle-edit.active { background: #f59e0b; }
     /* Quarter toggle (4Q / 2Q) inside user bar – reuses scope-toggle structure */
     .q-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.65rem; font-weight: 600; cursor: pointer; user-select: none; }
     .q-toggle .scope-label { color: rgba(255,255,255,0.45); transition: color 0.15s; }
@@ -355,6 +356,7 @@ components.html("""
         if (e.target.closest('.pgm-toggle-scope')) { clickToggleBtn('TOGGLE_SCOPE'); return; }
         if (e.target.closest('.pgm-toggle-growth')) { clickToggleBtn('TOGGLE_GROWTH'); return; }
         if (e.target.closest('.pgm-toggle-q')) { clickToggleBtn('TOGGLE_Q'); return; }
+        if (e.target.closest('.pgm-toggle-edit')) { clickToggleBtn('TOGGLE_EDIT'); return; }
         // 1. Dashboard card click (open)
         var card = e.target.closest('.pgm-card-wrap');
         if (card) {
@@ -575,6 +577,7 @@ components.html("""
             if (txt.indexOf('TOGGLE_SCOPE') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_GROWTH') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_Q') >= 0) hide = true;
+            if (txt.indexOf('TOGGLE_EDIT') >= 0) hide = true;
             if (hide) {
                 // Walk up hiding wrappers — use offscreen positioning to keep buttons clickable
                 var el = btn;
@@ -1003,7 +1006,11 @@ _q_cls = "mode-4q" if _q_4q else ""
 _q_lbl_2q = "" if _q_4q else "active"
 _q_lbl_4q = "active" if _q_4q else ""
 _q_toggle_html = f'<span class="q-toggle pgm-toggle-q {_q_cls}"><span class="scope-label {_q_lbl_2q}">2Q</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_q_lbl_4q}">4Q</span></span>'
-user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}{_scope_toggle_html}{_growth_html}{_q_toggle_html}</div>'
+_edit_on = st.session_state.get("bulk_edit_mode", False)
+_edit_cls = "active" if _edit_on else ""
+_edit_lbl = "✅ Listo" if _edit_on else "✏️ Editar"
+_edit_html = f'<span class="bar-pill pgm-toggle-edit {_edit_cls}">{_edit_lbl}</span>'
+user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}{_scope_toggle_html}{_growth_html}{_q_toggle_html}{_edit_html}</div>'
 
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
@@ -2064,8 +2071,7 @@ else:
         if st.button("TOGGLE_Q", key="btn_toggle_q"):
             st.session_state["q_4q"] = not st.session_state.get("q_4q", False)
             st.rerun()
-        _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
-        if st.button(_edit_label, key="toggle_edit_mode"):
+        if st.button("TOGGLE_EDIT", key="toggle_edit_mode"):
             st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
             st.rerun()
 
