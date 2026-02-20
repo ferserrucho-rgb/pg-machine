@@ -202,11 +202,18 @@ st.markdown("""
     .card-del-trigger { position: absolute; bottom: 6px; right: 8px; font-size: 0.75rem; color: #cbd5e1; cursor: pointer; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
     .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
     .bulk-del-bar { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-    div[data-testid="stRadio"] { margin-top: -0.4rem !important; margin-bottom: -0.4rem !important; }
-    div[data-testid="stRadio"] > div { gap: 0.1rem !important; }
-    div[data-testid="stRadio"] label { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; padding: 1px 5px !important; letter-spacing: 0.01em !important; color: #475569 !important; }
+    div[data-testid="stRadio"],
+    div[class*="stRadio"] { margin-top: -0.4rem !important; margin-bottom: -0.4rem !important; }
+    div[data-testid="stRadio"] > div,
+    div[class*="stRadio"] > div { gap: 0.1rem !important; }
+    div[data-testid="stRadio"] label,
+    div[class*="stRadio"] label,
+    [data-baseweb="radio"] label,
+    section.main label[data-baseweb="radio"] { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; padding: 1px 5px !important; letter-spacing: 0.01em !important; color: #475569 !important; }
     /* Compact toggle label */
-    div[data-testid="stToggle"] label span { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; color: #475569 !important; }
+    div[data-testid="stToggle"] label span,
+    div[class*="stToggle"] label span,
+    section.main [class*="Toggle"] label span { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; color: #475569 !important; }
     div[data-testid="stMultiSelect"] { margin-top: -6px !important; margin-bottom: -6px !important; }
     div[data-testid="stMultiSelect"] > div { min-height: 0 !important; }
     div[data-testid="stMultiSelect"] > div > div { min-height: 28px !important; padding: 0 4px !important; }
