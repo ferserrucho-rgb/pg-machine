@@ -258,8 +258,21 @@ st.markdown("""
     .scope-toggle.team-mode .scope-track { background: #3b82f6; }
     .scope-toggle .scope-knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
     .scope-toggle.team-mode .scope-knob { transform: translateX(14px); }
-    /* Hidden scope checkbox (triggered by JS from user bar toggle) */
+    /* Growth pill toggle inside user bar */
+    .bar-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.6rem; font-weight: 600; cursor: pointer; user-select: none; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.1); transition: background 0.15s, color 0.15s; color: rgba(255,255,255,0.45); }
+    .bar-pill.active { background: #22c55e; color: white; }
+    /* Quarter toggle (4Q / 2Q) inside user bar – reuses scope-toggle structure */
+    .q-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.65rem; font-weight: 600; cursor: pointer; user-select: none; }
+    .q-toggle .scope-label { color: rgba(255,255,255,0.45); transition: color 0.15s; }
+    .q-toggle .scope-label.active { color: white; }
+    .q-toggle .scope-track { width: 28px; height: 14px; background: rgba(255,255,255,0.25); border-radius: 7px; position: relative; transition: background 0.2s; }
+    .q-toggle.mode-4q .scope-track { background: #8b5cf6; }
+    .q-toggle .scope-knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
+    .q-toggle.mode-4q .scope-knob { transform: translateX(14px); }
+    /* Hidden checkboxes (triggered by JS from user bar toggles) */
     [data-testid="stElementContainer"]:has(input[aria-label="__scope_team__"]) { height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
+    [data-testid="stElementContainer"]:has(input[aria-label="__growth_only__"]) { height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
+    [data-testid="stElementContainer"]:has(input[aria-label="__q_4q__"]) { height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
     /* Calendar inbox badge */
@@ -310,22 +323,28 @@ components.html("""
     var doc = window.parent.document;
     if (doc._pgmObs) { try { doc._pgmObs.disconnect(); } catch(e){} }
 
-    // Scope toggle (Mías/Equipo) click handler
-    var scopeToggle = doc.getElementById('pgm-scope-toggle');
-    if (scopeToggle && !scopeToggle._pgmBound) {
-        scopeToggle._pgmBound = true;
-        scopeToggle.addEventListener('click', function() {
-            // Find the hidden scope checkbox and click it
-            var allCbs = doc.querySelectorAll('input[type="checkbox"]');
-            for (var i = 0; i < allCbs.length; i++) {
-                var lbl = allCbs[i].closest('label');
-                if (lbl && lbl.textContent.indexOf('__scope_team__') !== -1) {
-                    allCbs[i].click();
-                    return;
-                }
+    // Generic: find hidden checkbox by label text and click it
+    function clickHiddenCb(labelText) {
+        var allCbs = doc.querySelectorAll('input[type="checkbox"]');
+        for (var i = 0; i < allCbs.length; i++) {
+            var lbl = allCbs[i].closest('label');
+            if (lbl && lbl.textContent.indexOf(labelText) !== -1) {
+                allCbs[i].click();
+                return;
             }
-        });
+        }
     }
+    // Bind click handler to a toggle element by id
+    function bindToggle(id, labelText) {
+        var el = doc.getElementById(id);
+        if (el && !el._pgmBound) {
+            el._pgmBound = true;
+            el.addEventListener('click', function() { clickHiddenCb(labelText); });
+        }
+    }
+    bindToggle('pgm-scope-toggle', '__scope_team__');
+    bindToggle('pgm-growth-toggle', '__growth_only__');
+    bindToggle('pgm-q-toggle', '__q_4q__');
 
     // Helper: walk up DOM from startEl, search subsequent siblings for button matching text
     function findBtn(startEl, textMatch) {
@@ -984,7 +1003,15 @@ _scope_cls = "team-mode" if _scope_team else ""
 _scope_lbl_mias = "" if _scope_team else "active"
 _scope_lbl_team = "active" if _scope_team else ""
 _scope_toggle_html = f'<span class="scope-toggle {_scope_cls}" id="pgm-scope-toggle"><span class="scope-label {_scope_lbl_mias}">Mías</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_scope_lbl_team}">Equipo</span></span>'
-user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}{_scope_toggle_html}</div>'
+_growth_on = st.session_state.get("growth_only", False)
+_growth_cls = "active" if _growth_on else ""
+_growth_html = f'<span class="bar-pill {_growth_cls}" id="pgm-growth-toggle">🚀 Growth</span>'
+_q_4q = st.session_state.get("q_4q", False)
+_q_cls = "mode-4q" if _q_4q else ""
+_q_lbl_2q = "" if _q_4q else "active"
+_q_lbl_4q = "active" if _q_4q else ""
+_q_toggle_html = f'<span class="q-toggle {_q_cls}" id="pgm-q-toggle"><span class="scope-label {_q_lbl_2q}">2Q</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_q_lbl_4q}">4Q</span></span>'
+user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}{_scope_toggle_html}{_growth_html}{_q_toggle_html}</div>'
 
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
@@ -992,8 +1019,8 @@ if 'selected_id' not in st.session_state:
 
 if 'focused_cat' not in st.session_state:
     st.session_state.focused_cat = None
-if 'hide_protect' not in st.session_state:
-    st.session_state.hide_protect = True
+if 'growth_only' not in st.session_state:
+    st.session_state.growth_only = False
 if 'historial_group_by' not in st.session_state:
     st.session_state.historial_group_by = "Cuenta"
 if 'historial_selected' not in st.session_state:
@@ -2035,8 +2062,10 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        # Hidden checkbox driven by JS scope toggle in user bar
+        # Hidden checkboxes driven by JS toggles in user bar
         st.checkbox("__scope_team__", key="scope_team", label_visibility="collapsed")
+        st.checkbox("__growth_only__", key="growth_only", label_visibility="collapsed")
+        st.checkbox("__q_4q__", key="q_4q", label_visibility="collapsed")
         _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
         if st.button(_edit_label, key="toggle_edit_mode"):
             st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
@@ -2052,44 +2081,26 @@ else:
         else:
             visible_cats = CATEGORIAS
 
-        # --- Filters (one compact row) ---
-        _fc1, _fc2 = st.columns([1, 5])
-        hide_protect = _fc1.toggle("🚀 Solo Growth", key="hide_protect")
-        today = date.today()
-        q_start, q_end = _fiscal_quarter_range(today)
-        q0_label = _fiscal_quarter_label(today)
-        q1_start, q1_end = _offset_quarter(q_start, 1)
-        q1_label = _fiscal_quarter_label(q1_start)
-        q2_start, q2_end = _offset_quarter(q_start, 2)
-        q2_label = _fiscal_quarter_label(q2_start)
-        q3_start, q3_end = _offset_quarter(q_start, 3)
-        q_options = [
-            "Todas",
-            f"📅 4Q ({q0_label}–{_fiscal_quarter_label(q3_start)})",
-            f"📅 {q0_label}",
-            f"📅 {q1_label}",
-            f"📅 {q2_label}",
-        ]
-        q_filter = _fc2.radio("Trimestre", q_options, horizontal=True, key="q_filter", label_visibility="collapsed")
+        # --- Filters (driven by user bar toggles) ---
         if not st.session_state.get("scope_team", False):
             all_opps = [o for o in all_opps if o.get("owner_id") == user_id]
         # Precargar actividades para todas las oportunidades
         all_acts_by_opp = {}
         for act in all_activities:
             all_acts_by_opp.setdefault(act["opportunity_id"], []).append(act)
-        if hide_protect:
+        if st.session_state.get("growth_only", False):
             all_opps = [o for o in all_opps if "renewal" not in (o.get("proyecto") or "").lower()]
 
-        if q_filter != "Todas":
-            if q_filter == q_options[1]:  # Next 4 quarters
-                fq_start, fq_end = q_start, q3_end
-            elif q_filter == q_options[2]:  # Current quarter
-                fq_start, fq_end = q_start, q_end
-            elif q_filter == q_options[3]:  # Current + 1
-                fq_start, fq_end = q1_start, q1_end
-            else:  # Current + 2
-                fq_start, fq_end = q2_start, q2_end
-            all_opps = [o for o in all_opps if o.get("close_date") and fq_start <= (_parse_date(o["close_date"]) or date.min) <= fq_end]
+        # Quarter filter: 2Q (current + next) or 4Q (current + next 3)
+        today = date.today()
+        q_start, q_end = _fiscal_quarter_range(today)
+        q1_start, q1_end = _offset_quarter(q_start, 1)
+        if st.session_state.get("q_4q", False):
+            q3_start, q3_end = _offset_quarter(q_start, 3)
+            fq_start, fq_end = q_start, q3_end
+        else:
+            fq_start, fq_end = q_start, q1_end
+        all_opps = [o for o in all_opps if o.get("close_date") and fq_start <= (_parse_date(o["close_date"]) or date.min) <= fq_end]
 
         # Category totals (used by column headers below)
         cat_totals = {}
@@ -2740,7 +2751,7 @@ else:
         _gtm_cats = [c for c in CATEGORIAS if "GTM" in c.strip().upper()]
 
         st.markdown("### 📈 Performance")
-        _perf_hide_protect = st.toggle("🚀 Solo Growth", key="perf_hide_protect", value=st.session_state.get("hide_protect", True))
+        _perf_hide_protect = st.toggle("🚀 Solo Growth", key="perf_hide_protect", value=st.session_state.get("growth_only", False))
 
         def _is_protect(o):
             return "renewal" in (o.get("proyecto") or "").lower()
