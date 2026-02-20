@@ -870,7 +870,7 @@ if 'selected_id' not in st.session_state:
 if 'focused_cat' not in st.session_state:
     st.session_state.focused_cat = None
 if 'hide_protect' not in st.session_state:
-    st.session_state.hide_protect = False
+    st.session_state.hide_protect = True
 if 'historial_group_by' not in st.session_state:
     st.session_state.historial_group_by = "Cuenta"
 if 'historial_selected' not in st.session_state:
