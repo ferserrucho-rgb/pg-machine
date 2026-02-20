@@ -942,6 +942,18 @@ def _cached_all_activities(_team_id, _v):
 def _cached_all_activities_for_user(_team_id, _user_id, _role, _v):
     return dal.get_all_activities_for_user(_team_id, _user_id, _role)
 
+@st.cache_data(ttl=120)
+def _cached_calendar_events(_team_id, _user_id, _role, _v):
+    return dal.get_pending_calendar_events_for_user(_team_id, _user_id, _role)
+
+@st.cache_data(ttl=120)
+def _cached_team_info(_team_id):
+    return dal.get_team(_team_id)
+
+@st.cache_data(ttl=120)
+def _cached_team_members_all(_team_id, _v):
+    return dal.get_team_members(_team_id, active_only=False)
+
 def _parse_date(val):
     if not val or str(val).strip() in ("", "NaT", "nan", "None"):
         return None
@@ -2456,14 +2468,14 @@ else:
     with selected_tabs[3]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
         _cal_all_opps = _cached_opportunities(team_id, st.session_state._data_v)
-        _cal_events = dal.get_pending_calendar_events_for_user(team_id, user_id, user["role"])
+        _cal_events = _cached_calendar_events(team_id, user_id, user["role"], st.session_state._data_v)
 
         # Header + refresh + manual add button
         _cal_hdr_cols = st.columns([5, 1, 1])
         _cal_hdr_cols[0].markdown(f"### 📅 Bandeja de Calendario — {len(_cal_events)} pendientes")
         if _cal_hdr_cols[1].button("🔄 Actualizar", key="cal_refresh"):
             _cached_cal_count.clear()
-            _mark_dirty()
+            _cached_calendar_events.clear()
             st.rerun()
         if _cal_hdr_cols[2].button("+ Agregar", key="cal_manual_add"):
             st.session_state["_show_cal_form"] = True
@@ -2745,7 +2757,7 @@ else:
     equipo_tab_idx = 5 if has_control_access() else 4
     with selected_tabs[equipo_tab_idx]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        team_info = dal.get_team(team_id)
+        team_info = _cached_team_info(team_id)
 
         # Sub-tabs según rol
         if is_admin():
@@ -2756,7 +2768,7 @@ else:
         # --- MIEMBROS ---
         with equipo_subtabs[0]:
             st.subheader("Miembros del Equipo")
-            members = dal.get_team_members(team_id, active_only=False)
+            members = _cached_team_members_all(team_id, st.session_state._data_v)
 
             if team_info:
                 st.caption(f"Equipo: **{team_info['name']}** — ID: `{team_id}`")
