@@ -229,6 +229,11 @@ st.markdown("""
     .user-bar { background: #1e293b; color: white; padding: 4px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
     .user-bar .user-role { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
+    /* Unified filter bar: dark background spanning full width */
+    .filter-bar-wrap { background: #1e293b; border-radius: 6px; padding: 2px 8px; margin-bottom: 2px; }
+    .filter-bar-wrap label, .filter-bar-wrap p, .filter-bar-wrap span { color: white !important; font-size: 0.72rem !important; }
+    .filter-bar-wrap [data-baseweb="radio"] label { color: white !important; }
+    .filter-bar-wrap [data-testid="stHorizontalBlock"] { align-items: center !important; }
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
     /* Calendar inbox badge */
@@ -1981,26 +1986,6 @@ else:
 
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
-        st.markdown(user_bar_html, unsafe_allow_html=True)
-        _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
-        if st.button(_edit_label, key="toggle_edit_mode"):
-            st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
-            st.rerun()
-
-        all_opps = _cached_opportunities(team_id, st.session_state._data_v)
-        all_activities = _cached_all_activities(team_id, st.session_state._data_v)
-
-        # Category focus: show buttons to toggle
-        focused = st.session_state.focused_cat
-        if focused:
-            visible_cats = [focused]
-        else:
-            visible_cats = CATEGORIAS
-
-        # --- Filters (one compact row) ---
-        _fc1, _fc2, _fc3 = st.columns([2, 1, 5])
-        tab_scope = _fc1.radio("Vista", ["📋 Mías", "👥 Equipo"], horizontal=True, key="tab_scope", label_visibility="collapsed")
-        hide_protect = _fc2.toggle("🚀 Solo Growth", key="hide_protect")
         today = date.today()
         q_start, q_end = _fiscal_quarter_range(today)
         q0_label = _fiscal_quarter_label(today)
@@ -2011,12 +1996,32 @@ else:
         q3_start, q3_end = _offset_quarter(q_start, 3)
         q_options = [
             "Todas",
-            f"📅 4Q ({q0_label}–{_fiscal_quarter_label(q3_start)})",
-            f"📅 {q0_label}",
-            f"📅 {q1_label}",
-            f"📅 {q2_label}",
+            f"4Q ({q0_label}–{_fiscal_quarter_label(q3_start)})",
+            f"{q0_label}",
+            f"{q1_label}",
+            f"{q2_label}",
         ]
-        q_filter = _fc3.radio("Trimestre", q_options, horizontal=True, key="q_filter", label_visibility="collapsed")
+        st.markdown('<div class="filter-bar-wrap">', unsafe_allow_html=True)
+        _fb0, _fb1, _fb2, _fb3, _fb4 = st.columns([2.5, 1.5, 1, 4, 1])
+        _fb0.markdown(f'<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#3b82f6;color:white;font-size:0.6rem;font-weight:700;">{user_initials}</span> <span style="color:white;font-size:0.75rem;font-weight:600;">{user["full_name"]}</span> <span style="background:rgba(255,255,255,0.15);padding:2px 6px;border-radius:4px;font-size:0.6rem;color:white;text-transform:uppercase;">{user_role_label}</span>', unsafe_allow_html=True)
+        tab_scope = _fb1.radio("Vista", ["📋 Mías", "👥 Equipo"], horizontal=True, key="tab_scope", label_visibility="collapsed")
+        hide_protect = _fb2.toggle("🚀 Solo Growth", key="hide_protect")
+        q_filter = _fb3.radio("Trimestre", q_options, horizontal=True, key="q_filter", label_visibility="collapsed")
+        _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
+        if _fb4.button(_edit_label, key="toggle_edit_mode", use_container_width=True):
+            st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        all_opps = _cached_opportunities(team_id, st.session_state._data_v)
+        all_activities = _cached_all_activities(team_id, st.session_state._data_v)
+
+        # Category focus: show buttons to toggle
+        focused = st.session_state.focused_cat
+        if focused:
+            visible_cats = [focused]
+        else:
+            visible_cats = CATEGORIAS
         if tab_scope == "📋 Mías":
             all_opps = [o for o in all_opps if o.get("owner_id") == user_id]
         # Precargar actividades para todas las oportunidades
