@@ -24,7 +24,8 @@ _tour_trigger = st.session_state.pop("_trigger_tour", False)
 # --- 1. ESTILOS ---
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
     /* --- Loading overlay --- */
     .pgm-loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(248,250,252,0.75); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; backdrop-filter: blur(2px); pointer-events: none; }
@@ -202,8 +203,10 @@ st.markdown("""
     .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
     .bulk-del-bar { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
     div[data-testid="stRadio"] { margin-top: -0.4rem !important; margin-bottom: -0.4rem !important; }
-    div[data-testid="stRadio"] > div { gap: 0.15rem !important; }
-    div[data-testid="stRadio"] label { font-size: 0.75rem !important; padding: 2px 6px !important; }
+    div[data-testid="stRadio"] > div { gap: 0.1rem !important; }
+    div[data-testid="stRadio"] label { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; padding: 1px 5px !important; letter-spacing: 0.01em !important; color: #475569 !important; }
+    /* Compact toggle label */
+    div[data-testid="stToggle"] label span { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; color: #475569 !important; }
     div[data-testid="stMultiSelect"] { margin-top: -6px !important; margin-bottom: -6px !important; }
     div[data-testid="stMultiSelect"] > div { min-height: 0 !important; }
     div[data-testid="stMultiSelect"] > div > div { min-height: 28px !important; padding: 0 4px !important; }
