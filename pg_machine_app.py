@@ -32,18 +32,29 @@ st.markdown("""
     .pgm-loading-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
-    /* Hide Streamlit deploy toolbar but keep header for sidebar toggle */
-    [data-testid="stToolbar"] { display: none !important; }
-    [data-testid="stDecoration"] { display: none !important; }
-    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0rem !important; padding-bottom: 0.5rem !important; }
-    /* Compress Streamlit default vertical gaps (main area only) */
-    section.main [data-testid="stVerticalBlock"] { gap: 0 !important; }
-    section.main [data-testid="stVerticalBlock"] > * { margin-top: 0 !important; margin-bottom: 0 !important; }
-    [data-testid="stTabs"] [data-baseweb="tab-panel"] { padding-top: 0 !important; }
-    [data-testid="stTabs"] [data-baseweb="tab-list"] { margin-bottom: 0 !important; gap: 0 !important; }
-    [data-testid="stTabs"] [data-baseweb="tab-list"] button { padding: 4px 10px !important; font-size: 0.78rem !important; }
-    section.main [data-testid="stHorizontalBlock"] { gap: 0.2rem !important; }
-    section.main [data-testid="stElementToolbar"] { display: none !important; }
+    /* Hide Streamlit deploy toolbar */
+    [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
+    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
+    /* Compress ALL vertical gaps — broad selectors for Streamlit compatibility */
+    section.main [data-testid="stVerticalBlock"],
+    section.main [class*="stVerticalBlock"],
+    section.main .block-container > div,
+    section.main .block-container > div > div { gap: 0 !important; }
+    section.main [data-testid="stVerticalBlock"] > *,
+    section.main [class*="stVerticalBlock"] > *,
+    section.main [data-testid="stElementContainer"],
+    section.main [data-testid="element-container"],
+    section.main [class*="stElementContainer"] { margin-top: 0 !important; margin-bottom: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; }
+    /* Compress tabs */
+    [data-baseweb="tab-panel"] { padding-top: 0 !important; }
+    [data-baseweb="tab-list"] { margin-bottom: 0 !important; gap: 0 !important; }
+    [data-baseweb="tab-list"] button[role="tab"] { padding: 4px 10px !important; font-size: 0.78rem !important; }
+    /* Compress horizontal blocks */
+    section.main [data-testid="stHorizontalBlock"],
+    section.main [class*="stHorizontalBlock"] { gap: 0.2rem !important; }
+    /* Hide hover toolbars on widgets */
+    section.main [data-testid="stElementToolbar"],
+    section.main [class*="stElementToolbar"] { display: none !important; }
     .cat-styled { color: white !important; font-weight: 800 !important; font-size: 0.8rem !important; letter-spacing: 0.05em !important; text-transform: uppercase !important; border: none !important; border-radius: 6px !important; padding: 6px 10px !important; min-height: 0 !important; }
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .badge { float:right; font-size:0.6rem; font-weight:bold; padding:2px 6px; border-radius:8px; text-transform: uppercase; border: 1.2px solid; }
