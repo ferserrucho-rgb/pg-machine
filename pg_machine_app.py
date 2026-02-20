@@ -32,17 +32,17 @@ st.markdown("""
     .pgm-loading-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
-    /* Hide Streamlit deploy/toolbar bar but keep sidebar toggle */
+    /* Hide Streamlit deploy toolbar but keep header for sidebar toggle */
     [data-testid="stToolbar"] { display: none !important; }
     [data-testid="stDecoration"] { display: none !important; }
-    [data-testid="stHeader"] { height: 2rem !important; min-height: 0 !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0rem !important; padding-bottom: 0.5rem !important; }
     /* Compress Streamlit default vertical gaps (main area only) */
     section.main [data-testid="stVerticalBlock"] { gap: 0 !important; }
-    section.main [data-testid="stVerticalBlock"] > * { margin-top: 0 !important; margin-bottom: 0.15rem !important; }
-    [data-testid="stTabs"] [data-baseweb="tab-panel"] { padding-top: 0.15rem !important; }
-    [data-testid="stTabs"] [data-baseweb="tab-list"] { margin-bottom: 0 !important; }
-    section.main [data-testid="stHorizontalBlock"] { gap: 0.3rem !important; }
+    section.main [data-testid="stVerticalBlock"] > * { margin-top: 0 !important; margin-bottom: 0 !important; }
+    [data-testid="stTabs"] [data-baseweb="tab-panel"] { padding-top: 0 !important; }
+    [data-testid="stTabs"] [data-baseweb="tab-list"] { margin-bottom: 0 !important; gap: 0 !important; }
+    [data-testid="stTabs"] [data-baseweb="tab-list"] button { padding: 4px 10px !important; font-size: 0.78rem !important; }
+    section.main [data-testid="stHorizontalBlock"] { gap: 0.2rem !important; }
     section.main [data-testid="stElementToolbar"] { display: none !important; }
     .cat-styled { color: white !important; font-weight: 800 !important; font-size: 0.8rem !important; letter-spacing: 0.05em !important; text-transform: uppercase !important; border: none !important; border-radius: 6px !important; padding: 6px 10px !important; min-height: 0 !important; }
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
@@ -118,7 +118,7 @@ st.markdown("""
     .cat-chip:hover { background:#e2e8f0; color:#1e293b; }
     .cat-chip-active { background:#1e293b; color:#fff; border-color:#1e293b; }
     .cat-chip-active:hover { background:#334155; }
-    .account-group { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
+    .account-group { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; margin-bottom: 4px; }
     .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
     .account-name { color: #1e293b; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
     .account-total { color: #16a34a; font-size: 0.7rem; font-weight: 800; }
@@ -179,17 +179,19 @@ st.markdown("""
     .metro-card .metro-fecha { font-size:0.68rem; font-weight:700; color:#475569; margin-bottom:2px; }
     .metro-card .metro-meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
     /* Clickable card — whole card opens detail, × inside for delete */
-    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 10px; margin-bottom: 4px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
     .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); background: #f8faff; }
     .card-del-trigger { position: absolute; bottom: 6px; right: 8px; font-size: 0.75rem; color: #cbd5e1; cursor: pointer; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
     .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
     .bulk-del-bar { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-    div[data-testid="stRadio"] { margin-top: -0.5rem !important; margin-bottom: -0.5rem !important; }
-    div[data-testid="stRadio"] > div { gap: 0.25rem !important; }
-    div[data-testid="stMultiSelect"] { margin-top: -8px !important; margin-bottom: -8px !important; }
+    div[data-testid="stRadio"] { margin-top: -0.4rem !important; margin-bottom: -0.4rem !important; }
+    div[data-testid="stRadio"] > div { gap: 0.15rem !important; }
+    div[data-testid="stRadio"] label { font-size: 0.75rem !important; padding: 2px 6px !important; }
+    div[data-testid="stMultiSelect"] { margin-top: -6px !important; margin-bottom: -6px !important; }
     div[data-testid="stMultiSelect"] > div { min-height: 0 !important; }
-    div[data-testid="stMultiSelect"] input { font-size: 0.7rem !important; }
-    div[data-testid="stMultiSelect"] span[data-baseweb="tag"] { font-size: 0.65rem !important; height: 20px !important; }
+    div[data-testid="stMultiSelect"] > div > div { min-height: 28px !important; padding: 0 4px !important; }
+    div[data-testid="stMultiSelect"] input { font-size: 0.65rem !important; }
+    div[data-testid="stMultiSelect"] span[data-baseweb="tag"] { font-size: 0.6rem !important; height: 18px !important; }
     .pgm-card-wrap .opp-top { display: flex; justify-content: space-between; align-items: flex-start; }
     .pgm-card-wrap .opp-left { flex: 1; min-width: 0; }
     .pgm-card-wrap .opp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; margin-left: 8px; }
