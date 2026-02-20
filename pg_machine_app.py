@@ -269,7 +269,8 @@ st.markdown("""
     .q-toggle.mode-4q .scope-track { background: #8b5cf6; }
     .q-toggle .scope-knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
     .q-toggle.mode-4q .scope-knob { transform: translateX(14px); }
-    /* (toggle buttons hidden via JS — see components.html) */
+    /* Hidden toggle buttons row (marker + buttons column) */
+    [data-testid="stHorizontalBlock"]:has(.pgm-hid-mark) { height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
     /* Calendar inbox badge */
@@ -320,40 +321,14 @@ components.html("""
     var doc = window.parent.document;
     if (doc._pgmObs) { try { doc._pgmObs.disconnect(); } catch(e){} }
 
-    // Find toggle buttons, hide their containers, cache references
-    var _toggleLabels = ['__scope_team__', '__growth_only__', '__q_4q__'];
-    function hideToggleBtns() {
-        var found = 0;
-        var allBtns = doc.querySelectorAll('button');
-        doc._pgmToggleBtns = doc._pgmToggleBtns || {};
-        for (var i = 0; i < allBtns.length; i++) {
-            var txt = (allBtns[i].textContent || '').trim();
-            for (var j = 0; j < _toggleLabels.length; j++) {
-                if (txt === _toggleLabels[j]) {
-                    found++;
-                    doc._pgmToggleBtns[txt] = allBtns[i];
-                    var ct = allBtns[i].closest('[data-testid="stElementContainer"]');
-                    if (ct) { ct.style.cssText = 'position:fixed!important;left:-9999px!important;opacity:0!important;'; }
-                }
-            }
-        }
-        return found;
-    }
-    // Try now, retry until all 3 found
-    if (hideToggleBtns() < 3) {
-        var _hRetries = 0;
-        var _hTimer = setInterval(function() {
-            _hRetries++;
-            if (hideToggleBtns() >= 3 || _hRetries > 30) clearInterval(_hTimer);
-        }, 150);
-    }
-    // Click a hidden toggle button
+    // Find a hidden toggle button by label text and click it
     function clickHiddenBtn(labelText) {
-        var btn = (doc._pgmToggleBtns || {})[labelText];
-        if (btn) {
-            var ct = btn.closest('[data-testid="stElementContainer"]');
-            if (ct) ct.style.pointerEvents = 'auto';
-            btn.click();
+        var allBtns = doc.querySelectorAll('button');
+        for (var i = 0; i < allBtns.length; i++) {
+            if ((allBtns[i].textContent || '').trim() === labelText) {
+                allBtns[i].click();
+                return;
+            }
         }
     }
 
@@ -2085,16 +2060,19 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        # Hidden buttons driven by JS toggles in user bar (hidden via JS)
-        if st.button("__scope_team__", key="btn_scope_team"):
-            st.session_state["scope_team"] = not st.session_state.get("scope_team", False)
-            st.rerun()
-        if st.button("__growth_only__", key="btn_growth_only"):
-            st.session_state["growth_only"] = not st.session_state.get("growth_only", False)
-            st.rerun()
-        if st.button("__q_4q__", key="btn_q_4q"):
-            st.session_state["q_4q"] = not st.session_state.get("q_4q", False)
-            st.rerun()
+        # Hidden buttons driven by JS toggles in user bar
+        _hcol1, _hcol2 = st.columns([99, 1])
+        _hcol1.markdown('<div class="pgm-hid-mark"></div>', unsafe_allow_html=True)
+        with _hcol2:
+            if st.button("__scope_team__", key="btn_scope_team"):
+                st.session_state["scope_team"] = not st.session_state.get("scope_team", False)
+                st.rerun()
+            if st.button("__growth_only__", key="btn_growth_only"):
+                st.session_state["growth_only"] = not st.session_state.get("growth_only", False)
+                st.rerun()
+            if st.button("__q_4q__", key="btn_q_4q"):
+                st.session_state["q_4q"] = not st.session_state.get("q_4q", False)
+                st.rerun()
         _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
         if st.button(_edit_label, key="toggle_edit_mode"):
             st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
