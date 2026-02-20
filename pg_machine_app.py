@@ -32,7 +32,13 @@ st.markdown("""
     .pgm-loading-text { font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
-    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 1.5rem !important; }
+    header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; padding: 0 !important; }
+    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+    /* Compress Streamlit default vertical gaps */
+    [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlockBorderWrapper"],
+    [data-testid="stVerticalBlock"] > [data-testid="element-container"],
+    [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] { margin-bottom: -0.4rem; }
+    [data-testid="stTabs"] [data-baseweb="tab-panel"] { padding-top: 0.25rem !important; }
     .cat-styled { color: white !important; font-weight: 800 !important; font-size: 0.8rem !important; letter-spacing: 0.05em !important; text-transform: uppercase !important; border: none !important; border-radius: 6px !important; padding: 6px 10px !important; min-height: 0 !important; }
     .scorecard { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .badge { float:right; font-size:0.6rem; font-weight:bold; padding:2px 6px; border-radius:8px; text-transform: uppercase; border: 1.2px solid; }
@@ -173,6 +179,8 @@ st.markdown("""
     .card-del-trigger { position: absolute; bottom: 6px; right: 8px; font-size: 0.75rem; color: #cbd5e1; cursor: pointer; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
     .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
     .bulk-del-bar { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+    div[data-testid="stRadio"] { margin-top: -0.5rem !important; margin-bottom: -0.5rem !important; }
+    div[data-testid="stRadio"] > div { gap: 0.25rem !important; }
     div[data-testid="stMultiSelect"] { margin-top: -8px !important; margin-bottom: -8px !important; }
     div[data-testid="stMultiSelect"] > div { min-height: 0 !important; }
     div[data-testid="stMultiSelect"] input { font-size: 0.7rem !important; }
@@ -194,7 +202,7 @@ st.markdown("""
     .pgm-card-wrap .partner-pill { font-size: 0.6rem; font-weight: 700; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
     .pgm-card-wrap .act-line .act-status { font-weight: 600; font-size: 0.65rem; }
     /* User identity bar */
-    .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .user-bar { background: #1e293b; color: white; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
     .user-bar .user-role { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
     /* Initials avatar badge */
@@ -414,13 +422,24 @@ components.html("""
                 });
             }
         });
-        // Hide category hidden buttons
+        // Hide category hidden buttons (collapse full parent chain)
         doc.querySelectorAll('button').forEach(function(btn) {
             var t = (btn.textContent||'').trim();
             if ((t.indexOf('focus_')===0 || t.indexOf('unfocus_')===0) && !btn.dataset.catHidden) {
                 btn.dataset.catHidden = '1';
-                var el = btn.closest('[data-testid]') || btn.parentElement;
-                if (el) el.style.cssText = 'position:absolute!important;left:-9999px!important;height:0!important;overflow:hidden!important;';
+                var el = btn;
+                while (el && el !== doc.body) {
+                    el.style.cssText = 'height:0 !important;overflow:hidden !important;margin:0 !important;padding:0 !important;border:0 !important;';
+                    var par = el.parentElement;
+                    if (!par) break;
+                    var anyVisible = false;
+                    for (var i = 0; i < par.children.length; i++) {
+                        var sc = par.children[i].style.cssText || '';
+                        if (par.children[i] !== el && sc.indexOf('height:0') < 0) { anyVisible = true; break; }
+                    }
+                    if (anyVisible) break;
+                    el = par;
+                }
             }
         });
         // Hide open-button rows below dashboard cards
