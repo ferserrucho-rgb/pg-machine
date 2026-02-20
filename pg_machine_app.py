@@ -1793,11 +1793,53 @@ else:
 
         # --- Calendar Inbox ---
         _cal_events = dal.get_pending_calendar_events_for_user(team_id, user_id, user["role"]) if _cal_inbox_count > 0 else []
-        if _cal_events:
-            with st.expander(f"📅 Bandeja de Calendario ({len(_cal_events)} pendientes)", expanded=False):
+        _cal_label = f"📅 Bandeja de Calendario ({len(_cal_events)} pendientes)" if _cal_events else "📅 Bandeja de Calendario"
+        with st.expander(_cal_label, expanded=False):
+            # Manual entry form
+            if st.session_state.get("_show_cal_form"):
+                with st.form("cal_manual_form"):
+                    st.caption("📅 Nueva Reunión de Calendario")
+                    _cm_c1, _cm_c2 = st.columns(2)
+                    _cm_subject = _cm_c1.text_input("Asunto")
+                    _cm_organizer = _cm_c2.text_input("Organizador")
+                    _cm_c3, _cm_c4, _cm_c5 = st.columns(3)
+                    _cm_fecha = _cm_c3.date_input("Fecha", value=date.today())
+                    _cm_hora_inicio = _cm_c4.time_input("Hora inicio", value=datetime.now().replace(hour=10, minute=0).time())
+                    _cm_hora_fin = _cm_c5.time_input("Hora fin", value=datetime.now().replace(hour=11, minute=0).time())
+                    _cm_c6, _cm_c7 = st.columns(2)
+                    _cm_attendees = _cm_c6.text_input("Asistentes (separados por coma)")
+                    _cm_location = _cm_c7.text_input("Ubicación")
+                    _cm_body = st.text_area("Notas", height=60)
+                    _cm_cols = st.columns([1, 1, 4])
+                    _cm_submit = _cm_cols[0].form_submit_button("💾 Guardar")
+                    _cm_cancel = _cm_cols[1].form_submit_button("Cancelar")
+                    if _cm_submit and _cm_subject:
+                        _cm_start = datetime.combine(_cm_fecha, _cm_hora_inicio).isoformat()
+                        _cm_end = datetime.combine(_cm_fecha, _cm_hora_fin).isoformat()
+                        _cm_att_list = [a.strip() for a in _cm_attendees.split(",") if a.strip()]
+                        dal.create_calendar_event(team_id, user_id, user.get("email", ""), {
+                            "subject": _cm_subject,
+                            "start_time": _cm_start,
+                            "end_time": _cm_end,
+                            "organizer": _cm_organizer,
+                            "attendees": _cm_att_list,
+                            "location": _cm_location,
+                            "body": _cm_body,
+                        })
+                        st.session_state.pop("_show_cal_form", None)
+                        st.rerun()
+                    if _cm_cancel:
+                        st.session_state.pop("_show_cal_form", None)
+                        st.rerun()
+            else:
+                if st.button("+ Agregar Reunión de Calendario", key="cal_manual_add"):
+                    st.session_state["_show_cal_form"] = True
+                    st.rerun()
+
+            # Pending events list
+            if _cal_events:
                 for _ce in _cal_events:
                     _ce_id = _ce["id"]
-                    # Card con info del evento
                     _ce_start = _ce.get("start_time", "")
                     _ce_end = _ce.get("end_time", "")
                     _ce_start_fmt = _ce_start[:16].replace("T", " ") if _ce_start else ""
@@ -1820,7 +1862,6 @@ else:
                     _card_html += '</div>'
                     st.markdown(_card_html, unsafe_allow_html=True)
 
-                    # Selector de oportunidad + botones
                     _ce_cols = st.columns([4, 1, 1])
                     _opp_options = ["— Seleccionar oportunidad —"] + [f'{o["cuenta"]} / {o["proyecto"]}' for o in all_opps]
                     _sel_opp_idx = _ce_cols[0].selectbox("Oportunidad", range(len(_opp_options)), format_func=lambda i: _opp_options[i], key=f"cal_opp_{_ce_id}", label_visibility="collapsed")

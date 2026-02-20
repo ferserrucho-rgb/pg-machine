@@ -535,3 +535,22 @@ def dismiss_calendar_event(inbox_id: str) -> dict:
         .eq("id", inbox_id) \
         .execute()
     return resp.data[0] if resp.data else {}
+
+def create_calendar_event(team_id: str, user_id: str, user_email: str, data: dict) -> dict:
+    """Crea un evento de calendario manualmente."""
+    sb = get_supabase()
+    record = {
+        "team_id": team_id,
+        "profile_id": user_id,
+        "user_email": user_email,
+        "subject": data.get("subject", ""),
+        "start_time": data.get("start_time"),
+        "end_time": data.get("end_time"),
+        "organizer": data.get("organizer", ""),
+        "attendees": data.get("attendees", []),
+        "location": data.get("location", ""),
+        "body": data.get("body", ""),
+        "status": "pending",
+    }
+    resp = sb.table("calendar_inbox").insert(record).execute()
+    return resp.data[0] if resp.data else {}
