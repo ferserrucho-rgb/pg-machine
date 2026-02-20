@@ -250,6 +250,16 @@ st.markdown("""
     .user-bar { background: #1e293b; color: white; padding: 4px 14px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
     .user-bar .user-avatar { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
     .user-bar .user-role { background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
+    /* Scope toggle (Mías/Equipo) inside user bar */
+    .scope-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 0.65rem; font-weight: 600; cursor: pointer; user-select: none; }
+    .scope-toggle .scope-label { color: rgba(255,255,255,0.45); transition: color 0.15s; }
+    .scope-toggle .scope-label.active { color: white; }
+    .scope-toggle .scope-track { width: 28px; height: 14px; background: rgba(255,255,255,0.25); border-radius: 7px; position: relative; transition: background 0.2s; }
+    .scope-toggle.team-mode .scope-track { background: #3b82f6; }
+    .scope-toggle .scope-knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
+    .scope-toggle.team-mode .scope-knob { transform: translateX(14px); }
+    /* Hidden scope checkbox (triggered by JS from user bar toggle) */
+    [data-testid="stElementContainer"]:has(input[aria-label="__scope_team__"]) { height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
     /* Initials avatar badge */
     .avatar-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: white; font-size: 0.6rem; font-weight: 700; margin: 0 2px; vertical-align: middle; }
     /* Calendar inbox badge */
@@ -299,6 +309,23 @@ components.html("""
 (function() {
     var doc = window.parent.document;
     if (doc._pgmObs) { try { doc._pgmObs.disconnect(); } catch(e){} }
+
+    // Scope toggle (Mías/Equipo) click handler
+    var scopeToggle = doc.getElementById('pgm-scope-toggle');
+    if (scopeToggle && !scopeToggle._pgmBound) {
+        scopeToggle._pgmBound = true;
+        scopeToggle.addEventListener('click', function() {
+            // Find the hidden scope checkbox and click it
+            var allCbs = doc.querySelectorAll('input[type="checkbox"]');
+            for (var i = 0; i < allCbs.length; i++) {
+                var lbl = allCbs[i].closest('label');
+                if (lbl && lbl.textContent.indexOf('__scope_team__') !== -1) {
+                    allCbs[i].click();
+                    return;
+                }
+            }
+        });
+    }
 
     // Helper: walk up DOM from startEl, search subsequent siblings for button matching text
     function findBtn(startEl, textMatch) {
@@ -952,7 +979,12 @@ def _cached_cal_count(_team_id, _user_id, _role):
     return dal.get_pending_calendar_count(_team_id, _user_id, _role)
 _cal_inbox_count = _cached_cal_count(team_id, user_id, user["role"])
 _cal_badge_html = f' <span class="cal-badge">📅 {_cal_inbox_count}</span>' if _cal_inbox_count > 0 else ""
-user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}</div>'
+_scope_team = st.session_state.get("scope_team", False)
+_scope_cls = "team-mode" if _scope_team else ""
+_scope_lbl_mias = "" if _scope_team else "active"
+_scope_lbl_team = "active" if _scope_team else ""
+_scope_toggle_html = f'<span class="scope-toggle {_scope_cls}" id="pgm-scope-toggle"><span class="scope-label {_scope_lbl_mias}">Mías</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_scope_lbl_team}">Equipo</span></span>'
+user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}{_scope_toggle_html}</div>'
 
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
@@ -2003,6 +2035,8 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
+        # Hidden checkbox driven by JS scope toggle in user bar
+        st.checkbox("__scope_team__", key="scope_team", label_visibility="collapsed")
         _edit_label = "✅ Listo" if st.session_state.get("bulk_edit_mode") else "✏️ Editar"
         if st.button(_edit_label, key="toggle_edit_mode"):
             st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
@@ -2019,9 +2053,8 @@ else:
             visible_cats = CATEGORIAS
 
         # --- Filters (one compact row) ---
-        _fc1, _fc2, _fc3 = st.columns([2, 1, 5])
-        tab_scope = _fc1.radio("Vista", ["📋 Mías", "👥 Equipo"], horizontal=True, key="tab_scope", label_visibility="collapsed")
-        hide_protect = _fc2.toggle("🚀 Solo Growth", key="hide_protect")
+        _fc1, _fc2 = st.columns([1, 5])
+        hide_protect = _fc1.toggle("🚀 Solo Growth", key="hide_protect")
         today = date.today()
         q_start, q_end = _fiscal_quarter_range(today)
         q0_label = _fiscal_quarter_label(today)
@@ -2037,8 +2070,8 @@ else:
             f"📅 {q1_label}",
             f"📅 {q2_label}",
         ]
-        q_filter = _fc3.radio("Trimestre", q_options, horizontal=True, key="q_filter", label_visibility="collapsed")
-        if tab_scope == "📋 Mías":
+        q_filter = _fc2.radio("Trimestre", q_options, horizontal=True, key="q_filter", label_visibility="collapsed")
+        if not st.session_state.get("scope_team", False):
             all_opps = [o for o in all_opps if o.get("owner_id") == user_id]
         # Precargar actividades para todas las oportunidades
         all_acts_by_opp = {}
