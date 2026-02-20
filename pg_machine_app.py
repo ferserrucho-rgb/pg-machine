@@ -905,6 +905,25 @@ EXTRA_OPP_COLS = _tc["extra_cols"]
 team_members = _tc["members"]
 RECURSOS_PRESALES = {m["id"]: f'{m["full_name"]} ({m["specialty"]})' if m.get("specialty") else m["full_name"] for m in team_members}
 
+# Cache de datos principales (10s TTL — se refresca tras crear/editar actividades)
+@st.cache_data(ttl=10)
+def _cached_opportunities(_team_id):
+    return dal.get_opportunities(_team_id)
+
+@st.cache_data(ttl=10)
+def _cached_all_activities(_team_id):
+    return dal.get_all_activities(_team_id)
+
+@st.cache_data(ttl=10)
+def _cached_all_activities_for_user(_team_id, _user_id, _role):
+    return dal.get_all_activities_for_user(_team_id, _user_id, _role)
+
+def _clear_data_cache():
+    """Limpia cache de datos tras crear/editar/eliminar."""
+    _cached_opportunities.clear()
+    _cached_all_activities.clear()
+    _cached_all_activities_for_user.clear()
+
 def _parse_date(val):
     if not val or str(val).strip() in ("", "NaT", "nan", "None"):
         return None
@@ -1263,7 +1282,7 @@ with st.sidebar:
                     })
 
             # Comparar con existentes
-            existing = dal.get_opportunities(team_id)
+            existing = _cached_opportunities(team_id)
             # Índices de búsqueda
             by_opp_id = {o["opp_id"]: o for o in existing if o.get("opp_id")}
             by_proy_cuenta = {(o["proyecto"], o["cuenta"]): o for o in existing}
@@ -1800,8 +1819,8 @@ else:
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        all_opps = dal.get_opportunities(team_id)
-        all_activities = dal.get_all_activities(team_id)
+        all_opps = _cached_opportunities(team_id)
+        all_activities = _cached_all_activities(team_id)
 
         # Category focus: show buttons to toggle
         focused = st.session_state.focused_cat
@@ -2029,9 +2048,9 @@ else:
         act_scope = st.radio("Vista", scope_options, horizontal=True, key="act_scope", index=2)
 
         if can_see_all_opportunities():
-            all_activities_full = dal.get_all_activities(team_id)
+            all_activities_full = _cached_all_activities(team_id)
         else:
-            all_activities_full = dal.get_all_activities_for_user(team_id, user_id, user["role"])
+            all_activities_full = _cached_all_activities_for_user(team_id, user_id, user["role"])
 
         # Apply scope filter
         if act_scope == "📋 Mis tareas":
@@ -2181,9 +2200,9 @@ else:
 
         # Fetch activities (respects role permissions)
         if can_see_all_opportunities():
-            hist_activities = dal.get_all_activities(team_id)
+            hist_activities = _cached_all_activities(team_id)
         else:
-            hist_activities = dal.get_all_activities_for_user(team_id, user_id, user["role"])
+            hist_activities = _cached_all_activities_for_user(team_id, user_id, user["role"])
 
         # Grouping selector
         group_options = ["Cuenta", "Proyecto", "Destinatario", "Asignado a"]
@@ -2418,7 +2437,7 @@ else:
     # --- TAB: CALENDARIO ---
     with selected_tabs[3]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        _cal_all_opps = dal.get_opportunities(team_id)
+        _cal_all_opps = _cached_opportunities(team_id)
         _cal_events = dal.get_pending_calendar_events_for_user(team_id, user_id, user["role"])
 
         # Header + refresh + manual add button
@@ -2543,7 +2562,7 @@ else:
             st.markdown("### 📈 Panel de Control — RSM")
 
             # Fetch all activities for the team
-            ctrl_activities = dal.get_all_activities(team_id)
+            ctrl_activities = _cached_all_activities(team_id)
             today = date.today()
             now = datetime.now()
 
