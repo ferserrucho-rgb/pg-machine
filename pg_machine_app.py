@@ -2773,8 +2773,17 @@ else:
                 _ce_start_fmt = _ce_start[:16].replace("T", " ") if _ce_start else ""
                 _ce_end_fmt = _ce_end[11:16] if _ce_end and len(_ce_end) > 11 else ""
                 _ce_time_str = f"{_ce_start_fmt}–{_ce_end_fmt}" if _ce_end_fmt else _ce_start_fmt
-                _ce_attendees = _ce.get("attendees", [])
-                _ce_att_str = ", ".join(_ce_attendees) if isinstance(_ce_attendees, list) else str(_ce_attendees)
+                _ce_attendees_raw = _ce.get("attendees", [])
+                if isinstance(_ce_attendees_raw, list):
+                    _ce_attendees = []
+                    for _att in _ce_attendees_raw:
+                        if isinstance(_att, dict):
+                            _ce_attendees.append(_att.get("name") or _att.get("email") or _att.get("emailAddress", {}).get("address", "") or str(_att))
+                        else:
+                            _ce_attendees.append(str(_att))
+                    _ce_att_str = ", ".join(a for a in _ce_attendees if a)
+                else:
+                    _ce_att_str = str(_ce_attendees_raw)
                 _ce_loc = _ce.get("location", "")
                 _ce_org = _ce.get("organizer", "")
 
