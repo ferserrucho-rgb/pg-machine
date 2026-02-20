@@ -210,7 +210,11 @@ st.markdown("""
     div[class*="stRadio"] label,
     [data-baseweb="radio"] label,
     section.main label[data-baseweb="radio"] { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; padding: 1px 5px !important; letter-spacing: 0.01em !important; color: #475569 !important; }
-    /* Compact toggle label */
+    /* Compact toggle: align vertically with radios */
+    div[data-testid="stToggle"],
+    div[class*="stToggle"] { margin-top: -0.4rem !important; margin-bottom: -0.4rem !important; }
+    div[data-testid="stToggle"] label,
+    div[class*="stToggle"] label { display: flex !important; align-items: center !important; gap: 4px !important; padding-top: 0 !important; margin-top: 0 !important; }
     div[data-testid="stToggle"] label span,
     div[class*="stToggle"] label span,
     section.main [class*="Toggle"] label span { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; color: #475569 !important; }
