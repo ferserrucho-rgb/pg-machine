@@ -950,28 +950,28 @@ for _fn_name in ("create_opportunity", "update_opportunity", "delete_opportunity
     setattr(dal, _fn_name, _make_wrapper(_orig))
 
 @st.cache_data(ttl=300)
-def _cached_opportunities(_team_id, _v):
-    return dal.get_opportunities(_team_id)
+def _cached_opportunities(team_id, v):
+    return dal.get_opportunities(team_id)
 
 @st.cache_data(ttl=300)
-def _cached_all_activities(_team_id, _v):
-    return dal.get_all_activities(_team_id)
+def _cached_all_activities(team_id, v):
+    return dal.get_all_activities(team_id)
 
 @st.cache_data(ttl=300)
-def _cached_all_activities_for_user(_team_id, _user_id, _role, _v):
-    return dal.get_all_activities_for_user(_team_id, _user_id, _role)
+def _cached_all_activities_for_user(team_id, user_id, role, v):
+    return dal.get_all_activities_for_user(team_id, user_id, role)
 
 @st.cache_data(ttl=120)
-def _cached_calendar_events(_team_id, _user_id, _role, _v):
-    return dal.get_pending_calendar_events_for_user(_team_id, _user_id, _role)
+def _cached_calendar_events(team_id, user_id, role, v):
+    return dal.get_pending_calendar_events_for_user(team_id, user_id, role)
 
 @st.cache_data(ttl=120)
-def _cached_team_info(_team_id):
-    return dal.get_team(_team_id)
+def _cached_team_info(team_id):
+    return dal.get_team(team_id)
 
 @st.cache_data(ttl=120)
-def _cached_team_members_all(_team_id, _v):
-    return dal.get_team_members(_team_id, active_only=False)
+def _cached_team_members_all(team_id, v):
+    return dal.get_team_members(team_id, active_only=False)
 
 def _parse_date(val):
     if not val or str(val).strip() in ("", "NaT", "nan", "None"):
