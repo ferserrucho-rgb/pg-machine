@@ -1448,8 +1448,15 @@ with st.sidebar:
     with st.form("manual_entry"):
         nc = st.text_input("Cuenta")
         np = st.text_input("Proyecto")
-        nm = st.number_input("Monto USD", value=0)
         ncat = st.selectbox("Categoría", CATEGORIAS)
+        _new_is_gtm = "GTM" in ncat.strip().upper()
+        if _new_is_gtm:
+            _new_urg_opts = ["", "alta", "media", "baja"]
+            _new_urg_labels = {"": "— Sin prioridad —", "alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
+            n_urgency = st.selectbox("Prioridad", _new_urg_opts, format_func=lambda x: _new_urg_labels[x])
+            n_gtm_type = st.text_input("Tipo GTM")
+        else:
+            nm = st.number_input("Monto USD", value=0)
         n_opp_id = st.text_input("Opportunity ID")
         n_stage = st.text_input("Stage")
         n_partner = st.text_input("Partner")
@@ -1462,11 +1469,17 @@ with st.sidebar:
             if nc and np:
                 parsed = _parse_date(n_close)
                 opp_data = {
-                    "proyecto": np, "cuenta": nc, "monto": nm,
+                    "proyecto": np, "cuenta": nc,
                     "categoria": ncat, "opp_id": n_opp_id,
                     "stage": n_stage, "partner": n_partner,
                     "close_date": str(parsed) if parsed else None,
                 }
+                if _new_is_gtm:
+                    opp_data["monto"] = 0
+                    opp_data["urgency"] = n_urgency if n_urgency else None
+                    opp_data["gtm_type"] = n_gtm_type if n_gtm_type else None
+                else:
+                    opp_data["monto"] = nm
                 opp_data.update({k: v for k, v in extra_vals.items() if v})
                 dal.create_opportunity(team_id, user_id, opp_data)
                 st.rerun()
@@ -1495,7 +1508,18 @@ if st.session_state.selected_id:
         meta_parts.append(f'<span class="meta-pill meta-stage">{opp["stage"]}</span>')
     if opp.get("partner"):
         meta_parts.append(f'<span class="meta-partner">🤝 {opp["partner"]}</span>')
-    meta_parts.append(f'<span class="meta-monto">USD {monto_val:,.0f} ACV</span>')
+    _detail_is_gtm = "GTM" in cat_upper
+    if _detail_is_gtm:
+        _d_urg = opp.get("urgency", "")
+        _d_urg_labels = {"alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
+        _d_urg_colors = {"alta": "#ef4444", "media": "#f59e0b", "baja": "#3b82f6"}
+        _d_urg_lbl = _d_urg_labels.get(_d_urg, "⚪ Sin prioridad")
+        _d_urg_clr = _d_urg_colors.get(_d_urg, "#94a3b8")
+        meta_parts.append(f'<span class="meta-monto" style="color:{_d_urg_clr};">{_d_urg_lbl}</span>')
+        if opp.get("gtm_type"):
+            meta_parts.append(f'<span class="meta-pill meta-stage">{opp["gtm_type"]}</span>')
+    else:
+        meta_parts.append(f'<span class="meta-monto">USD {monto_val:,.0f} ACV</span>')
     if opp.get("opp_id"):
         meta_parts.append(f'<span class="meta-id">{opp["opp_id"]}</span>')
     if opp.get("close_date"):
@@ -1802,12 +1826,21 @@ if st.session_state.selected_id:
 
     # --- Edit Opportunity (toggled from meta-bar) ---
     if st.session_state.get("show_edit_opp"):
-        st.caption("✏️ Editar Oportunidad")
+        _edit_is_gtm = "GTM" in opp.get("categoria", "").strip().upper()
+        st.caption("✏️ Editar GTM" if _edit_is_gtm else "✏️ Editar Oportunidad")
         with st.form("edit_opp"):
             ed_c1, ed_c2, ed_c3 = st.columns(3)
             ed_cuenta = ed_c1.text_input("Cuenta", value=opp["cuenta"])
             ed_proyecto = ed_c2.text_input("Proyecto", value=opp["proyecto"])
-            ed_monto = ed_c3.number_input("Monto USD", value=float(opp.get("monto") or 0))
+            if _edit_is_gtm:
+                _urg_opts = ["", "alta", "media", "baja"]
+                _urg_labels_edit = {"": "— Sin prioridad —", "alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
+                _cur_urg = opp.get("urgency", "") or ""
+                _cur_urg_idx = _urg_opts.index(_cur_urg) if _cur_urg in _urg_opts else 0
+                ed_urgency = ed_c3.selectbox("Prioridad", _urg_opts, index=_cur_urg_idx, format_func=lambda x: _urg_labels_edit[x])
+                ed_gtm_type = st.text_input("Tipo GTM", value=opp.get("gtm_type", "") or "")
+            else:
+                ed_monto = ed_c3.number_input("Monto USD", value=float(opp.get("monto") or 0))
             ed_c4, ed_c5, ed_c6 = st.columns(3)
             ed_cat = ed_c4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(opp["categoria"]) if opp["categoria"] in CATEGORIAS else 0)
             ed_opp_id = ed_c5.text_input("Opportunity ID", value=opp.get("opp_id", ""))
@@ -1822,11 +1855,17 @@ if st.session_state.selected_id:
             if st.form_submit_button("💾 Guardar Cambios"):
                 update_data = {
                     "cuenta": ed_cuenta, "proyecto": ed_proyecto,
-                    "monto": float(ed_monto), "categoria": ed_cat,
+                    "categoria": ed_cat,
                     "opp_id": ed_opp_id, "stage": ed_stage,
                     "partner": ed_partner,
                     "close_date": str(ed_close) if ed_close else None,
                 }
+                if _edit_is_gtm:
+                    update_data["urgency"] = ed_urgency if ed_urgency else None
+                    update_data["gtm_type"] = ed_gtm_type if ed_gtm_type else None
+                    update_data["monto"] = 0
+                else:
+                    update_data["monto"] = float(ed_monto)
                 update_data.update(ed_extra)
                 dal.update_opportunity(opp["id"], update_data)
                 st.session_state.pop("show_edit_opp", None)
@@ -1942,7 +1981,12 @@ else:
         btn_cols = st.columns(len(CATEGORIAS))
         for i, bc in enumerate(btn_cols):
             cat = CATEGORIAS[i]
-            total_str = f"USD {cat_totals[cat]:,.0f} ACV"
+            _is_gtm_cat = "GTM" in cat.strip().upper()
+            if _is_gtm_cat:
+                _gtm_count = len([o for o in all_opps if o["categoria"] == cat])
+                total_str = f"{_gtm_count} items"
+            else:
+                total_str = f"USD {cat_totals[cat]:,.0f} ACV"
             if focused == cat:
                 if bc.button(f"✕ {cat} — Ver todas", key=f"unfocus_{cat}", use_container_width=True):
                     st.session_state.focused_cat = None
@@ -1983,22 +2027,41 @@ else:
                 st.session_state.pop("bulk_del_confirm", None)
                 st.rerun()
 
+        _URG_SORT = {"alta": 0, "media": 1, "baja": 2}
+        _URG_LABELS = {"alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
+        _URG_COLORS = {"alta": "#ef4444", "media": "#f59e0b", "baja": "#3b82f6"}
+
         def _render_account_group(cuenta, opps, all_acts_by_opp):
             """Renders one account group with its opportunity cards."""
-            total = sum(float(o.get('monto') or 0) for o in opps)
+            _grp_is_gtm = any("GTM" in o.get("categoria", "").strip().upper() for o in opps)
+            if _grp_is_gtm:
+                total_html = f'<span class="account-total">{len(opps)} items</span>'
+            else:
+                total = sum(float(o.get('monto') or 0) for o in opps)
+                total_html = f'<span class="account-total">USD {total:,.0f} ACV</span>'
             badge = f'<span class="account-badge">{len(opps)} opp{"s" if len(opps) > 1 else ""}</span>' if len(opps) > 1 else ""
             import re
             safe_cuenta = re.sub(r'[^a-zA-Z0-9]', '_', cuenta)
-            st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span><span class="account-total">USD {total:,.0f} ACV</span>{badge}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="account-group"><div class="account-header"><span class="account-name">{cuenta}</span>{total_html}{badge}</div>', unsafe_allow_html=True)
             for o in opps:
                 opp_acts = sorted(all_acts_by_opp.get(o["id"], []), key=_act_status_order)
+                _card_is_gtm = "GTM" in o.get("categoria", "").strip().upper()
                 monto_val = float(o.get("monto") or 0)
                 # Build HTML card — left: name + stage, right: amount + opp_id + close date
                 name_html = f'<div class="opp-name">{o["proyecto"]}</div>'
                 stage_html = f'<span class="stage-badge">{o["stage"]}</span>' if o.get("stage") else ""
                 row2_html = f'<div class="opp-row2">{stage_html}</div>' if stage_html else ""
-                # Right side: amount + opp ID + close date stacked
-                right_parts = [f'<span class="amount">USD {monto_val:,.0f} ACV</span>']
+                # Right side: GTM shows urgency badge; pipeline shows amount
+                if _card_is_gtm:
+                    _urg = o.get("urgency", "")
+                    _urg_lbl = _URG_LABELS.get(_urg, "⚪ Sin prioridad")
+                    _urg_clr = _URG_COLORS.get(_urg, "#94a3b8")
+                    _gtype = o.get("gtm_type", "") or ""
+                    right_parts = [f'<span class="amount" style="color:{_urg_clr};font-size:0.75rem;">{_urg_lbl}</span>']
+                    if _gtype:
+                        right_parts.append(f'<span class="opp-id-box" style="color:#7c3aed;background:#ede9fe;border-color:#c4b5fd;">{_gtype}</span>')
+                else:
+                    right_parts = [f'<span class="amount">USD {monto_val:,.0f} ACV</span>']
                 if o.get("opp_id"):
                     right_parts.append(f'<span class="opp-id-box">{o["opp_id"]}</span>')
                 if o.get("close_date"):
@@ -2047,12 +2110,18 @@ else:
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
+        def _opp_sort_key(o):
+            """Sort key: GTM by urgency priority, pipeline by monto desc."""
+            if "GTM" in o.get("categoria", "").strip().upper():
+                return (0, _URG_SORT.get(o.get("urgency", ""), 9))
+            return (0, -float(o.get("monto") or 0))
+
         if focused:
             # Focused mode: single category
             cat = visible_cats[0]
             items = [o for o in all_opps if o['categoria'] == cat]
             accounts = OrderedDict()
-            for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
+            for o in sorted(items, key=_opp_sort_key):
                 accounts.setdefault(o['cuenta'], []).append(o)
             account_list = list(accounts.items())
             if is_mobile:
@@ -2070,7 +2139,7 @@ else:
                     items = [o for o in all_opps if o['categoria'] == cat]
                     if items:
                         accounts = OrderedDict()
-                        for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
+                        for o in sorted(items, key=_opp_sort_key):
                             accounts.setdefault(o['cuenta'], []).append(o)
                         for cuenta, opps in accounts.items():
                             _render_account_group(cuenta, opps, all_acts_by_opp)
@@ -2082,7 +2151,7 @@ else:
                         cat = visible_cats[i]
                         items = [o for o in all_opps if o['categoria'] == cat]
                         accounts = OrderedDict()
-                        for o in sorted(items, key=lambda x: float(x.get('monto') or 0), reverse=True):
+                        for o in sorted(items, key=_opp_sort_key):
                             accounts.setdefault(o['cuenta'], []).append(o)
                         for cuenta, opps in accounts.items():
                             _render_account_group(cuenta, opps, all_acts_by_opp)
