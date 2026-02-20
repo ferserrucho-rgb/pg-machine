@@ -101,6 +101,10 @@ st.markdown("""
     .hist-card.respondida { background: #f0fdf4; }
     .hist-card.pendiente { background: #fffbeb; }
     .activity-line { font-size: 0.72rem; color: #475569; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cat-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 12px; border-radius:14px; font-size:0.7rem; font-weight:600; color:#475569; background:#f1f5f9; border:1px solid #e2e8f0; cursor:pointer; user-select:none; transition:all 0.15s; letter-spacing:0.02em; text-transform:uppercase; }
+    .cat-chip:hover { background:#e2e8f0; color:#1e293b; }
+    .cat-chip-active { background:#1e293b; color:#fff; border-color:#1e293b; }
+    .cat-chip-active:hover { background:#334155; }
     .account-group { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
     .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
     .account-name { color: #1e293b; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
@@ -387,24 +391,27 @@ components.html("""
         doc.querySelectorAll('section.main > div').forEach(function(el) {
             if (el.style.maxWidth) { el.style.maxWidth='100%'; el.style.paddingLeft='1rem'; el.style.paddingRight='1rem'; }
         });
-        // Style category buttons — uniform, compact pills
+        // Category chip clicks → trigger hidden Streamlit buttons
+        doc.querySelectorAll('.cat-chip').forEach(function(chip) {
+            if (!chip.dataset.chipBound) {
+                chip.dataset.chipBound = '1';
+                chip.addEventListener('click', function() {
+                    var cat = chip.getAttribute('data-cat');
+                    var isActive = chip.classList.contains('cat-chip-active');
+                    var key = isActive ? 'unfocus_' + cat : 'focus_' + cat;
+                    doc.querySelectorAll('button').forEach(function(btn) {
+                        if ((btn.textContent||'').trim() === key) btn.click();
+                    });
+                });
+            }
+        });
+        // Hide category hidden buttons
         doc.querySelectorAll('button').forEach(function(btn) {
-            var txt = (btn.textContent||'').trim().toUpperCase();
-            var isCat = (txt.indexOf('LEADS')>=0 || txt.indexOf('OFFICIAL')>=0 || txt.indexOf('GTM')>=0);
-            if (isCat && !btn.dataset.catStyled) {
-                btn.dataset.catStyled = '1';
-                var isActive = txt.indexOf('\u2715')>=0;
-                btn.style.background = isActive ? '#1e293b' : '#f1f5f9';
-                btn.style.color = isActive ? '#ffffff' : '#334155';
-                btn.style.fontWeight = '700';
-                btn.style.fontSize = '0.72rem';
-                btn.style.letterSpacing = '0.03em';
-                btn.style.textTransform = 'uppercase';
-                btn.style.border = isActive ? 'none' : '1px solid #cbd5e1';
-                btn.style.borderRadius = '16px';
-                btn.style.minHeight = '0';
-                btn.style.padding = '4px 14px';
-                btn.style.lineHeight = '1.4';
+            var t = (btn.textContent||'').trim();
+            if ((t.indexOf('focus_')===0 || t.indexOf('unfocus_')===0) && !btn.dataset.catHidden) {
+                btn.dataset.catHidden = '1';
+                var el = btn.closest('[data-testid]') || btn.parentElement;
+                if (el) el.style.cssText = 'position:absolute!important;left:-9999px!important;height:0!important;overflow:hidden!important;';
             }
         });
         // Hide open-button rows below dashboard cards
@@ -1972,26 +1979,32 @@ else:
                 fq_start, fq_end = q2_start, q2_end
             all_opps = [o for o in all_opps if o.get("close_date") and fq_start <= (_parse_date(o["close_date"]) or date.min) <= fq_end]
 
-        # Category selector buttons (styled via JS in components.html)
+        # Category selector — compact HTML chips + hidden buttons
         cat_totals = {}
         for cat in CATEGORIAS:
             cat_totals[cat] = sum(float(o.get("monto") or 0) for o in all_opps if o["categoria"] == cat)
-        _cat_col_spec = [1] * len(CATEGORIAS) + [max(1, 6 - len(CATEGORIAS))]
-        btn_cols = st.columns(_cat_col_spec)
-        for i in range(len(CATEGORIAS)):
-            cat = CATEGORIAS[i]
+        _chips_html = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">'
+        for cat in CATEGORIAS:
             _is_gtm_cat = "GTM" in cat.strip().upper()
             if _is_gtm_cat:
                 _gtm_count = len([o for o in all_opps if o["categoria"] == cat])
                 total_str = f"{_gtm_count} items"
             else:
-                total_str = f"USD {cat_totals[cat]:,.0f} ACV"
+                total_str = f"USD {cat_totals[cat]:,.0f}"
             if focused == cat:
-                if btn_cols[i].button(f"✕ {cat} — Ver todas", key=f"unfocus_{cat}", use_container_width=True):
+                _chips_html += f'<span class="cat-chip cat-chip-active" data-cat="{cat}">✕ {cat}</span>'
+            else:
+                _chips_html += f'<span class="cat-chip" data-cat="{cat}">{cat} <span style="opacity:0.7;font-weight:400;">{total_str}</span></span>'
+        _chips_html += '</div>'
+        st.markdown(_chips_html, unsafe_allow_html=True)
+        # Hidden buttons for click handling
+        for cat in CATEGORIAS:
+            if focused == cat:
+                if st.button(f"unfocus_{cat}", key=f"unfocus_{cat}"):
                     st.session_state.focused_cat = None
                     st.rerun()
             else:
-                if btn_cols[i].button(f"{cat} · {total_str}", key=f"focus_{cat}", use_container_width=True):
+                if st.button(f"focus_{cat}", key=f"focus_{cat}"):
                     st.session_state.focused_cat = cat
                     st.rerun()
 
