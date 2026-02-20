@@ -77,6 +77,8 @@ st.markdown("""
     .act-btn-send:hover { background: #047857; color: white; }
     .act-btn-resp { color: #7c3aed; background: #ede9fe; }
     .act-btn-resp:hover { background: #7c3aed; color: white; }
+    .act-btn-move { color: #6d28d9; background: #ede9fe; }
+    .act-btn-move:hover { background: #6d28d9; color: white; }
     .act-btn-resend { color: #0369a1; background: #e0f2fe; }
     .act-btn-resend:hover { background: #0369a1; color: white; }
     .act-tipo { font-size: 0.65rem; font-weight: 700; color: white; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
@@ -367,6 +369,13 @@ components.html("""
             if (hc) { var b = findBtn(hc, 'REENVIAR'); if (b) b.click(); }
             return;
         }
+
+        // 9. Activity move
+        if (e.target.closest('.act-btn-move')) {
+            var hc = e.target.closest('.hist-card');
+            if (hc) { var b = findBtn(hc, 'MOVE_'); if (b) b.click(); }
+            return;
+        }
     };
     doc.body.addEventListener('click', doc._pgmClickHandler);
 
@@ -457,6 +466,7 @@ components.html("""
             if (txt.indexOf('RESPONDIDA') >= 0) hide = true;
             if (txt.indexOf('REENVIAR') >= 0) hide = true;
             if (txt.indexOf('EDIT_OPP') >= 0) hide = true;
+            if (txt.indexOf('MOVE_') >= 0) hide = true;
             if (txt.indexOf('NEW_ACT') >= 0) hide = true;
             if (txt.indexOf('AGENDAR_') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_METRO') >= 0) hide = true;
@@ -927,7 +937,7 @@ def _mark_dirty():
 # Envolver funciones DAL de mutación para marcar dirty automáticamente
 for _fn_name in ("create_opportunity", "update_opportunity", "delete_opportunity",
                  "delete_opportunities_by_account", "bulk_create_opportunities",
-                 "create_activity", "update_activity", "delete_activity",
+                 "create_activity", "update_activity", "delete_activity", "move_activity",
                  "assign_calendar_event", "dismiss_calendar_event", "create_calendar_event",
                  "kill_opportunity", "upsert_pipeline_snapshot"):
     _orig = getattr(dal, _fn_name)
@@ -1677,7 +1687,7 @@ if st.session_state.selected_id:
                     estado_btns = f'<span class="act-btn act-btn-send">{send_label}</span>'
                 elif a["estado"] == "Enviada":
                     estado_btns = '<span class="act-btn act-btn-resp">📩 Respondida</span><span class="act-btn act-btn-resend">🔄 Reenviar</span>'
-                act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
+                act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-move">↗ Mover</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
 
                 # Build meta-row: assignee first, then → destinatario, then description
                 meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{estado_pill}{fecha_html}'
@@ -1775,9 +1785,12 @@ if st.session_state.selected_id:
                             dal.update_activity(aid, {"estado": "Pendiente", "enviada_ts": None, "response_deadline": None})
                             st.rerun()
 
-                # Hidden edit/delete triggers (wired via JS from in-card buttons)
+                # Hidden edit/delete/move triggers (wired via JS from in-card buttons)
                 if st.button("✏️ Editar", key=f"toggle_edit_{aid}"):
                     st.session_state[f"show_edit_{aid}"] = not st.session_state.get(f"show_edit_{aid}", False)
+                    st.rerun()
+                if st.button(f"MOVE_{aid}", key=f"toggle_move_{aid}"):
+                    st.session_state[f"show_move_{aid}"] = not st.session_state.get(f"show_move_{aid}", False)
                     st.rerun()
                 if st.button("⌫", key=f"act_del_{aid}"):
                     st.session_state[f"confirm_del_act_{aid}"] = True
@@ -1824,6 +1837,29 @@ if st.session_state.selected_id:
                                 "descripcion": ea_desc,
                             })
                             st.session_state.pop(f"show_edit_{aid}", None)
+                            st.rerun()
+
+                # Move panel (toggled)
+                if st.session_state.get(f"show_move_{aid}"):
+                    all_opps = _cached_opportunities(team_id, st.session_state._data_v)
+                    move_options = {o["id"]: f'[{o["categoria"]}] {o["cuenta"]} — {o["proyecto"]}' for o in all_opps if o["id"] != opp["id"]}
+                    if move_options:
+                        move_labels = list(move_options.values())
+                        move_ids = list(move_options.keys())
+                        selected_label = st.selectbox("Mover a oportunidad:", move_labels, key=f"move_sel_{aid}")
+                        selected_idx = move_labels.index(selected_label)
+                        mc1, mc2 = st.columns(2)
+                        if mc1.button("✅ Confirmar", key=f"move_ok_{aid}", use_container_width=True):
+                            dal.move_activity(aid, move_ids[selected_idx])
+                            st.session_state.pop(f"show_move_{aid}", None)
+                            st.rerun()
+                        if mc2.button("Cancelar", key=f"move_no_{aid}", use_container_width=True):
+                            st.session_state.pop(f"show_move_{aid}", None)
+                            st.rerun()
+                    else:
+                        st.info("No hay otras oportunidades disponibles.")
+                        if st.button("Cerrar", key=f"move_close_{aid}"):
+                            st.session_state.pop(f"show_move_{aid}", None)
                             st.rerun()
 
         if not activities:
