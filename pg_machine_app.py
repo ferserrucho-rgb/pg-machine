@@ -210,13 +210,20 @@ st.markdown("""
     div[class*="stRadio"] label,
     [data-baseweb="radio"] label,
     section.main label[data-baseweb="radio"] { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; padding: 1px 5px !important; letter-spacing: 0.01em !important; color: #475569 !important; }
-    /* Compact toggle: align vertically with radios */
+    /* Compact toggle: strip all internal spacing to align with radios */
     div[data-testid="stToggle"],
-    div[class*="stToggle"] { margin-top: -0.4rem !important; margin-bottom: -0.4rem !important; }
+    div[class*="stToggle"] { margin-top: -0.4rem !important; margin-bottom: -0.4rem !important; padding: 0 !important; }
+    div[data-testid="stToggle"] > div,
+    div[class*="stToggle"] > div { padding: 0 !important; margin: 0 !important; }
     div[data-testid="stToggle"] label,
-    div[class*="stToggle"] label { display: flex !important; align-items: center !important; gap: 4px !important; padding-top: 0 !important; margin-top: 0 !important; }
+    div[class*="stToggle"] label { display: flex !important; align-items: center !important; gap: 4px !important; padding: 0 !important; margin: 0 !important; min-height: 0 !important; }
+    div[data-testid="stToggle"] label > div,
+    div[class*="stToggle"] label > div { padding: 0 !important; margin: 0 !important; }
+    div[data-testid="stToggle"] label p,
+    div[class*="stToggle"] label p { margin: 0 !important; padding: 0 !important; }
     div[data-testid="stToggle"] label span,
     div[class*="stToggle"] label span,
+    div[data-testid="stToggle"] label p,
     section.main [class*="Toggle"] label span { font-family: 'DM Sans', sans-serif !important; font-size: 0.65rem !important; font-weight: 500 !important; color: #475569 !important; }
     div[data-testid="stMultiSelect"] { margin-top: -6px !important; margin-bottom: -6px !important; }
     div[data-testid="stMultiSelect"] > div { min-height: 0 !important; }
