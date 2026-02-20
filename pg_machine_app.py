@@ -33,8 +33,11 @@ st.markdown("""
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
     .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
-    /* Reduce empty space in top header bar */
-    header[data-testid="stHeader"] { height: 2rem !important; min-height: 2rem !important; }
+    /* Reduce empty space between top arrow and content */
+    header[data-testid="stHeader"] { height: 1.5rem !important; min-height: 1.5rem !important; }
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"] { margin-top: 0 !important; padding-top: 0 !important; }
+    section.main { padding-top: 0 !important; }
     /* Reduce space inside sidebar */
     [data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem !important; }
     [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.2rem !important; }
