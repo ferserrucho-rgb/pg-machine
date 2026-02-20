@@ -4,7 +4,6 @@ import pandas as pd
 import json
 from collections import OrderedDict
 from datetime import datetime, date, timedelta
-from urllib.parse import urlencode
 
 # --- AUTH GATE (must be before any other UI) ---
 from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_admin, has_control_access, can_see_all_opportunities, logout, get_supabase, ALL_ROLES, ROLE_LABELS
@@ -161,9 +160,10 @@ st.markdown("""
     .metro-card .metro-fecha { font-size:0.68rem; font-weight:700; color:#475569; margin-bottom:2px; }
     .metro-card .metro-meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
     /* Clickable card — whole card opens detail, × inside for delete */
-    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; text-decoration: none; color: inherit; display: block; }
+    .pgm-card-wrap { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
     .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); background: #f8faff; }
-
+    .card-del-trigger { position: absolute; bottom: 6px; right: 8px; font-size: 0.75rem; color: #cbd5e1; cursor: pointer; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
+    .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
     .bulk-del-bar { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
     div[data-testid="stMultiSelect"] { margin-top: -8px !important; margin-bottom: -8px !important; }
     div[data-testid="stMultiSelect"] > div { min-height: 0 !important; }
@@ -257,7 +257,26 @@ components.html("""
     // Event delegation for all custom click handlers
     if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
     doc._pgmClickHandler = function(e) {
-        // 1. Dashboard card click — handled by native <a> links now (no JS needed)
+        // 1. Dashboard card click (open)
+        var card = e.target.closest('.pgm-card-wrap');
+        if (card) {
+            var el = card.parentElement;
+            while (el) {
+                var sib = el.nextElementSibling;
+                while (sib) {
+                    var btns = sib.querySelectorAll('button');
+                    for (var i = 0; i < btns.length; i++) {
+                        if ((btns[i].textContent||'').trim() === '\u25b8') {
+                            btns[i].click();
+                            return;
+                        }
+                    }
+                    sib = sib.nextElementSibling;
+                }
+                el = el.parentElement;
+            }
+            return;
+        }
 
         // 2. Meta-bar back button
         if (e.target.closest('.meta-btn-back')) {
@@ -378,6 +397,25 @@ components.html("""
                 btn.style.borderRadius = '6px';
                 btn.style.minHeight = '0';
                 if (txt.indexOf('\u2715')>=0) btn.style.opacity = '0.75';
+            }
+        });
+        // Hide open-button rows below dashboard cards
+        doc.querySelectorAll('.pgm-card-wrap').forEach(function(card) {
+            var el = card.parentElement;
+            while (el) {
+                var sib = el.nextElementSibling;
+                if (sib) {
+                    var hasCardBtn = false;
+                    sib.querySelectorAll('button').forEach(function(b) {
+                        var t = (b.textContent||'').trim();
+                        if (t === '\u25b8') hasCardBtn = true;
+                    });
+                    if (hasCardBtn) {
+                        sib.style.cssText = 'position:absolute !important;left:-9999px !important;height:0 !important;overflow:hidden !important;';
+                        break;
+                    }
+                }
+                el = el.parentElement;
             }
         });
         // Hide Volver/Eliminar row in detail view (replaced by meta-bar buttons)
@@ -829,11 +867,6 @@ user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials
 if 'selected_id' not in st.session_state:
     st.session_state.selected_id = None
 
-# Handle card navigation via query params (set by <a> links on scorecards)
-if '_sel' in st.query_params:
-    st.session_state.selected_id = st.query_params['_sel']
-    del st.query_params['_sel']
-    st.rerun()
 if 'focused_cat' not in st.session_state:
     st.session_state.focused_cat = None
 if 'hide_protect' not in st.session_state:
@@ -1806,13 +1839,6 @@ else:
 
     selected_tabs = st.tabs(tabs)
 
-    # Compute base URL params for card navigation links (preserves auth tokens)
-    _nav_base = {}
-    if '_rt' in st.query_params:
-        _nav_base['_rt'] = st.query_params['_rt']
-    if '_at' in st.query_params:
-        _nav_base['_at'] = st.query_params['_at']
-
     # --- TAB: TABLERO ---
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
@@ -1970,9 +1996,12 @@ else:
                 acts_html = ""
                 if act_lines:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
-                _sel_url = '?' + urlencode({**_nav_base, '_sel': o['id']})
-                card_html = f'<a href="{_sel_url}" class="pgm-card-wrap" data-opp-id="{o["id"]}">{header_html}{meta_html}{acts_html}</a>'
+                del_icon = '<span class="card-del-trigger">&times;</span>'
+                card_html = f'<div class="pgm-card-wrap" data-opp-id="{o["id"]}">{del_icon}{header_html}{meta_html}{acts_html}</div>'
                 st.markdown(card_html, unsafe_allow_html=True)
+                if st.button("▸", key=f"g_{o['id']}"):
+                    st.session_state.selected_id = o['id']
+                    st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         if focused:
