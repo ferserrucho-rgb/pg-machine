@@ -326,9 +326,11 @@ components.html("""
         var inputs = doc.querySelectorAll('input[type="text"]');
         for (var i = 0; i < inputs.length; i++) {
             if (inputs[i].getAttribute('aria-label') === '__pgm_toggle__') {
-                var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                var setter = Object.getOwnPropertyDescriptor(
+                    window.parent.HTMLInputElement.prototype, 'value').set;
                 setter.call(inputs[i], toggleName);
                 inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
+                inputs[i].dispatchEvent(new Event('change', { bubbles: true }));
                 return;
             }
         }
@@ -354,10 +356,10 @@ components.html("""
     // Event delegation for all custom click handlers
     if (doc._pgmClickHandler) doc.body.removeEventListener('click', doc._pgmClickHandler);
     doc._pgmClickHandler = function(e) {
-        // 0. User-bar toggles (scope, growth, quarter)
-        if (e.target.closest('#pgm-scope-toggle')) { triggerToggle('scope_team'); return; }
-        if (e.target.closest('#pgm-growth-toggle')) { triggerToggle('growth_only'); return; }
-        if (e.target.closest('#pgm-q-toggle')) { triggerToggle('q_4q'); return; }
+        // 0. User-bar toggles (scope, growth, quarter) — use class selectors (Streamlit strips id attrs)
+        if (e.target.closest('.pgm-toggle-scope')) { triggerToggle('scope_team'); return; }
+        if (e.target.closest('.pgm-toggle-growth')) { triggerToggle('growth_only'); return; }
+        if (e.target.closest('.pgm-toggle-q')) { triggerToggle('q_4q'); return; }
         // 1. Dashboard card click (open)
         var card = e.target.closest('.pgm-card-wrap');
         if (card) {
@@ -994,15 +996,15 @@ _scope_team = st.session_state.get("scope_team", False)
 _scope_cls = "team-mode" if _scope_team else ""
 _scope_lbl_mias = "" if _scope_team else "active"
 _scope_lbl_team = "active" if _scope_team else ""
-_scope_toggle_html = f'<span class="scope-toggle {_scope_cls}" id="pgm-scope-toggle"><span class="scope-label {_scope_lbl_mias}">Mías</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_scope_lbl_team}">Equipo</span></span>'
+_scope_toggle_html = f'<span class="scope-toggle pgm-toggle-scope {_scope_cls}"><span class="scope-label {_scope_lbl_mias}">Mías</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_scope_lbl_team}">Equipo</span></span>'
 _growth_on = st.session_state.get("growth_only", False)
 _growth_cls = "active" if _growth_on else ""
-_growth_html = f'<span class="bar-pill {_growth_cls}" id="pgm-growth-toggle">🚀 Growth</span>'
+_growth_html = f'<span class="bar-pill pgm-toggle-growth {_growth_cls}">🚀 Growth</span>'
 _q_4q = st.session_state.get("q_4q", False)
 _q_cls = "mode-4q" if _q_4q else ""
 _q_lbl_2q = "" if _q_4q else "active"
 _q_lbl_4q = "active" if _q_4q else ""
-_q_toggle_html = f'<span class="q-toggle {_q_cls}" id="pgm-q-toggle"><span class="scope-label {_q_lbl_2q}">2Q</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_q_lbl_4q}">4Q</span></span>'
+_q_toggle_html = f'<span class="q-toggle pgm-toggle-q {_q_cls}"><span class="scope-label {_q_lbl_2q}">2Q</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_q_lbl_4q}">4Q</span></span>'
 user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}{_scope_toggle_html}{_growth_html}{_q_toggle_html}</div>'
 
 # --- 2. DATOS DESDE SUPABASE ---
