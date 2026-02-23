@@ -79,11 +79,24 @@ serve(async (req: Request) => {
     }
   }
 
-  // Normalizar attendees: acepta array o string separado por ;
+  // Normalizar attendees: acepta array de strings, array de objetos, o string separado por ;
   let attendees: string[] = [];
   const rawAttendees = body.attendees;
   if (Array.isArray(rawAttendees)) {
-    attendees = rawAttendees.map((a: unknown) => String(a).trim()).filter(Boolean);
+    attendees = rawAttendees.map((a: unknown) => {
+      if (typeof a === "string") return a.trim();
+      if (a && typeof a === "object") {
+        const obj = a as Record<string, unknown>;
+        // Microsoft Graph format: { emailAddress: { name, address } }
+        if (obj.emailAddress && typeof obj.emailAddress === "object") {
+          const ea = obj.emailAddress as Record<string, string>;
+          return (ea.name || ea.address || "").trim();
+        }
+        // Power Automate / other formats
+        return ((obj.name || obj.email || obj.address || obj.Address || obj.DisplayName || "") as string).trim();
+      }
+      return String(a).trim();
+    }).filter(Boolean);
   } else if (typeof rawAttendees === "string" && rawAttendees.trim()) {
     attendees = rawAttendees.split(";").map((a: string) => a.trim()).filter(Boolean);
   }

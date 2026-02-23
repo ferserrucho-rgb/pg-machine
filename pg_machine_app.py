@@ -1169,6 +1169,13 @@ def _naive(dt):
         return dt.replace(tzinfo=None)
     return dt
 
+def _safe_dest(val) -> str:
+    """Sanitiza destinatario: filtra valores corruptos como [object Object]."""
+    if not val:
+        return ""
+    s = str(val).strip()
+    return "" if s == "[object Object]" else s
+
 def _traffic_light(act):
     """Calcula semáforo para una actividad (formato Supabase)."""
     estado = act.get("estado", "Pendiente")
@@ -1269,7 +1276,7 @@ def _outlook_event_url(activity: dict, opportunity: dict) -> str:
     if proyecto:
         body_parts.append(f"Proyecto: {proyecto}")
     body = "\n".join(body_parts)
-    destinatario = (activity.get("destinatario") or "").strip()
+    destinatario = _safe_dest(activity.get("destinatario"))
     params = f"subject={quote(subject)}&body={quote(body)}&startdt={quote(startdt)}&enddt={quote(enddt)}"
     if destinatario:
         params += f"&to={quote(destinatario)}"
@@ -1289,7 +1296,13 @@ def _meeting_audit_html(activity: dict) -> str:
     scheduled_at = mm.get("scheduled_at", "")
     start_time = mm.get("start_time", "")
     end_time = mm.get("end_time", "")
-    attendees = mm.get("attendees", "")
+    attendees_raw = mm.get("attendees", "")
+    if isinstance(attendees_raw, list):
+        attendees = ", ".join(s for s in (str(a) for a in attendees_raw) if s and s != "[object Object]")
+    elif isinstance(attendees_raw, str):
+        attendees = "" if attendees_raw.strip() == "[object Object]" else attendees_raw
+    else:
+        attendees = str(attendees_raw) if attendees_raw else ""
     try:
         sched_dt = datetime.fromisoformat(scheduled_at)
         sched_str = sched_dt.strftime("%d/%m")
@@ -1354,7 +1367,7 @@ def _metro_station_html(a: dict, ctx_html: str = "") -> str:
     tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
     tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
     obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
-    dest_html = f'<span class="act-dest">→ {a["destinatario"]}</span>' if a.get("destinatario") else ''
+    dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
     asig_initials = _get_initials(assigned_name) if assigned_name else ""
     asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
     desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
@@ -1727,7 +1740,7 @@ if st.session_state.selected_id:
         activities.sort(key=_act_status_order)
         for a in activities:
             with st.container():
-                dest_txt = f' → {a["destinatario"]}' if a.get("destinatario") else ""
+                dest_txt = f' → {_safe_dest(a.get("destinatario"))}' if _safe_dest(a.get("destinatario")) else ""
                 assigned_name = ""
                 if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                     assigned_name = a["assigned_profile"]["full_name"]
@@ -1771,7 +1784,7 @@ if st.session_state.selected_id:
                 # Metadata elements
                 tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
                 obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
-                dest_html = f'<span class="act-dest">→ {a["destinatario"]}</span>' if a.get("destinatario") else ''
+                dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
                 asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                 fecha_html = f'<span class="act-fecha">{fecha_display}</span>'
                 desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
@@ -2186,7 +2199,7 @@ else:
                 for a in opp_acts:
                     light, label = _traffic_light(a)
                     obj = f' <span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ""
-                    dest = f' → <span class="act-dest">{a["destinatario"]}</span>' if a.get("destinatario") else ""
+                    dest = f' → <span class="act-dest">{_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ""
                     asig_name = ""
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                         asig_name = a["assigned_profile"]["full_name"]
@@ -2584,7 +2597,7 @@ else:
                                 tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
                                 tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
                                 obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
-                                dest_html = f'<span class="act-dest">→ {a["destinatario"]}</span>' if a.get("destinatario") else ''
+                                dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
                                 asig_initials = _get_initials(assigned_name) if assigned_name else ""
                                 asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                                 fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
@@ -2682,7 +2695,7 @@ else:
                                 tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
                                 tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
                                 obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
-                                dest_html = f'<span class="act-dest">→ {a["destinatario"]}</span>' if a.get("destinatario") else ''
+                                dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
                                 asig_initials = _get_initials(assigned_name) if assigned_name else ""
                                 asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                                 fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
@@ -2993,9 +3006,11 @@ else:
                     _ce_attendees = []
                     for _att in _ce_attendees_raw:
                         if isinstance(_att, dict):
-                            _ce_attendees.append(_att.get("name") or _att.get("email") or _att.get("emailAddress", {}).get("address", "") or str(_att))
+                            _ce_attendees.append(_att.get("name") or _att.get("email") or _att.get("emailAddress", {}).get("address", "") or "")
                         else:
-                            _ce_attendees.append(str(_att))
+                            _val = str(_att)
+                            if _val != "[object Object]":
+                                _ce_attendees.append(_val)
                     _ce_att_str = ", ".join(a for a in _ce_attendees if a)
                 else:
                     _ce_att_str = str(_ce_attendees_raw)
