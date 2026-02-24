@@ -64,9 +64,24 @@ serve(async (req: Request) => {
   }
 
   // Si el organizador es otro miembro del mismo equipo, asignar el evento a él.
-  // Power Automate puede enviar email o nombre como organizer.
-  const organizerRaw = (body.organizer as string || "").trim();
-  const organizerLower = organizerRaw.toLowerCase();
+  // Power Automate puede enviar: string, o Graph object { emailAddress: { name, address } }
+  let organizerEmail = "";
+  let organizerName = "";
+  const rawOrg = body.organizer;
+  if (typeof rawOrg === "string") {
+    organizerEmail = rawOrg.trim().toLowerCase();
+  } else if (rawOrg && typeof rawOrg === "object") {
+    const orgObj = rawOrg as Record<string, unknown>;
+    if (orgObj.emailAddress && typeof orgObj.emailAddress === "object") {
+      const ea = orgObj.emailAddress as Record<string, string>;
+      organizerEmail = (ea.address || ea.email || "").trim().toLowerCase();
+      organizerName = (ea.name || "").trim();
+    } else {
+      organizerEmail = ((orgObj.email || orgObj.address || orgObj.Address || "") as string).trim().toLowerCase();
+      organizerName = ((orgObj.name || orgObj.Name || orgObj.DisplayName || "") as string).trim();
+    }
+  }
+  const organizerLower = organizerEmail;
   let ownerProfile = profile;
   if (organizerLower && organizerLower !== userEmail) {
     // Intentar por email primero
@@ -79,12 +94,12 @@ serve(async (req: Request) => {
 
     if (orgByEmail) {
       ownerProfile = orgByEmail;
-    } else {
+    } else if (organizerName) {
       // Fallback: buscar por nombre (case-insensitive)
       const { data: orgByName } = await supabase
         .from("profiles")
         .select("id, team_id")
-        .ilike("full_name", organizerLower)
+        .ilike("full_name", organizerName)
         .eq("team_id", profile.team_id)
         .maybeSingle();
 
@@ -140,7 +155,7 @@ serve(async (req: Request) => {
     subject: (body.subject as string || "").trim(),
     start_time: body.start || null,
     end_time: body.end || null,
-    organizer: (body.organizer as string || "").trim(),
+    organizer: organizerName || organizerEmail || "",
     attendees: attendees,
     location: (body.location as string || "").trim(),
     body: (body.body as string || "").trim(),
