@@ -63,6 +63,37 @@ serve(async (req: Request) => {
     return jsonResponse({ error: `Usuario no encontrado: ${userEmail}` }, 404);
   }
 
+  // Si el organizador es otro miembro del mismo equipo, asignar el evento a él.
+  // Power Automate puede enviar email o nombre como organizer.
+  const organizerRaw = (body.organizer as string || "").trim();
+  const organizerLower = organizerRaw.toLowerCase();
+  let ownerProfile = profile;
+  if (organizerLower && organizerLower !== userEmail) {
+    // Intentar por email primero
+    const { data: orgByEmail } = await supabase
+      .from("profiles")
+      .select("id, team_id")
+      .eq("email", organizerLower)
+      .eq("team_id", profile.team_id)
+      .maybeSingle();
+
+    if (orgByEmail) {
+      ownerProfile = orgByEmail;
+    } else {
+      // Fallback: buscar por nombre (case-insensitive)
+      const { data: orgByName } = await supabase
+        .from("profiles")
+        .select("id, team_id")
+        .ilike("full_name", organizerLower)
+        .eq("team_id", profile.team_id)
+        .maybeSingle();
+
+      if (orgByName) {
+        ownerProfile = orgByName;
+      }
+    }
+  }
+
   const outlookEventId = (body.outlook_event_id as string || "").trim();
 
   // Deduplicar por outlook_event_id
@@ -71,7 +102,7 @@ serve(async (req: Request) => {
       .from("calendar_inbox")
       .select("id")
       .eq("outlook_event_id", outlookEventId)
-      .eq("profile_id", profile.id)
+      .eq("profile_id", ownerProfile.id)
       .maybeSingle();
 
     if (existing) {
@@ -103,9 +134,9 @@ serve(async (req: Request) => {
 
   // Insertar en calendar_inbox
   const record = {
-    team_id: profile.team_id,
-    profile_id: profile.id,
-    user_email: userEmail,
+    team_id: ownerProfile.team_id,
+    profile_id: ownerProfile.id,
+    user_email: ownerProfile === profile ? userEmail : organizerLower || userEmail,
     subject: (body.subject as string || "").trim(),
     start_time: body.start || null,
     end_time: body.end || null,
