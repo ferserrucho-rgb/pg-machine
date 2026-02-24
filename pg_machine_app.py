@@ -3062,17 +3062,22 @@ else:
                         _auto_opp_idx = _oi + 1  # +1 because index 0 is "— Seleccionar —"
                         break
 
-                # Auto-match member: find first attendee (not the syncing user) who is a team member
+                # Auto-match member: 1) opportunity owner, 2) attendee email, 3) fallback
                 _auto_member_idx = 0
-                for _att_email in _ce_attendee_emails:
-                    if _att_email == user.get("email", "").lower():
-                        continue  # skip the admin/syncing user
-                    if _att_email in _member_email_map:
-                        _auto_member_idx = _member_email_map[_att_email]
-                        break
-                # Fallback: profile_id from the calendar event
+                # First priority: if opportunity matched, use its owner
+                if _auto_opp_idx > 0:
+                    _matched_opp = _cal_all_opps[_auto_opp_idx - 1]
+                    _opp_owner_id = _matched_opp.get("owner_id")
+                    if _opp_owner_id and _opp_owner_id != user_id:
+                        _auto_member_idx = next((i for i, m in enumerate(team_members) if m["id"] == _opp_owner_id), 0)
+                # Second priority: attendee email match (skip admin)
                 if _auto_member_idx == 0:
-                    _auto_member_idx = next((i for i, m in enumerate(team_members) if m["id"] == _ce.get("profile_id")), 0)
+                    for _att_email in _ce_attendee_emails:
+                        if _att_email == user.get("email", "").lower():
+                            continue
+                        if _att_email in _member_email_map:
+                            _auto_member_idx = _member_email_map[_att_email]
+                            break
 
                 _match_label = ""
                 if _auto_opp_idx > 0:
