@@ -64,23 +64,47 @@ serve(async (req: Request) => {
   }
 
   // Si el organizador es otro miembro del mismo equipo, asignar el evento a él.
-  // Power Automate puede enviar: string, o Graph object { emailAddress: { name, address } }
+  // Extraer email/nombre del organizer (puede ser string, objeto Graph, u otro formato).
   let organizerEmail = "";
   let organizerName = "";
   const rawOrg = body.organizer;
-  if (typeof rawOrg === "string") {
-    organizerEmail = rawOrg.trim().toLowerCase();
-  } else if (rawOrg && typeof rawOrg === "object") {
-    const orgObj = rawOrg as Record<string, unknown>;
-    if (orgObj.emailAddress && typeof orgObj.emailAddress === "object") {
-      const ea = orgObj.emailAddress as Record<string, string>;
-      organizerEmail = (ea.address || ea.email || "").trim().toLowerCase();
-      organizerName = (ea.name || "").trim();
-    } else {
-      organizerEmail = ((orgObj.email || orgObj.address || orgObj.Address || "") as string).trim().toLowerCase();
-      organizerName = ((orgObj.name || orgObj.Name || orgObj.DisplayName || "") as string).trim();
+  const rawOrgDebug = JSON.stringify(rawOrg || null);
+
+  function extractEmail(val: unknown): string {
+    if (!val) return "";
+    if (typeof val === "string") return val.trim().toLowerCase();
+    if (typeof val === "object") {
+      const o = val as Record<string, unknown>;
+      // Recursively check common keys
+      for (const key of ["address", "email", "Address", "Email", "mail"]) {
+        if (typeof o[key] === "string") return (o[key] as string).trim().toLowerCase();
+      }
+      // Nested emailAddress object (Microsoft Graph)
+      if (o.emailAddress) return extractEmail(o.emailAddress);
     }
+    return "";
   }
+
+  function extractName(val: unknown): string {
+    if (!val) return "";
+    if (typeof val === "object") {
+      const o = val as Record<string, unknown>;
+      for (const key of ["name", "Name", "DisplayName", "displayName"]) {
+        if (typeof o[key] === "string") return (o[key] as string).trim();
+      }
+      if (o.emailAddress) return extractName(o.emailAddress);
+    }
+    return "";
+  }
+
+  organizerEmail = extractEmail(rawOrg);
+  organizerName = extractName(rawOrg);
+
+  // If organizer is a plain string that looks like an email
+  if (!organizerEmail && typeof rawOrg === "string") {
+    organizerEmail = rawOrg.trim().toLowerCase();
+  }
+
   const organizerLower = organizerEmail;
   let ownerProfile = profile;
   if (organizerLower && organizerLower !== userEmail) {
@@ -155,7 +179,7 @@ serve(async (req: Request) => {
     subject: (body.subject as string || "").trim(),
     start_time: body.start || null,
     end_time: body.end || null,
-    organizer: organizerName || organizerEmail || "",
+    organizer: organizerName || organizerEmail || ("DEBUG:" + rawOrgDebug),
     attendees: attendees,
     location: (body.location as string || "").trim(),
     body: (body.body as string || "").trim(),

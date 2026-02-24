@@ -3053,11 +3053,15 @@ else:
                 _card_html += '</div>'
                 st.markdown(_card_html, unsafe_allow_html=True)
 
-                _ce_cols = st.columns([4, 1, 1])
+                _ce_cols = st.columns([3, 2, 1, 1])
                 _opp_options = ["— Seleccionar oportunidad —"] + [f'{o["cuenta"]} / {o["proyecto"]}' for o in _cal_all_opps]
                 _sel_opp_idx = _ce_cols[0].selectbox("Oportunidad", range(len(_opp_options)), format_func=lambda i: _opp_options[i], key=f"cal_opp_{_ce_id}", label_visibility="collapsed")
+                _member_options = [{"id": m["id"], "label": m["full_name"]} for m in team_members]
+                _member_labels = [m["label"] for m in _member_options]
+                _default_member_idx = next((i for i, m in enumerate(_member_options) if m["id"] == _ce.get("profile_id")), 0)
+                _sel_member_idx = _ce_cols[1].selectbox("Responsable", range(len(_member_labels)), format_func=lambda i: _member_labels[i], key=f"cal_member_{_ce_id}", index=_default_member_idx, label_visibility="collapsed")
 
-                if _ce_cols[1].button("✅ Asignar", key=f"cal_assign_{_ce_id}"):
+                if _ce_cols[2].button("✅ Asignar", key=f"cal_assign_{_ce_id}"):
                     if _sel_opp_idx > 0:
                         _target_opp = _cal_all_opps[_sel_opp_idx - 1]
                         _ce_fecha = str(_ce_start[:10]) if _ce_start else str(date.today())
@@ -3070,7 +3074,7 @@ else:
                             "original_subject": _ce.get("subject", ""),
                             "synced_at": datetime.now().isoformat(),
                         })
-                        _ce_owner = _ce.get("profile_id") or user_id
+                        _ce_owner = _member_options[_sel_member_idx]["id"]
                         _new_act = dal.create_activity(_target_opp["id"], team_id, _ce_owner, {
                             "tipo": "Reunión",
                             "fecha": _ce_fecha,
@@ -3089,7 +3093,7 @@ else:
                     else:
                         st.toast("Selecciona una oportunidad primero", icon="⚠️")
 
-                if _ce_cols[2].button("❌ Descartar", key=f"cal_dismiss_{_ce_id}"):
+                if _ce_cols[3].button("❌ Descartar", key=f"cal_dismiss_{_ce_id}"):
                     dal.dismiss_calendar_event(_ce_id)
                     st.rerun()
 
