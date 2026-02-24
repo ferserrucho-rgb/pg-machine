@@ -305,6 +305,28 @@ st.markdown("""
         .metro-timeline { padding-left: 24px; }
         .metro-station .metro-dot { left: -20px; width: 12px; height: 12px; }
         .metro-card { padding: 6px 10px; }
+        /* Tab bar: horizontal scroll + compact */
+        [data-baseweb="tab-list"] { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; scrollbar-width: none !important; flex-wrap: nowrap !important; padding: 2px 2px !important; }
+        [data-baseweb="tab-list"]::-webkit-scrollbar { display: none !important; }
+        [data-baseweb="tab-list"] button[role="tab"] { padding: 5px 8px !important; font-size: 0.62rem !important; white-space: nowrap !important; flex-shrink: 0 !important; min-width: fit-content !important; }
+        /* User bar: wrap toggles */
+        .user-bar { flex-wrap: wrap !important; gap: 4px 8px !important; padding: 4px 8px !important; }
+        .scope-toggle { margin-left: 0 !important; }
+        .user-bar .user-avatar { width: 24px !important; height: 24px !important; font-size: 0.6rem !important; }
+        .bar-pill, .scope-toggle, .q-toggle { font-size: 0.58rem !important; }
+        .cal-badge { font-size: 0.55rem !important; padding: 1px 4px !important; }
+        /* Detail view meta-actions: full-width wrap */
+        .opp-meta-bar .meta-actions { margin-left: 0 !important; flex-basis: 100% !important; flex-wrap: wrap !important; flex-shrink: 1 !important; gap: 4px !important; margin-top: 4px !important; }
+        .meta-btn { font-size: 0.62rem !important; padding: 6px 10px !important; min-height: 32px !important; }
+        /* Activity action buttons: enlarge for touch */
+        .act-btn { font-size: 0.65rem !important; padding: 5px 8px !important; min-height: 28px !important; display: inline-flex !important; align-items: center !important; }
+        .act-actions { gap: 4px !important; }
+        /* Metrics: 2-column grid */
+        [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 4px !important; }
+        [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) > [data-testid="column"] { width: auto !important; flex: none !important; min-width: auto !important; }
+        /* Sidebar: constrain width */
+        [data-testid="stSidebar"] { min-width: 260px !important; max-width: 80vw !important; }
+        [data-testid="stSidebar"] button { min-height: 44px !important; font-size: 0.85rem !important; }
     }
     @media (max-width: 480px) {
         .pgm-card-wrap .opp-header { font-size: 0.75rem; }
@@ -313,6 +335,15 @@ st.markdown("""
         .account-name { font-size: 0.75rem; }
         .account-total { font-size: 0.7rem; }
         .user-bar { font-size: 0.65rem; }
+        /* Tab bar: further compact */
+        [data-baseweb="tab-list"] button[role="tab"] { padding: 4px 6px !important; font-size: 0.58rem !important; }
+        /* User bar: tighter */
+        .user-bar { gap: 3px 6px !important; padding: 3px 6px !important; }
+        .bar-pill, .scope-toggle, .q-toggle { font-size: 0.55rem !important; gap: 3px !important; }
+        .scope-toggle .scope-track, .q-toggle .scope-track { width: 22px !important; height: 12px !important; }
+        .scope-toggle .scope-knob, .q-toggle .scope-knob { width: 8px !important; height: 8px !important; }
+        /* Activity buttons: larger for small screens */
+        .act-btn { padding: 6px 10px !important; min-height: 32px !important; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -990,10 +1021,26 @@ def _get_initials(full_name: str) -> str:
 
 user_initials = _get_initials(user["full_name"])
 user_role_label = ROLE_LABELS.get(user["role"], user["role"])
-@st.cache_data(ttl=30)
-def _cached_cal_count(_team_id, _user_id, _role):
-    return dal.get_pending_calendar_count(_team_id, _user_id, _role)
-_cal_inbox_count = _cached_cal_count(team_id, user_id, user["role"])
+
+# --- Session-state cache helpers ---
+_SS_CACHE_KEYS = (
+    "_c_team_config", "_c_opps", "_c_acts", "_c_acts_user",
+    "_c_cal_events", "_c_team_info", "_c_members_all",
+    "_c_cal_count", "_c_detail_opp", "_c_detail_acts",
+)
+
+def _invalidate_cache():
+    """Clear all session-state cache keys on mutation."""
+    for k in _SS_CACHE_KEYS:
+        st.session_state.pop(k, None)
+
+def _ss_cache(key, loader, *args):
+    """Return cached value from session_state, or call loader and store it."""
+    if key not in st.session_state:
+        st.session_state[key] = loader(*args)
+    return st.session_state[key]
+
+_cal_inbox_count = _ss_cache("_c_cal_count", dal.get_pending_calendar_count, team_id, user_id, user["role"])
 _cal_badge_html = f' <span class="cal-badge">📅 {_cal_inbox_count}</span>' if _cal_inbox_count > 0 else ""
 _scope_team = st.session_state.get("scope_team", False)
 _scope_cls = "team-mode" if _scope_team else ""
@@ -1031,17 +1078,14 @@ if 'metro_view' not in st.session_state:
 if 'historial_metro_view' not in st.session_state:
     st.session_state.historial_metro_view = False
 
-# Cargar configuración del equipo (cacheado 60s para reducir roundtrips)
-@st.cache_data(ttl=60)
-def _cached_team_config(_team_id):
-    return {
-        "sla_opciones": dal.get_sla_options(_team_id),
-        "sla_respuesta": dal.get_sla_respuesta(_team_id),
-        "categorias": dal.get_categorias(_team_id),
-        "extra_cols": dal.get_opportunity_extra_columns(_team_id),
-        "members": dal.get_team_members(_team_id),
-    }
-_tc = _cached_team_config(team_id)
+# Cargar configuración del equipo
+_tc = _ss_cache("_c_team_config", lambda tid: {
+    "sla_opciones": dal.get_sla_options(tid),
+    "sla_respuesta": dal.get_sla_respuesta(tid),
+    "categorias": dal.get_categorias(tid),
+    "extra_cols": dal.get_opportunity_extra_columns(tid),
+    "members": dal.get_team_members(tid),
+}, team_id)
 SLA_OPCIONES = _tc["sla_opciones"]
 SLA_RESPUESTA = _tc["sla_respuesta"]
 CATEGORIAS = _tc["categorias"]
@@ -1055,10 +1099,7 @@ if "_data_v" not in st.session_state:
 # Auto-bump: si el rerun anterior fue tras una mutación, incrementar versión
 if st.session_state.pop("_data_dirty", False):
     st.session_state._data_v += 1
-
-def _mark_dirty():
-    """Marca datos como modificados — el próximo rerun refrescará el cache."""
-    st.session_state._data_dirty = True
+    _invalidate_cache()
 
 # Envolver funciones DAL de mutación para marcar dirty automáticamente
 for _fn_name in ("create_opportunity", "update_opportunity", "delete_opportunity",
@@ -1075,29 +1116,6 @@ for _fn_name in ("create_opportunity", "update_opportunity", "delete_opportunity
         return _wrapper
     setattr(dal, _fn_name, _make_wrapper(_orig))
 
-@st.cache_data(ttl=300)
-def _cached_opportunities(team_id, v):
-    return dal.get_opportunities(team_id)
-
-@st.cache_data(ttl=300)
-def _cached_all_activities(team_id, v):
-    return dal.get_all_activities(team_id)
-
-@st.cache_data(ttl=300)
-def _cached_all_activities_for_user(team_id, user_id, role, v):
-    return dal.get_all_activities_for_user(team_id, user_id, role)
-
-@st.cache_data(ttl=120)
-def _cached_calendar_events(team_id, user_id, role, v):
-    return dal.get_pending_calendar_events_for_user(team_id, user_id, role)
-
-@st.cache_data(ttl=120)
-def _cached_team_info(team_id):
-    return dal.get_team(team_id)
-
-@st.cache_data(ttl=120)
-def _cached_team_members_all(team_id, v):
-    return dal.get_team_members(team_id, active_only=False)
 
 def _parse_date(val):
     if not val or str(val).strip() in ("", "NaT", "nan", "None"):
@@ -1463,7 +1481,7 @@ with st.sidebar:
                         "close_date": str(parsed) if parsed else None,
                         "partner": str(r.get('Partner', '') or '').strip() if str(r.get('Partner', '')).lower() not in ('nan', '') else '',
                     })
-            existing = _cached_opportunities(team_id, st.session_state._data_v)
+            existing = _ss_cache("_c_opps", dal.get_opportunities, team_id)
             by_opp_id = {o["opp_id"]: o for o in existing if o.get("opp_id")}
             by_proy_cuenta = {(o["proyecto"], o["cuenta"]): o for o in existing}
             nuevas = []
@@ -1614,8 +1632,14 @@ with st.sidebar:
 # --- 4. LAYOUT ---
 if st.session_state.selected_id:
     # --- VISTA DETALLE ---
+    # Clear detail cache when switching to a different opportunity
+    if st.session_state.get("_prev_sel") != st.session_state.selected_id:
+        st.session_state.pop("_c_detail_opp", None)
+        st.session_state.pop("_c_detail_acts", None)
+        st.session_state["_prev_sel"] = st.session_state.selected_id
+
     st.markdown(user_bar_html, unsafe_allow_html=True)
-    opp = dal.get_opportunity(st.session_state.selected_id)
+    opp = _ss_cache("_c_detail_opp", dal.get_opportunity, st.session_state.selected_id)
     if not opp:
         st.error("Oportunidad no encontrada.")
         st.session_state.selected_id = None
@@ -1725,7 +1749,7 @@ if st.session_state.selected_id:
 
     # --- History ---
     st.caption("📜 Historial e Interacción")
-    activities = dal.get_activities_for_opportunity(opp["id"])
+    activities = _ss_cache("_c_detail_acts", dal.get_activities_for_opportunity, opp["id"])
 
     if st.session_state.get("metro_view"):
         # --- Metro Timeline (read-only chronological view) ---
@@ -1952,7 +1976,7 @@ if st.session_state.selected_id:
 
                 # Move panel (toggled)
                 if st.session_state.get(f"show_move_{aid}"):
-                    all_opps = _cached_opportunities(team_id, st.session_state._data_v)
+                    all_opps = _ss_cache("_c_opps", dal.get_opportunities, team_id)
                     move_options = {o["id"]: f'[{o["categoria"]}] {o["cuenta"]} — {o["proyecto"]}' for o in all_opps if o["id"] != opp["id"]}
                     if move_options:
                         move_labels = list(move_options.values())
@@ -2077,8 +2101,8 @@ else:
     with selected_tabs[0]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
 
-        all_opps = _cached_opportunities(team_id, st.session_state._data_v)
-        all_activities = _cached_all_activities(team_id, st.session_state._data_v)
+        all_opps = _ss_cache("_c_opps", dal.get_opportunities, team_id)
+        all_activities = _ss_cache("_c_acts", dal.get_all_activities, team_id)
 
         # Category focus: show buttons to toggle
         focused = st.session_state.focused_cat
@@ -2327,9 +2351,9 @@ else:
         act_scope = st.radio("Vista", scope_options, horizontal=True, key="act_scope", index=2)
 
         if can_see_all_opportunities():
-            all_activities_full = _cached_all_activities(team_id, st.session_state._data_v)
+            all_activities_full = _ss_cache("_c_acts", dal.get_all_activities, team_id)
         else:
-            all_activities_full = _cached_all_activities_for_user(team_id, user_id, user["role"], st.session_state._data_v)
+            all_activities_full = _ss_cache("_c_acts_user", dal.get_all_activities_for_user, team_id, user_id, user["role"])
 
         # Apply scope filter
         if act_scope == "📋 Mis tareas":
@@ -2479,9 +2503,9 @@ else:
 
         # Fetch activities (respects role permissions)
         if can_see_all_opportunities():
-            hist_activities = _cached_all_activities(team_id, st.session_state._data_v)
+            hist_activities = _ss_cache("_c_acts", dal.get_all_activities, team_id)
         else:
-            hist_activities = _cached_all_activities_for_user(team_id, user_id, user["role"], st.session_state._data_v)
+            hist_activities = _ss_cache("_c_acts_user", dal.get_all_activities_for_user, team_id, user_id, user["role"])
 
         # Grouping selector
         group_options = ["Cuenta", "Proyecto", "Destinatario", "Asignado a"]
@@ -2941,15 +2965,15 @@ else:
     # --- TAB: CALENDARIO ---
     with selected_tabs[4]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        _cal_all_opps = _cached_opportunities(team_id, st.session_state._data_v)
-        _cal_events = _cached_calendar_events(team_id, user_id, user["role"], st.session_state._data_v)
+        _cal_all_opps = _ss_cache("_c_opps", dal.get_opportunities, team_id)
+        _cal_events = _ss_cache("_c_cal_events", dal.get_pending_calendar_events_for_user, team_id, user_id, user["role"])
 
         # Header + refresh + manual add button
         _cal_hdr_cols = st.columns([5, 1, 1])
         _cal_hdr_cols[0].markdown(f"### 📅 Bandeja de Calendario — {len(_cal_events)} pendientes")
         if _cal_hdr_cols[1].button("🔄 Actualizar", key="cal_refresh"):
-            _cached_cal_count.clear()
-            _cached_calendar_events.clear()
+            st.session_state.pop("_c_cal_count", None)
+            st.session_state.pop("_c_cal_events", None)
             st.rerun()
         if _cal_hdr_cols[2].button("+ Agregar", key="cal_manual_add"):
             st.session_state["_show_cal_form"] = True
@@ -3046,7 +3070,8 @@ else:
                             "original_subject": _ce.get("subject", ""),
                             "synced_at": datetime.now().isoformat(),
                         })
-                        _new_act = dal.create_activity(_target_opp["id"], team_id, user_id, {
+                        _ce_owner = _ce.get("profile_id") or user_id
+                        _new_act = dal.create_activity(_target_opp["id"], team_id, _ce_owner, {
                             "tipo": "Reunión",
                             "fecha": _ce_fecha,
                             "objetivo": _ce.get("subject", ""),
@@ -3055,6 +3080,7 @@ else:
                             "sla_key": "",
                             "sla_hours": None,
                             "sla_respuesta_dias": 7,
+                            "assigned_to": _ce_owner,
                         })
                         if _new_act:
                             dal.update_activity(_new_act["id"], {"meeting_metadata": _meeting_metadata})
@@ -3078,7 +3104,7 @@ else:
             st.markdown("### 📈 Panel de Control — RSM")
 
             # Fetch all activities for the team
-            ctrl_activities = _cached_all_activities(team_id, st.session_state._data_v)
+            ctrl_activities = _ss_cache("_c_acts", dal.get_all_activities, team_id)
             today = date.today()
             now = datetime.now()
 
@@ -3242,7 +3268,7 @@ else:
     equipo_tab_idx = 6 if has_control_access() else 5
     with selected_tabs[equipo_tab_idx]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        team_info = _cached_team_info(team_id)
+        team_info = _ss_cache("_c_team_info", dal.get_team, team_id)
 
         # Sub-tabs según rol
         if is_admin():
@@ -3253,7 +3279,7 @@ else:
         # --- MIEMBROS ---
         with equipo_subtabs[0]:
             st.subheader("Miembros del Equipo")
-            members = _cached_team_members_all(team_id, st.session_state._data_v)
+            members = _ss_cache("_c_members_all", dal.get_team_members, team_id, False)
 
             if team_info:
                 st.caption(f"Equipo: **{team_info['name']}** — ID: `{team_id}`")
