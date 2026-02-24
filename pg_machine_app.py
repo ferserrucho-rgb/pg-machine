@@ -3019,7 +3019,79 @@ else:
         # Auto-match helpers: build lookup structures once
         _member_email_map = {m.get("email", "").lower(): i for i, m in enumerate(team_members) if m.get("email")}
 
-        # Pending events list
+        # --- Auto-assign: process events that match an opportunity automatically ---
+        _auto_assigned = False
+        for _ce in list(_cal_events):
+            _ce_subj_lower = _ce.get("subject", "").lower()
+            if not _ce_subj_lower:
+                continue
+            # Match account name in subject
+            _matched_opp = None
+            for _o in _cal_all_opps:
+                _cuenta_lower = _o["cuenta"].lower().strip()
+                if _cuenta_lower and len(_cuenta_lower) >= 3 and _cuenta_lower in _ce_subj_lower:
+                    _matched_opp = _o
+                    break
+            if not _matched_opp:
+                continue
+            # Determine owner: opportunity owner > attendee email > skip
+            _owner_id = _matched_opp.get("owner_id")
+            if not _owner_id or _owner_id == user_id:
+                # Try attendee emails
+                _att_raw = _ce.get("attendees", [])
+                _admin_email = user.get("email", "").lower()
+                if isinstance(_att_raw, list):
+                    for _att in _att_raw:
+                        _att_email = ""
+                        if isinstance(_att, dict):
+                            _att_email = (_att.get("email") or _att.get("emailAddress", {}).get("address", "") or "").lower().strip()
+                        elif isinstance(_att, str) and "@" in _att:
+                            _att_email = _att.lower().strip()
+                        if _att_email and _att_email != _admin_email and _att_email in _member_email_map:
+                            _owner_id = team_members[_member_email_map[_att_email]]["id"]
+                            break
+            if not _owner_id:
+                continue
+            # Auto-create the activity
+            _ce_start = _ce.get("start_time", "")
+            _ce_fecha = str(_ce_start[:10]) if _ce_start else str(date.today())
+            _ce_org = _ce.get("organizer", "")
+            _ce_att_list = _ce.get("attendees", [])
+            _ce_att_display = ", ".join(
+                (a.get("name") or a.get("email") or str(a)) if isinstance(a, dict) else str(a)
+                for a in _ce_att_list
+            ) if isinstance(_ce_att_list, list) else str(_ce_att_list)
+            _meeting_metadata = json.dumps({
+                "source": "calendar_auto_assign",
+                "outlook_event_id": _ce.get("outlook_event_id", ""),
+                "organizer": _ce_org,
+                "attendees": _ce_att_list,
+                "location": _ce.get("location", ""),
+                "original_subject": _ce.get("subject", ""),
+                "synced_at": datetime.now().isoformat(),
+                "auto_matched_account": _matched_opp["cuenta"],
+            })
+            _new_act = dal.create_activity(_matched_opp["id"], team_id, _owner_id, {
+                "tipo": "Reunión",
+                "fecha": _ce_fecha,
+                "objetivo": _ce.get("subject", ""),
+                "descripcion": _ce.get("body", ""),
+                "destinatario": _ce_att_display,
+                "sla_key": "",
+                "sla_hours": None,
+                "sla_respuesta_dias": 7,
+                "assigned_to": _owner_id,
+            })
+            if _new_act:
+                dal.update_activity(_new_act["id"], {"meeting_metadata": _meeting_metadata})
+                dal.assign_calendar_event(_ce["id"], _matched_opp["id"], _new_act["id"], user_id)
+                _auto_assigned = True
+        if _auto_assigned:
+            _owner_name = next((m["full_name"] for m in team_members if m["id"] == _owner_id), "")
+            st.toast(f"Reunión asignada automáticamente a {_owner_name}", icon="🔗")
+            st.rerun()
+
+        # Pending events list (only unmatched events remain after auto-assign)
         if _cal_events:
             for _ce in _cal_events:
                 _ce_id = _ce["id"]
