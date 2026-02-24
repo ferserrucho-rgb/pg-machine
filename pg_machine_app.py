@@ -3016,6 +3016,9 @@ else:
                     st.session_state.pop("_show_cal_form", None)
                     st.rerun()
 
+        # Auto-match helpers: build lookup structures once
+        _member_email_map = {m.get("email", "").lower(): i for i, m in enumerate(team_members) if m.get("email")}
+
         # Pending events list
         if _cal_events:
             for _ce in _cal_events:
@@ -3026,24 +3029,62 @@ else:
                 _ce_end_fmt = _ce_end[11:16] if _ce_end and len(_ce_end) > 11 else ""
                 _ce_time_str = f"{_ce_start_fmt}–{_ce_end_fmt}" if _ce_end_fmt else _ce_start_fmt
                 _ce_attendees_raw = _ce.get("attendees", [])
+                _ce_attendee_emails = []
                 if isinstance(_ce_attendees_raw, list):
                     _ce_attendees = []
                     for _att in _ce_attendees_raw:
                         if isinstance(_att, dict):
-                            _ce_attendees.append(_att.get("name") or _att.get("email") or _att.get("emailAddress", {}).get("address", "") or "")
+                            _att_email = (_att.get("email") or _att.get("emailAddress", {}).get("address", "") or "").lower().strip()
+                            _att_name = _att.get("name") or _att.get("emailAddress", {}).get("name", "") or ""
+                            _ce_attendees.append(_att_name or _att_email or "")
+                            if _att_email:
+                                _ce_attendee_emails.append(_att_email)
                         else:
-                            _val = str(_att)
-                            if _val != "[object Object]":
+                            _val = str(_att).strip()
+                            if _val and _val != "[object Object]":
                                 _ce_attendees.append(_val)
+                                if "@" in _val:
+                                    _ce_attendee_emails.append(_val.lower())
                     _ce_att_str = ", ".join(a for a in _ce_attendees if a)
                 else:
                     _ce_att_str = str(_ce_attendees_raw)
+                    _ce_attendee_emails = [e.strip().lower() for e in str(_ce_attendees_raw).split(",") if "@" in e]
                 _ce_loc = _ce.get("location", "")
                 _ce_org = _ce.get("organizer", "")
 
+                # Auto-match opportunity: check if any account name appears in the subject
+                _ce_subj = _ce.get("subject", "")
+                _ce_subj_lower = _ce_subj.lower()
+                _auto_opp_idx = 0
+                for _oi, _o in enumerate(_cal_all_opps):
+                    _cuenta_lower = _o["cuenta"].lower().strip()
+                    if _cuenta_lower and len(_cuenta_lower) >= 3 and _cuenta_lower in _ce_subj_lower:
+                        _auto_opp_idx = _oi + 1  # +1 because index 0 is "— Seleccionar —"
+                        break
+
+                # Auto-match member: find first attendee (not the syncing user) who is a team member
+                _auto_member_idx = 0
+                for _att_email in _ce_attendee_emails:
+                    if _att_email == user.get("email", "").lower():
+                        continue  # skip the admin/syncing user
+                    if _att_email in _member_email_map:
+                        _auto_member_idx = _member_email_map[_att_email]
+                        break
+                # Fallback: profile_id from the calendar event
+                if _auto_member_idx == 0:
+                    _auto_member_idx = next((i for i, m in enumerate(team_members) if m["id"] == _ce.get("profile_id")), 0)
+
+                _match_label = ""
+                if _auto_opp_idx > 0:
+                    _match_label += f"📌 {_cal_all_opps[_auto_opp_idx - 1]['cuenta']}"
+                if _auto_member_idx > 0:
+                    _match_label += f" → 👤 {team_members[_auto_member_idx]['full_name']}"
+
                 _card_html = f'''<div class="cal-inbox-card">
-                    <div class="cal-subj">{_ce.get("subject", "(sin asunto)")}</div>
+                    <div class="cal-subj">{_ce_subj or "(sin asunto)"}</div>
                     <div class="cal-time">🕐 {_ce_time_str}</div>'''
+                if _match_label:
+                    _card_html += f'<div class="cal-meta" style="color:#059669;font-weight:600;">🔗 Auto: {_match_label}</div>'
                 if _ce_org:
                     _card_html += f'<div class="cal-meta">👤 Organizador: {_ce_org}</div>'
                 if _ce_att_str:
@@ -3055,11 +3096,10 @@ else:
 
                 _ce_cols = st.columns([3, 2, 1, 1])
                 _opp_options = ["— Seleccionar oportunidad —"] + [f'{o["cuenta"]} / {o["proyecto"]}' for o in _cal_all_opps]
-                _sel_opp_idx = _ce_cols[0].selectbox("Oportunidad", range(len(_opp_options)), format_func=lambda i: _opp_options[i], key=f"cal_opp_{_ce_id}", label_visibility="collapsed")
+                _sel_opp_idx = _ce_cols[0].selectbox("Oportunidad", range(len(_opp_options)), format_func=lambda i: _opp_options[i], key=f"cal_opp_{_ce_id}", index=_auto_opp_idx, label_visibility="collapsed")
                 _member_options = [{"id": m["id"], "label": m["full_name"]} for m in team_members]
                 _member_labels = [m["label"] for m in _member_options]
-                _default_member_idx = next((i for i, m in enumerate(_member_options) if m["id"] == _ce.get("profile_id")), 0)
-                _sel_member_idx = _ce_cols[1].selectbox("Responsable", range(len(_member_labels)), format_func=lambda i: _member_labels[i], key=f"cal_member_{_ce_id}", index=_default_member_idx, label_visibility="collapsed")
+                _sel_member_idx = _ce_cols[1].selectbox("Responsable", range(len(_member_labels)), format_func=lambda i: _member_labels[i], key=f"cal_member_{_ce_id}", index=_auto_member_idx, label_visibility="collapsed")
 
                 if _ce_cols[2].button("✅ Asignar", key=f"cal_assign_{_ce_id}"):
                     if _sel_opp_idx > 0:
