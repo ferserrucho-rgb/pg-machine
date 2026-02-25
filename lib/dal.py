@@ -365,9 +365,11 @@ def upload_activity_photo(team_id: str, activity_id: str, file_name: str, file_b
     sb = _get_admin_supabase()
     _ensure_photo_bucket(sb)
     # Add unique suffix to avoid name collisions
-    import uuid
-    name_base, _, ext = file_name.rpartition(".")
-    unique_name = f"{name_base or file_name}_{uuid.uuid4().hex[:8]}.{ext}" if ext else f"{file_name}_{uuid.uuid4().hex[:8]}"
+    import uuid, re
+    # Sanitize filename: replace spaces and special chars
+    safe_name = re.sub(r'[^a-zA-Z0-9._-]', '_', file_name)
+    name_base, _, ext = safe_name.rpartition(".")
+    unique_name = f"{name_base or safe_name}_{uuid.uuid4().hex[:8]}.{ext}" if ext else f"{safe_name}_{uuid.uuid4().hex[:8]}"
     path = f"{team_id}/{activity_id}/{unique_name}"
     try:
         sb.storage.from_("activity-photos").upload(path, file_bytes, {"content-type": content_type or "image/png", "x-upsert": "true"})
