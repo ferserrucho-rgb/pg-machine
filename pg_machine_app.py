@@ -2913,7 +2913,7 @@ else:
                 week = snap.get("week_ending", "")
                 sd = snap.get("snapshot_data", {})
                 row = {"Semana": week}
-                if week == _perf_week:
+                if str(week)[:10] == str(_perf_week)[:10]:
                     # Current week: use live user-scoped data (same as scorecards)
                     for cat in _pipeline_cats:
                         row[cat] = _live_chart.get(cat, 0)
