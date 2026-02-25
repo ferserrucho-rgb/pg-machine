@@ -32,7 +32,9 @@ st.markdown("""
     .pgm-loading-text { font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
-    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 0.5rem !important; }
+    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 3rem !important; }
+    /* Hide Streamlit Cloud deploy button so it doesn't cover UI elements */
+    [data-testid="stStatusWidget"], .stDeployButton, [data-testid="manage-app-button"] { display: none !important; }
     /* Place sidebar toggle on the right side */
     [data-testid="stSidebarCollapsedControl"],
     [data-testid="collapsedControl"] { left: auto !important; right: 0.5rem !important; }
