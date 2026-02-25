@@ -352,8 +352,12 @@ def delete_activity(act_id: str):
 def upload_activity_photo(team_id: str, activity_id: str, file_name: str, file_bytes: bytes, content_type: str) -> str:
     """Sube una foto al bucket y retorna la URL pública."""
     sb = get_supabase()
-    path = f"{team_id}/{activity_id}/{file_name}"
-    sb.storage.from_("activity-photos").upload(path, file_bytes, {"content-type": content_type})
+    # Add unique suffix to avoid name collisions
+    import uuid
+    name_base, _, ext = file_name.rpartition(".")
+    unique_name = f"{name_base or file_name}_{uuid.uuid4().hex[:8]}.{ext}" if ext else f"{file_name}_{uuid.uuid4().hex[:8]}"
+    path = f"{team_id}/{activity_id}/{unique_name}"
+    sb.storage.from_("activity-photos").upload(path, file_bytes, {"content-type": content_type or "image/png", "x-upsert": "true"})
     url = sb.storage.from_("activity-photos").get_public_url(path)
     # Append to activity photos JSONB array
     act = sb.table("activities").select("photos").eq("id", activity_id).maybe_single().execute()
