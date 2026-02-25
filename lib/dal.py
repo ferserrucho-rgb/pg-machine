@@ -642,3 +642,71 @@ def create_calendar_event(team_id: str, user_id: str, user_email: str, data: dic
     }
     resp = sb.table("calendar_inbox").insert(record).execute()
     return resp.data[0] if resp.data else {}
+
+
+# ============================================================
+# VIAJES (TRIPS)
+# ============================================================
+
+def get_viajes(team_id: str) -> list[dict]:
+    """Obtiene todos los viajes del equipo."""
+    sb = get_supabase()
+    resp = sb.table("viajes") \
+        .select("*") \
+        .eq("team_id", team_id) \
+        .order("fecha_inicio", desc=True) \
+        .execute()
+    return resp.data or []
+
+def get_viajes_for_user(team_id: str, user_id: str, role: str) -> list[dict]:
+    """Obtiene viajes según el rol. Admin/VP ven todos; otros ven solo los propios."""
+    if role in ("admin", "vp"):
+        return get_viajes(team_id)
+    sb = get_supabase()
+    resp = sb.table("viajes") \
+        .select("*") \
+        .eq("team_id", team_id) \
+        .eq("created_by", user_id) \
+        .order("fecha_inicio", desc=True) \
+        .execute()
+    return resp.data or []
+
+def get_viaje(viaje_id: str) -> dict | None:
+    """Obtiene un viaje por ID."""
+    sb = get_supabase()
+    resp = sb.table("viajes") \
+        .select("*") \
+        .eq("id", viaje_id) \
+        .maybe_single() \
+        .execute()
+    return resp.data
+
+def create_viaje(team_id: str, created_by: str, data: dict) -> dict:
+    """Crea un nuevo viaje."""
+    sb = get_supabase()
+    record = {
+        "team_id": team_id,
+        "created_by": created_by,
+        "destino": data["destino"],
+        "fecha_inicio": data["fecha_inicio"],
+        "fecha_fin": data["fecha_fin"],
+        "notas": data.get("notas", ""),
+        "visitas": data.get("visitas", "[]"),
+    }
+    resp = sb.table("viajes").insert(record).execute()
+    return resp.data[0] if resp.data else {}
+
+def update_viaje(viaje_id: str, data: dict) -> dict:
+    """Actualiza un viaje existente."""
+    sb = get_supabase()
+    data["updated_at"] = datetime.now().isoformat()
+    resp = sb.table("viajes") \
+        .update(data) \
+        .eq("id", viaje_id) \
+        .execute()
+    return resp.data[0] if resp.data else {}
+
+def delete_viaje(viaje_id: str):
+    """Elimina un viaje."""
+    sb = get_supabase()
+    sb.table("viajes").delete().eq("id", viaje_id).execute()

@@ -1027,6 +1027,7 @@ _SS_CACHE_KEYS = (
     "_c_team_config", "_c_opps", "_c_acts", "_c_acts_user",
     "_c_cal_events", "_c_team_info", "_c_members_all",
     "_c_cal_count", "_c_detail_opp", "_c_detail_acts",
+    "_c_viajes",
 )
 
 def _invalidate_cache():
@@ -1106,7 +1107,8 @@ for _fn_name in ("create_opportunity", "update_opportunity", "delete_opportunity
                  "delete_opportunities_by_account", "bulk_create_opportunities",
                  "create_activity", "update_activity", "delete_activity", "move_activity",
                  "assign_calendar_event", "dismiss_calendar_event", "create_calendar_event",
-                 "kill_opportunity", "upsert_pipeline_snapshot"):
+                 "kill_opportunity", "upsert_pipeline_snapshot",
+                 "create_viaje", "update_viaje", "delete_viaje"):
     _orig = getattr(dal, _fn_name)
     def _make_wrapper(fn):
         def _wrapper(*args, **kwargs):
@@ -2090,7 +2092,7 @@ if st.session_state.selected_id:
 else:
     # --- VISTAS PRINCIPALES ---
     _cal_tab_label = f"📅 Calendario ({_cal_inbox_count})" if _cal_inbox_count > 0 else "📅 Calendario"
-    tabs = ["📊 Tablero", "📋 Actividades", "📜 Historial", "📈 Performance", _cal_tab_label]
+    tabs = ["📊 Tablero", "📋 Actividades", "📜 Historial", "📈 Performance", _cal_tab_label, "✈️ Viajes"]
     if has_control_access():
         tabs.append("📊 Control")
     tabs.append("👥 Equipo")
@@ -3218,9 +3220,443 @@ else:
         else:
             st.info("No hay reuniones pendientes en la bandeja.")
 
+    # --- TAB: VIAJES ---
+    with selected_tabs[5]:
+        st.markdown(user_bar_html, unsafe_allow_html=True)
+
+        # Session state defaults
+        if "viaje_selected_id" not in st.session_state:
+            st.session_state.viaje_selected_id = None
+        if "_show_viaje_form" not in st.session_state:
+            st.session_state._show_viaje_form = False
+
+        _viajes_list = _ss_cache("_c_viajes", dal.get_viajes_for_user, team_id, user_id, user["role"])
+
+        # --- Helper: visit summary counts ---
+        def _visit_summary(visitas):
+            if not visitas or not isinstance(visitas, list):
+                return 0, 0, 0
+            planned = sum(1 for v in visitas if v.get("status") == "planned")
+            done = sum(1 for v in visitas if v.get("status") == "done")
+            skipped = sum(1 for v in visitas if v.get("status") == "skipped")
+            return planned, done, skipped
+
+        # --- Helper: status badge ---
+        def _estado_badge(estado):
+            colors = {"planeado": ("#3b82f6", "#eff6ff"), "en_curso": ("#d97706", "#fffbeb"), "completado": ("#16a34a", "#f0fdf4"), "cancelado": ("#ef4444", "#fef2f2")}
+            labels = {"planeado": "Planeado", "en_curso": "En Curso", "completado": "Completado", "cancelado": "Cancelado"}
+            c, bg = colors.get(estado, ("#64748b", "#f8fafc"))
+            return f'<span style="font-size:0.65rem;font-weight:700;color:{c};background:{bg};border:1px solid {c};padding:2px 8px;border-radius:10px;">{labels.get(estado, estado)}</span>'
+
+        # ==========================================
+        # VIEW: Trip Detail
+        # ==========================================
+        if st.session_state.viaje_selected_id:
+            _viaje = dal.get_viaje(st.session_state.viaje_selected_id)
+            if not _viaje:
+                st.error("Viaje no encontrado.")
+                st.session_state.viaje_selected_id = None
+                st.rerun()
+            else:
+                # Back button + header
+                _vd_cols = st.columns([1, 5, 2])
+                if _vd_cols[0].button("← Volver", key="viaje_back"):
+                    st.session_state.viaje_selected_id = None
+                    st.session_state.pop("_c_viajes", None)
+                    st.rerun()
+                _vd_cols[1].markdown(f'### ✈️ {_viaje["destino"]} &nbsp; {_estado_badge(_viaje["estado"])}', unsafe_allow_html=True)
+                _vd_fecha_ini = _viaje.get("fecha_inicio", "")
+                _vd_fecha_fin = _viaje.get("fecha_fin", "")
+                _vd_cols[2].markdown(f'<div style="text-align:right;color:#64748b;font-size:0.8rem;padding-top:8px;">📅 {_vd_fecha_ini} → {_vd_fecha_fin}</div>', unsafe_allow_html=True)
+
+                if _viaje.get("notas"):
+                    st.caption(f"📝 {_viaje['notas']}")
+
+                # Status controls
+                _vs_cols = st.columns(4)
+                if _viaje["estado"] == "planeado":
+                    if _vs_cols[0].button("🚀 Iniciar Viaje", key="viaje_start", use_container_width=True):
+                        dal.update_viaje(_viaje["id"], {"estado": "en_curso"})
+                        st.rerun()
+                if _viaje["estado"] == "en_curso":
+                    if _vs_cols[0].button("✅ Completar Viaje", key="viaje_complete", use_container_width=True):
+                        dal.update_viaje(_viaje["id"], {"estado": "completado"})
+                        st.rerun()
+                if _viaje["estado"] in ("planeado", "en_curso"):
+                    if _vs_cols[1].button("❌ Cancelar", key="viaje_cancel", use_container_width=True):
+                        dal.update_viaje(_viaje["id"], {"estado": "cancelado"})
+                        st.rerun()
+
+                # Edit trip button
+                if _viaje["estado"] in ("planeado", "en_curso"):
+                    if _vs_cols[2].button("✏️ Editar", key="viaje_edit_btn", use_container_width=True):
+                        st.session_state._show_viaje_form = "edit"
+                        st.rerun()
+
+                # Delete trip
+                if _viaje["estado"] in ("planeado", "cancelado"):
+                    if _vs_cols[3].button("🗑️ Eliminar", key="viaje_delete_btn", use_container_width=True):
+                        dal.delete_viaje(_viaje["id"])
+                        st.session_state.viaje_selected_id = None
+                        st.session_state.pop("_c_viajes", None)
+                        st.rerun()
+
+                st.divider()
+
+                # --- Edit form (inline) ---
+                if st.session_state.get("_show_viaje_form") == "edit":
+                    with st.form("viaje_edit_form"):
+                        st.markdown("#### ✏️ Editar Viaje")
+                        _ve_c1, _ve_c2 = st.columns(2)
+                        _ve_destino = _ve_c1.text_input("Destino", value=_viaje["destino"])
+                        _ve_notas = _ve_c2.text_input("Notas", value=_viaje.get("notas", ""))
+                        _ve_c3, _ve_c4 = st.columns(2)
+                        _ve_fi = _ve_c3.date_input("Fecha inicio", value=_parse_date(_viaje["fecha_inicio"]) or date.today())
+                        _ve_ff = _ve_c4.date_input("Fecha fin", value=_parse_date(_viaje["fecha_fin"]) or date.today())
+                        _ve_sub = st.form_submit_button("Guardar Cambios")
+                        if _ve_sub:
+                            dal.update_viaje(_viaje["id"], {
+                                "destino": _ve_destino,
+                                "notas": _ve_notas,
+                                "fecha_inicio": str(_ve_fi),
+                                "fecha_fin": str(_ve_ff),
+                            })
+                            st.session_state._show_viaje_form = False
+                            st.session_state.pop("_c_viajes", None)
+                            st.rerun()
+                    if st.button("Cancelar edición", key="viaje_edit_cancel"):
+                        st.session_state._show_viaje_form = False
+                        st.rerun()
+
+                # --- Visit Checklist ---
+                st.markdown("#### 📋 Visitas")
+                _visitas = _viaje.get("visitas", [])
+                if not isinstance(_visitas, list):
+                    _visitas = json.loads(_visitas) if isinstance(_visitas, str) else []
+
+                if not _visitas:
+                    st.info("No hay visitas planificadas. Agrega visitas desde el botón de abajo.")
+
+                _visitas_changed = False
+                for _vi, _visit in enumerate(_visitas):
+                    _v_status = _visit.get("status", "planned")
+                    _v_cuenta = _visit.get("cuenta", "")
+                    _v_proyecto = _visit.get("proyecto", "")
+                    _v_tipo = _visit.get("tipo", "existing")
+                    _v_notes = _visit.get("notes", "")
+
+                    # Card styling by status
+                    if _v_status == "done":
+                        _v_border = "#16a34a"
+                        _v_bg = "#f0fdf4"
+                        _v_icon = "✅"
+                    elif _v_status == "skipped":
+                        _v_border = "#94a3b8"
+                        _v_bg = "#f8fafc"
+                        _v_icon = "⏭️"
+                    else:
+                        _v_border = "#3b82f6"
+                        _v_bg = "#eff6ff"
+                        _v_icon = "📍"
+
+                    _tipo_label = {"existing": "Cuenta existente", "new": "Cuenta nueva", "calendar": "Desde calendario"}.get(_v_tipo, _v_tipo)
+                    _v_card = f'''<div style="background:{_v_bg};border:1px solid #e2e8f0;border-left:4px solid {_v_border};border-radius:8px;padding:10px 14px;margin-bottom:6px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span style="font-size:1.1rem;">{_v_icon}</span>
+                            <span style="font-weight:700;color:#1e293b;font-size:0.85rem;">{_v_cuenta}</span>
+                            <span style="color:#64748b;font-size:0.75rem;">— {_v_proyecto}</span>
+                            <span style="font-size:0.6rem;color:#94a3b8;margin-left:auto;">{_tipo_label}</span>
+                        </div>'''
+                    if _v_notes:
+                        _v_card += f'<div style="font-size:0.72rem;color:#64748b;margin-top:4px;">📝 {_v_notes}</div>'
+                    if _v_status == "done" and _visit.get("done_at"):
+                        _v_card += f'<div style="font-size:0.65rem;color:#16a34a;margin-top:2px;">Completada: {_visit["done_at"][:16]}</div>'
+                    _v_card += '</div>'
+                    st.markdown(_v_card, unsafe_allow_html=True)
+
+                    # Action buttons (only if trip is en_curso or planeado)
+                    if _viaje["estado"] in ("planeado", "en_curso"):
+                        _vb_cols = st.columns(4)
+                        if _v_status == "planned":
+                            if _vb_cols[0].button("✅ Hecho", key=f"visit_done_{_vi}", use_container_width=True):
+                                # Mark visit as done: create opportunity if new, then create activity
+                                _current_visit = _visitas[_vi]
+                                _opp_id = _current_visit.get("opp_id")
+
+                                # If new account, create opportunity first
+                                if _current_visit.get("tipo") == "new" and not _opp_id:
+                                    _new_opp = dal.create_opportunity(team_id, user_id, {
+                                        "proyecto": _current_visit.get("proyecto", ""),
+                                        "cuenta": _current_visit.get("cuenta", ""),
+                                        "monto": 0,
+                                        "categoria": "LEADS",
+                                    })
+                                    _opp_id = _new_opp.get("id")
+                                    _visitas[_vi]["opp_id"] = _opp_id
+
+                                # Create Reunión activity if we have an opp_id
+                                if _opp_id:
+                                    _new_act = dal.create_activity(_opp_id, team_id, user_id, {
+                                        "tipo": "Reunión",
+                                        "fecha": str(date.today()),
+                                        "objetivo": f"Visita en {_viaje['destino']}",
+                                        "assigned_to": user_id,
+                                    })
+                                    _visitas[_vi]["done_act_id"] = _new_act.get("id")
+
+                                _visitas[_vi]["status"] = "done"
+                                _visitas[_vi]["done_at"] = datetime.now().isoformat()
+                                dal.update_viaje(_viaje["id"], {"visitas": json.dumps(_visitas)})
+                                st.session_state.pop("_c_viajes", None)
+                                st.rerun()
+
+                            if _vb_cols[1].button("⏭️ Omitir", key=f"visit_skip_{_vi}", use_container_width=True):
+                                _visitas[_vi]["status"] = "skipped"
+                                dal.update_viaje(_viaje["id"], {"visitas": json.dumps(_visitas)})
+                                st.session_state.pop("_c_viajes", None)
+                                st.rerun()
+
+                        elif _v_status == "skipped":
+                            if _vb_cols[0].button("↩️ Revertir", key=f"visit_revert_{_vi}", use_container_width=True):
+                                _visitas[_vi]["status"] = "planned"
+                                dal.update_viaje(_viaje["id"], {"visitas": json.dumps(_visitas)})
+                                st.session_state.pop("_c_viajes", None)
+                                st.rerun()
+
+                        # Remove visit button
+                        if _v_status in ("planned", "skipped"):
+                            if _vb_cols[3].button("🗑️", key=f"visit_del_{_vi}", use_container_width=True):
+                                _visitas.pop(_vi)
+                                dal.update_viaje(_viaje["id"], {"visitas": json.dumps(_visitas)})
+                                st.session_state.pop("_c_viajes", None)
+                                st.rerun()
+
+                # --- Add visit on the go ---
+                if _viaje["estado"] in ("planeado", "en_curso"):
+                    st.divider()
+                    st.markdown("#### + Agregar Visita")
+
+                    _av_source = st.radio("Fuente", ["Desde Cuentas", "Nueva Cuenta", "Desde Calendario"], key="viaje_add_source", horizontal=True)
+
+                    if _av_source == "Desde Cuentas":
+                        _av_opps = _ss_cache("_c_opps", dal.get_opportunities, team_id)
+                        if _av_opps:
+                            _av_opp_labels = [f'{o["cuenta"]} / {o["proyecto"]}' for o in _av_opps]
+                            _av_selected = st.multiselect("Seleccionar oportunidades", _av_opp_labels, key="viaje_add_opps")
+                            if st.button("Agregar seleccionadas", key="viaje_add_existing"):
+                                if _av_selected:
+                                    _existing_ids = {v.get("opp_id") for v in _visitas if v.get("opp_id")}
+                                    _v_counter = len(_visitas)
+                                    for _sel_label in _av_selected:
+                                        _sel_idx = _av_opp_labels.index(_sel_label)
+                                        _sel_opp = _av_opps[_sel_idx]
+                                        if _sel_opp["id"] not in _existing_ids:
+                                            _visitas.append({
+                                                "id": f"v_{_v_counter}",
+                                                "cuenta": _sel_opp["cuenta"],
+                                                "proyecto": _sel_opp["proyecto"],
+                                                "tipo": "existing",
+                                                "opp_id": _sel_opp["id"],
+                                                "status": "planned",
+                                                "notes": "",
+                                                "done_act_id": None,
+                                                "done_at": None,
+                                            })
+                                            _v_counter += 1
+                                    dal.update_viaje(_viaje["id"], {"visitas": json.dumps(_visitas)})
+                                    st.session_state.pop("_c_viajes", None)
+                                    st.rerun()
+                        else:
+                            st.info("No hay oportunidades disponibles.")
+
+                    elif _av_source == "Nueva Cuenta":
+                        _av_nc1, _av_nc2 = st.columns(2)
+                        _av_n_cuenta = _av_nc1.text_input("Cuenta", key="viaje_new_cuenta")
+                        _av_n_proyecto = _av_nc2.text_input("Proyecto", key="viaje_new_proyecto")
+                        if st.button("Agregar nueva cuenta", key="viaje_add_new"):
+                            if _av_n_cuenta.strip():
+                                _v_counter = len(_visitas)
+                                _visitas.append({
+                                    "id": f"v_{_v_counter}",
+                                    "cuenta": _av_n_cuenta.strip(),
+                                    "proyecto": _av_n_proyecto.strip() or _av_n_cuenta.strip(),
+                                    "tipo": "new",
+                                    "opp_id": None,
+                                    "status": "planned",
+                                    "notes": "",
+                                    "done_act_id": None,
+                                    "done_at": None,
+                                })
+                                dal.update_viaje(_viaje["id"], {"visitas": json.dumps(_visitas)})
+                                st.session_state.pop("_c_viajes", None)
+                                st.rerun()
+                            else:
+                                st.warning("Ingresa un nombre de cuenta.")
+
+                    elif _av_source == "Desde Calendario":
+                        _av_cal_events = _ss_cache("_c_cal_events", dal.get_pending_calendar_events_for_user, team_id, user_id, user["role"])
+                        if _av_cal_events:
+                            _av_cal_labels = [f'{e.get("subject", "(sin asunto)")} — {str(e.get("start_time", ""))[:10]}' for e in _av_cal_events]
+                            _av_cal_sel = st.multiselect("Seleccionar reuniones", _av_cal_labels, key="viaje_add_cal")
+                            if st.button("Importar desde calendario", key="viaje_add_cal_btn"):
+                                if _av_cal_sel:
+                                    _v_counter = len(_visitas)
+                                    for _cal_label in _av_cal_sel:
+                                        _cal_idx = _av_cal_labels.index(_cal_label)
+                                        _cal_ev = _av_cal_events[_cal_idx]
+                                        _visitas.append({
+                                            "id": f"v_{_v_counter}",
+                                            "cuenta": _cal_ev.get("subject", "Reunión"),
+                                            "proyecto": _cal_ev.get("subject", "Reunión"),
+                                            "tipo": "calendar",
+                                            "opp_id": None,
+                                            "status": "planned",
+                                            "notes": f"Calendario: {_cal_ev.get('organizer', '')}",
+                                            "done_act_id": None,
+                                            "done_at": None,
+                                        })
+                                        _v_counter += 1
+                                    dal.update_viaje(_viaje["id"], {"visitas": json.dumps(_visitas)})
+                                    st.session_state.pop("_c_viajes", None)
+                                    st.rerun()
+                        else:
+                            st.info("No hay eventos de calendario pendientes.")
+
+        # ==========================================
+        # VIEW: Create Trip Form
+        # ==========================================
+        elif st.session_state._show_viaje_form == "new":
+            st.markdown("### ✈️ Nuevo Viaje")
+
+            with st.form("viaje_form"):
+                _vf_c1, _vf_c2 = st.columns(2)
+                _vf_destino = _vf_c1.text_input("Destino *", placeholder="San Pedro Sula")
+                _vf_notas = _vf_c2.text_input("Notas", placeholder="Visita a clientes zona norte")
+                _vf_c3, _vf_c4 = st.columns(2)
+                _vf_fi = _vf_c3.date_input("Fecha inicio *", value=date.today())
+                _vf_ff = _vf_c4.date_input("Fecha fin *", value=date.today() + timedelta(days=2))
+
+                st.markdown("---")
+                st.markdown("#### Agregar visitas al viaje")
+
+                # Pre-add visits from existing opportunities
+                _vf_opps = _ss_cache("_c_opps", dal.get_opportunities, team_id)
+                _vf_opp_labels = [f'{o["cuenta"]} / {o["proyecto"]}' for o in _vf_opps] if _vf_opps else []
+                _vf_sel_opps = st.multiselect("Desde cuentas existentes", _vf_opp_labels, key="vf_existing_opps")
+
+                # New account inputs
+                st.caption("O agregar cuenta nueva:")
+                _vf_nc1, _vf_nc2 = st.columns(2)
+                _vf_new_cuenta = _vf_nc1.text_input("Nueva cuenta", key="vf_new_cuenta")
+                _vf_new_proyecto = _vf_nc2.text_input("Proyecto", key="vf_new_proyecto")
+
+                _vf_submit = st.form_submit_button("Crear Viaje", use_container_width=True)
+                if _vf_submit:
+                    if not _vf_destino.strip():
+                        st.error("El destino es obligatorio.")
+                    elif _vf_ff < _vf_fi:
+                        st.error("La fecha fin no puede ser anterior a la fecha inicio.")
+                    else:
+                        # Build visits list
+                        _vf_visitas = []
+                        _vc = 0
+                        # Add selected existing opportunities
+                        for _sel_l in _vf_sel_opps:
+                            _sel_i = _vf_opp_labels.index(_sel_l)
+                            _sel_o = _vf_opps[_sel_i]
+                            _vf_visitas.append({
+                                "id": f"v_{_vc}",
+                                "cuenta": _sel_o["cuenta"],
+                                "proyecto": _sel_o["proyecto"],
+                                "tipo": "existing",
+                                "opp_id": _sel_o["id"],
+                                "status": "planned",
+                                "notes": "",
+                                "done_act_id": None,
+                                "done_at": None,
+                            })
+                            _vc += 1
+                        # Add new account if provided
+                        if _vf_new_cuenta.strip():
+                            _vf_visitas.append({
+                                "id": f"v_{_vc}",
+                                "cuenta": _vf_new_cuenta.strip(),
+                                "proyecto": _vf_new_proyecto.strip() or _vf_new_cuenta.strip(),
+                                "tipo": "new",
+                                "opp_id": None,
+                                "status": "planned",
+                                "notes": "",
+                                "done_act_id": None,
+                                "done_at": None,
+                            })
+
+                        dal.create_viaje(team_id, user_id, {
+                            "destino": _vf_destino.strip(),
+                            "fecha_inicio": str(_vf_fi),
+                            "fecha_fin": str(_vf_ff),
+                            "notas": _vf_notas.strip(),
+                            "visitas": json.dumps(_vf_visitas),
+                        })
+                        st.session_state._show_viaje_form = False
+                        st.session_state.pop("_c_viajes", None)
+                        st.rerun()
+
+            if st.button("← Cancelar", key="viaje_form_cancel"):
+                st.session_state._show_viaje_form = False
+                st.rerun()
+
+        # ==========================================
+        # VIEW: Trip List
+        # ==========================================
+        else:
+            _vl_hdr = st.columns([5, 1])
+            _vl_hdr[0].markdown("### ✈️ Viajes")
+            if _vl_hdr[1].button("+ Nuevo Viaje", key="viaje_new_btn", use_container_width=True):
+                st.session_state._show_viaje_form = "new"
+                st.rerun()
+
+            # Status filter
+            _vl_filter = st.radio("Filtrar por estado", ["Todos", "Planeado", "En Curso", "Completado", "Cancelado"], key="viaje_filter", horizontal=True)
+            _filter_map = {"Todos": None, "Planeado": "planeado", "En Curso": "en_curso", "Completado": "completado", "Cancelado": "cancelado"}
+            _vl_estado_filter = _filter_map.get(_vl_filter)
+
+            _filtered_viajes = _viajes_list
+            if _vl_estado_filter:
+                _filtered_viajes = [v for v in _viajes_list if v["estado"] == _vl_estado_filter]
+
+            if not _filtered_viajes:
+                st.info("No hay viajes registrados. Crea uno con el botón '+ Nuevo Viaje'.")
+            else:
+                for _vj in _filtered_viajes:
+                    _vj_visitas = _vj.get("visitas", [])
+                    if not isinstance(_vj_visitas, list):
+                        _vj_visitas = json.loads(_vj_visitas) if isinstance(_vj_visitas, str) else []
+                    _vp, _vd, _vs = _visit_summary(_vj_visitas)
+                    _vj_total = _vp + _vd + _vs
+
+                    _vj_card = f'''<div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <span style="font-size:1.2rem;">✈️</span>
+                            <span style="font-weight:700;color:#1e293b;font-size:0.95rem;">{_vj["destino"]}</span>
+                            {_estado_badge(_vj["estado"])}
+                            <span style="color:#64748b;font-size:0.75rem;margin-left:auto;">📅 {_vj.get("fecha_inicio", "")} → {_vj.get("fecha_fin", "")}</span>
+                        </div>
+                        <div style="display:flex;gap:16px;margin-top:6px;font-size:0.72rem;color:#64748b;">
+                            <span>📍 {_vj_total} visitas</span>
+                            <span style="color:#3b82f6;">🔵 {_vp} pendientes</span>
+                            <span style="color:#16a34a;">✅ {_vd} hechas</span>
+                            <span style="color:#94a3b8;">⏭️ {_vs} omitidas</span>
+                        </div>
+                    </div>'''
+                    st.markdown(_vj_card, unsafe_allow_html=True)
+
+                    if st.button(f"Abrir viaje: {_vj['destino']}", key=f"viaje_open_{_vj['id']}", use_container_width=True):
+                        st.session_state.viaje_selected_id = _vj["id"]
+                        st.rerun()
+
     # --- TAB: CONTROL (admin, vp, y managers) ---
     if has_control_access():
-        with selected_tabs[5]:
+        with selected_tabs[6]:
             st.markdown(user_bar_html, unsafe_allow_html=True)
             st.markdown("### 📈 Panel de Control — RSM")
 
@@ -3386,7 +3822,7 @@ else:
                     st.bar_chart(df_resp_chart.set_index("Miembro"), color=["#16a34a"])
 
     # --- TAB: EQUIPO (todos los roles) ---
-    equipo_tab_idx = 6 if has_control_access() else 5
+    equipo_tab_idx = 7 if has_control_access() else 6
     with selected_tabs[equipo_tab_idx]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
         team_info = _ss_cache("_c_team_info", dal.get_team, team_id)
