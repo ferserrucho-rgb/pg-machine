@@ -1030,6 +1030,14 @@ _SS_CACHE_KEYS = (
     "_c_viajes",
 )
 
+# Cache groups: each mutation only invalidates related caches
+_CACHE_GROUP_OPP = ("_c_opps", "_c_detail_opp", "_c_detail_acts")
+_CACHE_GROUP_ACT = ("_c_acts", "_c_acts_user", "_c_detail_acts")
+_CACHE_GROUP_CAL = ("_c_cal_events", "_c_cal_count")
+_CACHE_GROUP_VIAJES = ("_c_viajes",)
+_CACHE_GROUP_CONFIG = ("_c_team_config",)
+_CACHE_GROUP_ALL = _SS_CACHE_KEYS  # fallback
+
 def _invalidate_cache():
     """Clear all session-state cache keys on mutation."""
     for k in _SS_CACHE_KEYS:
@@ -1079,11 +1087,22 @@ if 'metro_view' not in st.session_state:
 if 'historial_metro_view' not in st.session_state:
     st.session_state.historial_metro_view = False
 
-# Cargar configuración del equipo
+# Cargar configuración del equipo (1 batch query + 2 individuales = 3 API calls en vez de 5)
+def _load_team_config_bulk(tid):
+    raw = dal.get_team_config_bulk(tid, ["sla_opciones", "sla_respuesta", "categorias"])
+    defaults = {
+        "sla_opciones": {"🚨 Urgente (2-4h)": {"horas": 4, "color": "#ef4444"}, "⚠️ Importante (2d)": {"dias": 2, "color": "#f59e0b"}, "☕ No urgente (7d)": {"dias": 7, "color": "#3b82f6"}},
+        "sla_respuesta": {"3 días": 3, "1 semana": 7, "2 semanas": 14, "1 mes": 30},
+        "categorias": ["LEADS", "OFFICIAL", "GTM"],
+    }
+    return {
+        "sla_opciones": raw.get("sla_opciones") or defaults["sla_opciones"],
+        "sla_respuesta": raw.get("sla_respuesta") or defaults["sla_respuesta"],
+        "categorias": raw.get("categorias") or defaults["categorias"],
+    }
+
 _tc = _ss_cache("_c_team_config", lambda tid: {
-    "sla_opciones": dal.get_sla_options(tid),
-    "sla_respuesta": dal.get_sla_respuesta(tid),
-    "categorias": dal.get_categorias(tid),
+    **_load_team_config_bulk(tid),
     "extra_cols": dal.get_opportunity_extra_columns(tid),
     "members": dal.get_team_members(tid),
 }, team_id)
@@ -1097,26 +1116,47 @@ RECURSOS_PRESALES = {m["id"]: f'{m["full_name"]} ({m["specialty"]})' if m.get("s
 # Cache de datos principales — usa _v (version) para invalidar tras mutaciones
 if "_data_v" not in st.session_state:
     st.session_state._data_v = 0
-# Auto-bump: si el rerun anterior fue tras una mutación, incrementar versión
-if st.session_state.pop("_data_dirty", False):
-    st.session_state._data_v += 1
-    _invalidate_cache()
+# Auto-bump: si el rerun anterior fue tras una mutación, invalidar solo los grupos afectados
+if "_dirty_groups" not in st.session_state:
+    st.session_state._dirty_groups = set()
+_dirty = st.session_state.pop("_dirty_groups", set())
+if _dirty:
+    st.session_state._data_v = st.session_state.get("_data_v", 0) + 1
+    for grp in _dirty:
+        for k in grp:
+            st.session_state.pop(k, None)
 
-# Envolver funciones DAL de mutación para marcar dirty automáticamente
-for _fn_name in ("create_opportunity", "update_opportunity", "delete_opportunity",
-                 "delete_opportunities_by_account", "bulk_create_opportunities",
-                 "create_activity", "update_activity", "delete_activity", "move_activity",
-                 "assign_calendar_event", "dismiss_calendar_event", "create_calendar_event",
-                 "kill_opportunity", "upsert_pipeline_snapshot",
-                 "create_viaje", "update_viaje", "delete_viaje"):
+# Envolver funciones DAL de mutación para invalidar solo los caches afectados
+_MUTATION_CACHE_MAP = {
+    "create_opportunity": _CACHE_GROUP_OPP,
+    "update_opportunity": _CACHE_GROUP_OPP,
+    "delete_opportunity": _CACHE_GROUP_OPP + _CACHE_GROUP_ACT,
+    "delete_opportunities_by_account": _CACHE_GROUP_OPP + _CACHE_GROUP_ACT,
+    "bulk_create_opportunities": _CACHE_GROUP_OPP,
+    "kill_opportunity": _CACHE_GROUP_OPP,
+    "create_activity": _CACHE_GROUP_ACT,
+    "update_activity": _CACHE_GROUP_ACT,
+    "delete_activity": _CACHE_GROUP_ACT,
+    "move_activity": _CACHE_GROUP_ACT,
+    "assign_calendar_event": _CACHE_GROUP_CAL + _CACHE_GROUP_ACT,
+    "dismiss_calendar_event": _CACHE_GROUP_CAL,
+    "create_calendar_event": _CACHE_GROUP_CAL,
+    "upsert_pipeline_snapshot": (),
+    "create_viaje": _CACHE_GROUP_VIAJES,
+    "update_viaje": _CACHE_GROUP_VIAJES,
+    "delete_viaje": _CACHE_GROUP_VIAJES,
+}
+
+for _fn_name, _groups in _MUTATION_CACHE_MAP.items():
     _orig = getattr(dal, _fn_name)
-    def _make_wrapper(fn):
+    def _make_wrapper(fn, groups):
         def _wrapper(*args, **kwargs):
             result = fn(*args, **kwargs)
-            st.session_state._data_dirty = True
+            if groups:
+                st.session_state.setdefault("_dirty_groups", set()).add(groups)
             return result
         return _wrapper
-    setattr(dal, _fn_name, _make_wrapper(_orig))
+    setattr(dal, _fn_name, _make_wrapper(_orig, _groups))
 
 
 def _parse_date(val):

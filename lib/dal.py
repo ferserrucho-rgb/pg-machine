@@ -419,6 +419,16 @@ def set_team_config(team_id: str, key: str, value) -> None:
         .upsert({"team_id": team_id, "key": key, "value": value}, on_conflict="team_id,key") \
         .execute()
 
+def get_team_config_bulk(team_id: str, keys: list[str]) -> dict:
+    """Obtiene múltiples configs del equipo en una sola consulta."""
+    sb = get_supabase()
+    resp = sb.table("team_config") \
+        .select("key, value") \
+        .eq("team_id", team_id) \
+        .in_("key", keys) \
+        .execute()
+    return {r["key"]: r["value"] for r in (resp.data or [])}
+
 def get_sla_options(team_id: str) -> dict:
     """Obtiene opciones de SLA del equipo o las por defecto."""
     config = get_team_config(team_id, "sla_opciones")
