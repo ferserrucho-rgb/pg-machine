@@ -1872,16 +1872,17 @@ if st.session_state.selected_id:
                 meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{estado_pill}{fecha_html}'
                 meeting_html = _meeting_audit_html(a) if a.get("tipo") == "Reunión" else ''
 
-                st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}{meeting_html}</div>', unsafe_allow_html=True)
-
-                # Show photos if any
+                # Build photos HTML inside the card
                 act_photos = a.get("photos") or []
                 if act_photos:
-                    photos_html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">'
+                    photos_gallery = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:6px;border-top:1px solid #f1f5f9;">'
                     for p in act_photos:
-                        photos_html += f'<a href="{p["url"]}" target="_blank"><img src="{p["url"]}" style="height:60px;border-radius:4px;border:1px solid #e2e8f0;object-fit:cover;" title="{p["name"]}"></a>'
-                    photos_html += '</div>'
-                    st.markdown(photos_html, unsafe_allow_html=True)
+                        photos_gallery += f'<a href="{p["url"]}" target="_blank"><img src="{p["url"]}" style="height:60px;border-radius:4px;border:1px solid #e2e8f0;object-fit:cover;" title="{p["name"]}"></a>'
+                    photos_gallery += '</div>'
+                else:
+                    photos_gallery = ''
+
+                st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}{meeting_html}{photos_gallery}</div>', unsafe_allow_html=True)
 
                 aid = a['id']
                 # Abrir Outlook Web para agendar Reuniones
