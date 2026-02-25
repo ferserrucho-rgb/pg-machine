@@ -349,9 +349,21 @@ def delete_activity(act_id: str):
     sb.table("activities").delete().eq("id", act_id).execute()
 
 
-def upload_activity_photo(team_id: str, activity_id: str, file_name: str, file_bytes: bytes, content_type: str) -> str:
-    """Sube una foto al bucket y retorna la URL pública."""
+def _ensure_photo_bucket(sb):
+    """Crea el bucket activity-photos si no existe."""
+    try:
+        sb.storage.get_bucket("activity-photos")
+    except Exception:
+        try:
+            sb.storage.create_bucket("activity-photos", options={"public": True})
+        except Exception:
+            pass  # May already exist or lack permissions
+
+
+def upload_activity_photo(team_id: str, activity_id: str, file_name: str, file_bytes: bytes, content_type: str) -> str | None:
+    """Sube una foto al bucket y retorna la URL pública. Retorna None si falla."""
     sb = _get_admin_supabase()
+    _ensure_photo_bucket(sb)
     # Add unique suffix to avoid name collisions
     import uuid
     name_base, _, ext = file_name.rpartition(".")
@@ -360,7 +372,8 @@ def upload_activity_photo(team_id: str, activity_id: str, file_name: str, file_b
     try:
         sb.storage.from_("activity-photos").upload(path, file_bytes, {"content-type": content_type or "image/png", "x-upsert": "true"})
     except Exception as e:
-        raise RuntimeError(f"Error subiendo foto al bucket 'activity-photos': {e}") from e
+        st.error(f"Error subiendo foto: {e}")
+        return None
     url = sb.storage.from_("activity-photos").get_public_url(path)
     # Append to activity photos JSONB array
     act = sb.table("activities").select("photos").eq("id", activity_id).maybe_single().execute()
