@@ -1059,7 +1059,7 @@ _scope_toggle_html = f'<span class="scope-toggle pgm-toggle-scope {_scope_cls}">
 _growth_on = st.session_state.get("growth_only", True)
 _growth_cls = "active" if _growth_on else ""
 _growth_html = f'<span class="bar-pill pgm-toggle-growth {_growth_cls}">🚀 Growth</span>'
-_q_4q = st.session_state.get("q_4q", False)
+_q_4q = st.session_state.get("q_4q", True)
 _q_cls = "mode-4q" if _q_4q else ""
 _q_lbl_2q = "" if _q_4q else "active"
 _q_lbl_4q = "active" if _q_4q else ""
