@@ -2899,17 +2899,29 @@ else:
 
         st.divider()
 
-        # ---- Weekly Trend (from snapshots — full data, no protect filter) ----
+        # ---- Weekly Trend (current week uses live user-scoped data to match scorecards) ----
         st.markdown("##### 📈 Tendencia Semanal (últimas 12 semanas)")
+        # Build live data for current week so chart matches scorecards
+        _live_chart = {}
+        for cat in _pipeline_cats:
+            _cat_active_live = [o for o in _pipe_live if o.get("categoria", "").strip().upper() == cat.strip().upper() and not o.get("killed_at")]
+            _live_chart[cat] = sum(float(o.get("monto") or 0) for o in _cat_active_live)
+        _live_chart["Ganadas"] = _ganada_amt
         if _perf_snapshots:
             _trend_rows = []
             for snap in reversed(_perf_snapshots):
                 week = snap.get("week_ending", "")
                 sd = snap.get("snapshot_data", {})
                 row = {"Semana": week}
-                for cat in _pipeline_cats:
-                    row[cat] = sd.get(cat, {}).get("active_amount", 0)
-                row["Ganadas"] = sum(sd.get(c, {}).get("ganada_amount", 0) for c in _pipeline_cats)
+                if week == _perf_week:
+                    # Current week: use live user-scoped data (same as scorecards)
+                    for cat in _pipeline_cats:
+                        row[cat] = _live_chart.get(cat, 0)
+                    row["Ganadas"] = _live_chart.get("Ganadas", 0)
+                else:
+                    for cat in _pipeline_cats:
+                        row[cat] = sd.get(cat, {}).get("active_amount", 0)
+                    row["Ganadas"] = sum(sd.get(c, {}).get("ganada_amount", 0) for c in _pipeline_cats)
                 _trend_rows.append(row)
             _trend_df = pd.DataFrame(_trend_rows)
             if not _trend_df.empty:
