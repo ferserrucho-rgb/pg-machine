@@ -2047,9 +2047,12 @@ if st.session_state.selected_id:
                             if len(new_photos) > remaining:
                                 st.warning(f"Máximo {remaining} fotos más. Solo se subirán las primeras {remaining}.")
                             if st.button("📤 Subir fotos", key=f"upload_photos_{aid}"):
+                                _upload_ok = True
                                 for photo in new_photos[:remaining]:
-                                    dal.upload_activity_photo(team_id, aid, photo.name, photo.read(), photo.type)
-                                st.rerun()
+                                    if not dal.upload_activity_photo(team_id, aid, photo.name, photo.read(), photo.type):
+                                        _upload_ok = False
+                                if _upload_ok:
+                                    st.rerun()
 
                 # Move panel (toggled)
                 if st.session_state.get(f"show_move_{aid}"):
@@ -2165,10 +2168,15 @@ if st.session_state.selected_id:
                         notifications.send_assignment_notification(new_act, assignee, opp)
                         dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
                 # Upload attached photos
+                _upload_ok = True
                 for photo in (new_act_photos or [])[:5]:
-                    dal.upload_activity_photo(team_id, new_act["id"], photo.name, photo.read(), photo.type)
+                    if not dal.upload_activity_photo(team_id, new_act["id"], photo.name, photo.read(), photo.type):
+                        _upload_ok = False
                 st.session_state.pop("show_new_act", None)
-                st.rerun()
+                if _upload_ok:
+                    st.rerun()
+                else:
+                    st.info("La actividad fue creada. Las fotos con error no se subieron.")
 
 else:
     # --- VISTAS PRINCIPALES ---
