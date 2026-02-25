@@ -2132,7 +2132,7 @@ else:
             fq_start, fq_end = q_start, q3_end
         else:
             fq_start, fq_end = q_start, q1_end
-        all_opps = [o for o in all_opps if not o.get("close_date") or (fq_start <= (_parse_date(o["close_date"]) or date.min) <= fq_end)]
+        all_opps = [o for o in all_opps if "GTM" in o.get("categoria", "").strip().upper() or not o.get("close_date") or (fq_start <= (_parse_date(o["close_date"]) or date.min) <= fq_end)]
 
         # Category totals (used by column headers below)
         cat_totals = {}
