@@ -2790,12 +2790,11 @@ else:
             days_until_friday = (4 - today.weekday()) % 7
             return today + timedelta(days=days_until_friday)
 
-        def _compute_current_snapshot(t_id, categorias_list):
-            """Agrega estado actual del pipeline por categoría (pipeline + GTM separados)."""
-            all_opps = dal.get_all_opportunities_for_snapshot(t_id)
+        def _compute_snapshot_from_opps(opps_list, categorias_list):
+            """Computa snapshot del pipeline a partir de una lista de oportunidades."""
             snap = {}
             for cat in categorias_list:
-                cat_opps = [o for o in all_opps if o.get("categoria", "").strip().upper() == cat.strip().upper()]
+                cat_opps = [o for o in opps_list if o.get("categoria", "").strip().upper() == cat.strip().upper()]
                 active = [o for o in cat_opps if not o.get("killed_at")]
                 is_gtm = "GTM" in cat.strip().upper()
                 if is_gtm:
@@ -2821,15 +2820,7 @@ else:
                     }
             return snap
 
-        def _ensure_current_snapshot():
-            """Upsert snapshot para la semana actual."""
-            wf = str(_get_current_week_friday())
-            snap_data = _compute_current_snapshot(team_id, CATEGORIAS)
-            dal.upsert_pipeline_snapshot(team_id, wf, snap_data)
-            return wf, snap_data
-
-        # Auto-snapshot on tab load
-        _perf_week, _perf_current = _ensure_current_snapshot()
+        _perf_week = str(_get_current_week_friday())
         _perf_snapshots = dal.get_pipeline_snapshots(team_id, weeks=12)
 
         # Separate pipeline cats (LEADS/OFFICIAL) from GTM
@@ -2846,6 +2837,16 @@ else:
         _all_opps_snap = dal.get_opportunities_for_user(team_id, user_id, user["role"], include_killed=True)
         if _perf_hide_protect:
             _all_opps_snap = [o for o in _all_opps_snap if not _is_protect(o)]
+
+        # Upsert snapshot with user-scoped data (updates current + all stored weeks)
+        _perf_current = _compute_snapshot_from_opps(_all_opps_snap, CATEGORIAS)
+        dal.upsert_pipeline_snapshot(team_id, _perf_week, _perf_current)
+        for _snap_rec in _perf_snapshots:
+            _sw = _snap_rec.get("week_ending", "")
+            if str(_sw)[:10] != str(_perf_week)[:10]:
+                dal.upsert_pipeline_snapshot(team_id, str(_sw)[:10], _perf_current)
+        # Reload snapshots with updated data
+        _perf_snapshots = dal.get_pipeline_snapshots(team_id, weeks=12)
 
         # =============================================
         # PIPELINE SECTION (LEADS → OFFICIAL → Ganada)
