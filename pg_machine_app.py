@@ -2802,8 +2802,8 @@ else:
         def _is_protect(o):
             return "renewal" in (o.get("proyecto") or "").lower()
 
-        # Live opps for display (respects protect toggle)
-        _all_opps_snap = dal.get_all_opportunities_for_snapshot(team_id)
+        # Live opps for display (user-scoped, respects protect toggle)
+        _all_opps_snap = dal.get_opportunities_for_user(team_id, user_id, user["role"], include_killed=True)
         if _perf_hide_protect:
             _all_opps_snap = [o for o in _all_opps_snap if not _is_protect(o)]
 
