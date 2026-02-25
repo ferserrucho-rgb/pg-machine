@@ -349,6 +349,36 @@ def delete_activity(act_id: str):
     sb.table("activities").delete().eq("id", act_id).execute()
 
 
+def upload_activity_photo(team_id: str, activity_id: str, file_name: str, file_bytes: bytes, content_type: str) -> str:
+    """Sube una foto al bucket y retorna la URL pública."""
+    sb = get_supabase()
+    path = f"{team_id}/{activity_id}/{file_name}"
+    sb.storage.from_("activity-photos").upload(path, file_bytes, {"content-type": content_type})
+    url = sb.storage.from_("activity-photos").get_public_url(path)
+    # Append to activity photos JSONB array
+    act = sb.table("activities").select("photos").eq("id", activity_id).maybe_single().execute()
+    photos = (act.data or {}).get("photos") or []
+    photos.append({"url": url, "name": file_name, "uploaded_at": datetime.now().isoformat()})
+    sb.table("activities").update({"photos": photos}).eq("id", activity_id).execute()
+    return url
+
+
+def delete_activity_photo(activity_id: str, photo_url: str) -> None:
+    """Elimina una foto del bucket y del registro."""
+    sb = get_supabase()
+    # Remove from JSONB array
+    act = sb.table("activities").select("photos").eq("id", activity_id).maybe_single().execute()
+    photos = (act.data or {}).get("photos") or []
+    photos = [p for p in photos if p.get("url") != photo_url]
+    sb.table("activities").update({"photos": photos}).eq("id", activity_id).execute()
+    # Remove from storage
+    try:
+        path = photo_url.split("/object/public/activity-photos/")[-1]
+        sb.storage.from_("activity-photos").remove([path])
+    except Exception:
+        pass
+
+
 # ============================================================
 # TEAM MEMBERS (PROFILES)
 # ============================================================

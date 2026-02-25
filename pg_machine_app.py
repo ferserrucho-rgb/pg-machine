@@ -1138,6 +1138,8 @@ _MUTATION_CACHE_MAP = {
     "update_activity": _CACHE_GROUP_ACT,
     "delete_activity": _CACHE_GROUP_ACT,
     "move_activity": _CACHE_GROUP_ACT,
+    "upload_activity_photo": _CACHE_GROUP_ACT,
+    "delete_activity_photo": _CACHE_GROUP_ACT,
     "assign_calendar_event": _CACHE_GROUP_CAL + _CACHE_GROUP_ACT,
     "dismiss_calendar_event": _CACHE_GROUP_CAL,
     "create_calendar_event": _CACHE_GROUP_CAL,
@@ -1872,6 +1874,15 @@ if st.session_state.selected_id:
 
                 st.markdown(f'<div class="{card_class}"><div class="act-top"><div class="act-meta-row">{meta_row}</div>{act_btns}</div>{desc_html}{fb_html}{meeting_html}</div>', unsafe_allow_html=True)
 
+                # Show photos if any
+                act_photos = a.get("photos") or []
+                if act_photos:
+                    photos_html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">'
+                    for p in act_photos:
+                        photos_html += f'<a href="{p["url"]}" target="_blank"><img src="{p["url"]}" style="height:60px;border-radius:4px;border:1px solid #e2e8f0;object-fit:cover;" title="{p["name"]}"></a>'
+                    photos_html += '</div>'
+                    st.markdown(photos_html, unsafe_allow_html=True)
+
                 aid = a['id']
                 # Abrir Outlook Web para agendar Reuniones
                 if a.get("tipo") == "Reunión":
@@ -2015,6 +2026,27 @@ if st.session_state.selected_id:
                             })
                             st.session_state.pop(f"show_edit_{aid}", None)
                             st.rerun()
+                    # Photo management (outside st.form)
+                    edit_photos = a.get("photos") or []
+                    if edit_photos:
+                        st.caption("Fotos actuales:")
+                        photo_cols = st.columns(min(len(edit_photos), 5))
+                        for pi, p in enumerate(edit_photos):
+                            with photo_cols[pi]:
+                                st.image(p["url"], width=80)
+                                if st.button("🗑", key=f"del_photo_{aid}_{pi}"):
+                                    dal.delete_activity_photo(aid, p["url"])
+                                    st.rerun()
+                    remaining = 5 - len(edit_photos)
+                    if remaining > 0:
+                        new_photos = st.file_uploader(f"📷 Agregar fotos ({remaining} restantes)", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True, key=f"edit_photos_{aid}")
+                        if new_photos:
+                            if len(new_photos) > remaining:
+                                st.warning(f"Máximo {remaining} fotos más. Solo se subirán las primeras {remaining}.")
+                            if st.button("📤 Subir fotos", key=f"upload_photos_{aid}"):
+                                for photo in new_photos[:remaining]:
+                                    dal.upload_activity_photo(team_id, aid, photo.name, photo.read(), photo.type)
+                                st.rerun()
 
                 # Move panel (toggled)
                 if st.session_state.get(f"show_move_{aid}"):
@@ -2093,6 +2125,9 @@ if st.session_state.selected_id:
     if st.session_state.get("show_new_act"):
         st.caption("➕ Nueva Actividad")
         tipo = st.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
+        new_act_photos = st.file_uploader("📷 Fotos", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True, key="new_act_photos")
+        if new_act_photos and len(new_act_photos) > 5:
+            st.warning("Máximo 5 fotos por actividad.")
         with st.form("act_form"):
             c1, c2, c3 = st.columns(3)
             sla_key = c1.selectbox("SLA", list(SLA_OPCIONES.keys()))
@@ -2126,6 +2161,9 @@ if st.session_state.selected_id:
                     if assignee:
                         notifications.send_assignment_notification(new_act, assignee, opp)
                         dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
+                # Upload attached photos
+                for photo in (new_act_photos or [])[:5]:
+                    dal.upload_activity_photo(team_id, new_act["id"], photo.name, photo.read(), photo.type)
                 st.session_state.pop("show_new_act", None)
                 st.rerun()
 
