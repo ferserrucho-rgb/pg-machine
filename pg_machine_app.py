@@ -1568,8 +1568,7 @@ with st.sidebar:
             if nuevas:
                 st.markdown("---")
                 st.markdown("**🆕 Nuevas oportunidades:**")
-                nc1, nc2 = st.columns([0.8, 0.2])
-                select_all_new = nc2.checkbox("Todas", value=True, key="sel_all_new")
+                select_all_new = st.checkbox("Todas", value=True, key="sel_all_new")
                 for i, item in enumerate(nuevas):
                     monto_str = f"USD {float(item.get('monto', 0)):,.0f} ACV"
                     partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
@@ -1581,8 +1580,7 @@ with st.sidebar:
             if con_cambios:
                 st.markdown("---")
                 st.markdown("**⚠️ Con diferencias (sobrescribir con Excel):**")
-                cc1, cc2 = st.columns([0.8, 0.2])
-                select_all_chg = cc2.checkbox("Todas", value=False, key="sel_all_chg")
+                select_all_chg = st.checkbox("Todas", value=False, key="sel_all_chg")
                 for i, (item, existing_opp, diffs) in enumerate(con_cambios):
                     diff_summary = ", ".join(f"{f}: {v['actual']} → {v['excel']}" for f, v in diffs.items())
                     monto_str = f"USD {float(item.get('monto', 0)):,.0f} ACV"
