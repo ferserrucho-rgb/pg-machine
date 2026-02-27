@@ -2216,7 +2216,7 @@ else:
         today = date.today()
         q_start, q_end = _fiscal_quarter_range(today)
         q1_start, q1_end = _offset_quarter(q_start, 1)
-        if st.session_state.get("q_4q", False):
+        if st.session_state.get("q_4q", True):
             q3_start, q3_end = _offset_quarter(q_start, 3)
             fq_start, fq_end = q_start, q3_end
         else:
@@ -2424,7 +2424,7 @@ else:
             st.session_state["growth_only"] = not st.session_state.get("growth_only", True)
             st.rerun()
         if st.button("TOGGLE_Q", key="btn_toggle_q"):
-            st.session_state["q_4q"] = not st.session_state.get("q_4q", False)
+            st.session_state["q_4q"] = not st.session_state.get("q_4q", True)
             st.rerun()
         if st.button("TOGGLE_EDIT", key="toggle_edit_mode"):
             st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
