@@ -5,6 +5,7 @@ Login, registro, gestión de sesión con Supabase Auth.
 import streamlit as st
 import streamlit.components.v1 as components
 from supabase import create_client, Client
+from lib.i18n import t, get_lang, set_lang, auth_lang_toggle_html
 
 # --- Roles del sistema ---
 ALL_ROLES = [
@@ -103,8 +104,8 @@ def _do_login(email: str, password: str):
     except Exception as e:
         msg = str(e)
         if "Invalid login" in msg or "invalid" in msg.lower():
-            return "Email o contraseña incorrectos."
-        return f"Error de autenticación: {msg}"
+            return t("auth.invalid_login")
+        return t("auth.auth_error", msg=msg)
 
 def _do_register(email: str, password: str, full_name: str, team_name: str):
     """Registra un nuevo usuario + crea equipo y perfil."""
@@ -113,7 +114,7 @@ def _do_register(email: str, password: str, full_name: str, team_name: str):
         # 1. Registrar en Supabase Auth
         resp = sb.auth.sign_up({"email": email, "password": password})
         if not resp.user:
-            return "No se pudo crear la cuenta. Intenta de nuevo."
+            return t("auth.register_fail")
 
         user_id = resp.user.id
 
@@ -146,8 +147,8 @@ def _do_register(email: str, password: str, full_name: str, team_name: str):
     except Exception as e:
         msg = str(e)
         if "already registered" in msg.lower() or "already exists" in msg.lower():
-            return "Este email ya está registrado."
-        return f"Error en registro: {msg}"
+            return t("auth.email_exists")
+        return t("auth.register_error", msg=msg)
 
 def _do_join_team(email: str, password: str, full_name: str, team_id: str, role: str = "presales"):
     """Registra un usuario que se une a un equipo existente."""
@@ -158,7 +159,7 @@ def _do_join_team(email: str, password: str, full_name: str, team_id: str, role:
     try:
         resp = sb.auth.sign_up({"email": email, "password": password})
         if not resp.user:
-            return "No se pudo crear la cuenta."
+            return t("auth.account_fail")
 
         user_id = resp.user.id
 
@@ -183,7 +184,7 @@ def _do_join_team(email: str, password: str, full_name: str, team_id: str, role:
         return None
 
     except Exception as e:
-        return f"Error: {str(e)}"
+        return t("auth.join_error", msg=str(e))
 
 def show_auth_page():
     """Muestra la página de login/registro (pantalla completa, sin sidebar)."""
@@ -200,53 +201,83 @@ def show_auth_page():
 
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown('<div class="auth-header"><h1>PG Machine</h1><p>Plataforma de gestión de oportunidades</p></div>', unsafe_allow_html=True)
+        # Language toggle for auth page
+        st.markdown(auth_lang_toggle_html(), unsafe_allow_html=True)
+        components.html("""
+        <script>
+        (function() {
+            function findBtn(label) {
+                var btns = window.parent.document.querySelectorAll('button');
+                for (var i = 0; i < btns.length; i++) {
+                    if (btns[i].textContent.trim() === label) return btns[i];
+                }
+                return null;
+            }
+            // Hide the trigger button
+            function hideBtn() {
+                var btn = findBtn('AUTH_TOGGLE_LANG');
+                if (btn) { var el = btn.closest('[data-testid="stButton"]') || btn; el.style.display = 'none'; }
+            }
+            hideBtn();
+            new MutationObserver(hideBtn).observe(window.parent.document.body, {childList: true, subtree: true});
+            // Toggle click handler
+            window.parent.document.addEventListener('click', function(e) {
+                if (e.target.closest('.pgm-toggle-lang')) {
+                    var btn = findBtn('AUTH_TOGGLE_LANG');
+                    if (btn) btn.click();
+                }
+            });
+        })();
+        </script>
+        """, height=0)
 
-        tab_login, tab_register, tab_join = st.tabs(["Iniciar Sesión", "Crear Equipo", "Unirse a Equipo"])
+        st.markdown(f'<div class="auth-header"><h1>{t("auth.title")}</h1><p>{t("auth.subtitle")}</p></div>', unsafe_allow_html=True)
+
+        tab_login, tab_register, tab_join = st.tabs([t("auth.tab_login"), t("auth.tab_register"), t("auth.tab_join")])
 
         with tab_login:
             with st.form("login_form"):
-                email = st.text_input("Email", key="login_email")
-                password = st.text_input("Contraseña", type="password", key="login_password")
-                submitted = st.form_submit_button("Iniciar Sesión", use_container_width=True)
+                email = st.text_input(t("auth.email"), key="login_email")
+                password = st.text_input(t("auth.password"), type="password", key="login_password")
+                submitted = st.form_submit_button(t("auth.login_btn"), use_container_width=True)
                 if submitted:
                     if not email or not password:
-                        st.error("Completa todos los campos.")
+                        st.error(t("auth.fill_all"))
                     else:
                         err = _do_login(email, password)
                         if err:
                             st.error(err)
                         else:
                             st.rerun()
-            if st.button("¿Olvidaste tu contraseña?", key="forgot_pw"):
+            if st.button(t("auth.forgot_pw"), key="forgot_pw"):
                 st.session_state["_show_forgot_pw"] = True
             if st.session_state.get("_show_forgot_pw"):
-                forgot_email = st.text_input("Ingresa tu email para restablecer la contraseña", key="forgot_email")
-                if st.button("Enviar enlace de restablecimiento", key="send_reset"):
+                forgot_email = st.text_input(t("auth.forgot_email_prompt"), key="forgot_email")
+                if st.button(t("auth.send_reset"), key="send_reset"):
                     if not forgot_email:
-                        st.error("Ingresa tu email.")
+                        st.error(t("auth.enter_email"))
                     else:
                         try:
                             sb = _get_supabase()
                             app_url = st.secrets.get("APP_URL", "http://localhost:8501")
                             sb.auth.reset_password_email(forgot_email, {"redirect_to": app_url})
-                            st.success("Se envió un enlace de restablecimiento a tu email. Revisa tu bandeja de entrada.")
+                            st.success(t("auth.reset_sent"))
                             st.session_state.pop("_show_forgot_pw", None)
                         except Exception as e:
-                            st.error(f"Error al enviar el enlace: {str(e)}")
+                            st.error(t("auth.reset_error", msg=str(e)))
 
         with tab_register:
             with st.form("register_form"):
-                r_name = st.text_input("Nombre completo", key="reg_name")
-                r_email = st.text_input("Email", key="reg_email")
-                r_password = st.text_input("Contraseña", type="password", key="reg_password")
-                r_team = st.text_input("Nombre del equipo", key="reg_team")
-                submitted = st.form_submit_button("Crear Cuenta y Equipo", use_container_width=True)
+                r_name = st.text_input(t("auth.full_name"), key="reg_name")
+                r_email = st.text_input(t("auth.email"), key="reg_email")
+                r_password = st.text_input(t("auth.password"), type="password", key="reg_password")
+                r_team = st.text_input(t("auth.team_name"), key="reg_team")
+                submitted = st.form_submit_button(t("auth.register_btn"), use_container_width=True)
                 if submitted:
                     if not all([r_name, r_email, r_password, r_team]):
-                        st.error("Completa todos los campos.")
+                        st.error(t("auth.fill_all"))
                     elif len(r_password) < 6:
-                        st.error("La contraseña debe tener al menos 6 caracteres.")
+                        st.error(t("auth.pw_min"))
                     else:
                         err = _do_register(r_email, r_password, r_name, r_team)
                         if err:
@@ -255,29 +286,36 @@ def show_auth_page():
                             st.rerun()
 
         with tab_join:
-            st.info("Usa el ID de equipo que te compartió tu administrador.")
+            st.info(t("auth.join_info"))
             with st.form("join_form"):
-                j_name = st.text_input("Nombre completo", key="join_name")
-                j_email = st.text_input("Email", key="join_email")
-                j_password = st.text_input("Contraseña", type="password", key="join_password")
-                j_team_id = st.text_input("ID del equipo", key="join_team_id")
+                j_name = st.text_input(t("auth.full_name"), key="join_name")
+                j_email = st.text_input(t("auth.email"), key="join_email")
+                j_password = st.text_input(t("auth.password"), type="password", key="join_password")
+                j_team_id = st.text_input(t("auth.team_id"), key="join_team_id")
                 j_role = st.selectbox(
-                    "Rol",
+                    t("auth.role"),
                     JOINABLE_ROLES,
                     format_func=lambda r: ROLE_LABELS.get(r, r),
                     index=JOINABLE_ROLES.index("presales"),
                     key="join_role",
                 )
-                submitted = st.form_submit_button("Unirse al Equipo", use_container_width=True)
+                submitted = st.form_submit_button(t("auth.join_btn"), use_container_width=True)
                 if submitted:
                     if not all([j_name, j_email, j_password, j_team_id]):
-                        st.error("Completa todos los campos.")
+                        st.error(t("auth.fill_all"))
                     else:
                         err = _do_join_team(j_email, j_password, j_name, j_team_id, j_role)
                         if err:
                             st.error(err)
                         else:
                             st.rerun()
+
+        # Hidden button for auth page language toggle
+        _auth_lang_btn = st.button("AUTH_TOGGLE_LANG", key="btn_auth_toggle_lang")
+        if _auth_lang_btn:
+            new_lang = "en" if get_lang() == "es" else "es"
+            set_lang(new_lang)
+            st.rerun()
 
 def _show_recovery_page():
     """Muestra formulario para establecer nueva contraseña tras recovery."""
@@ -298,26 +336,27 @@ def _show_recovery_page():
 
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown('<div class="auth-header"><h1>PG Machine</h1><p>Restablecer contraseña</p></div>', unsafe_allow_html=True)
+        st.markdown(auth_lang_toggle_html(), unsafe_allow_html=True)
+        st.markdown(f'<div class="auth-header"><h1>{t("auth.title")}</h1><p>{t("auth.reset_title")}</p></div>', unsafe_allow_html=True)
         with st.form("reset_pw_form"):
-            new_pw = st.text_input("Nueva contraseña", type="password", key="new_pw")
-            confirm_pw = st.text_input("Confirmar contraseña", type="password", key="confirm_pw")
-            if st.form_submit_button("Cambiar contraseña", use_container_width=True):
+            new_pw = st.text_input(t("auth.new_pw"), type="password", key="new_pw")
+            confirm_pw = st.text_input(t("auth.confirm_pw"), type="password", key="confirm_pw")
+            if st.form_submit_button(t("auth.change_pw_btn"), use_container_width=True):
                 if not new_pw or not confirm_pw:
-                    st.error("Completa ambos campos.")
+                    st.error(t("auth.fill_both"))
                 elif len(new_pw) < 6:
-                    st.error("La contraseña debe tener al menos 6 caracteres.")
+                    st.error(t("auth.pw_min"))
                 elif new_pw != confirm_pw:
-                    st.error("Las contraseñas no coinciden.")
+                    st.error(t("auth.pw_mismatch"))
                 else:
                     try:
                         sb = _get_supabase()
                         sb.auth.set_session(access_token, refresh_token)
                         sb.auth.update_user({"password": new_pw})
-                        st.success("Contraseña actualizada. Ya puedes iniciar sesión.")
+                        st.success(t("auth.pw_updated"))
                         st.query_params.clear()
                     except Exception as e:
-                        st.error(f"Error al cambiar contraseña: {str(e)}")
+                        st.error(t("auth.pw_change_error", msg=str(e)))
     return True
 
 

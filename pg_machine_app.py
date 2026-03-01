@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta
 from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_admin, has_control_access, can_see_all_opportunities, logout, get_supabase, ALL_ROLES, ROLE_LABELS
 from lib import dal
 from lib import notifications
+from lib.i18n import t, get_lang, set_lang, display_estado, db_estado, display_tipo, db_tipo, tipo_selectbox_options, tipo_selectbox_index, estado_selectbox_options, estado_selectbox_index, lang_toggle_html
 
 st.set_page_config(page_title="PG Machine", layout="wide", initial_sidebar_state="expanded")
 
@@ -262,6 +263,9 @@ st.markdown("""
     .scope-toggle.team-mode .scope-track { background: #3b82f6; }
     .scope-toggle .scope-knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: transform 0.2s; }
     .scope-toggle.team-mode .scope-knob { transform: translateX(14px); }
+    /* Language toggle (SP/EN) inside user bar — reuses scope-toggle structure */
+    .scope-toggle.lang-en .scope-track { background: #0ea5e9; }
+    .scope-toggle.lang-en .scope-knob { transform: translateX(14px); }
     /* Growth pill toggle inside user bar */
     .bar-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.6rem; font-weight: 600; cursor: pointer; user-select: none; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.1); transition: background 0.15s, color 0.15s; color: rgba(255,255,255,0.45); }
     .bar-pill.active { background: #22c55e; color: white; }
@@ -392,6 +396,7 @@ components.html("""
         if (e.target.closest('.pgm-toggle-growth')) { clickToggleBtn('TOGGLE_GROWTH'); return; }
         if (e.target.closest('.pgm-toggle-q')) { clickToggleBtn('TOGGLE_Q'); return; }
         if (e.target.closest('.pgm-toggle-edit')) { clickToggleBtn('TOGGLE_EDIT'); return; }
+        if (e.target.closest('.pgm-toggle-lang')) { clickToggleBtn('TOGGLE_LANG'); return; }
         // 1. Dashboard card click (open)
         var card = e.target.closest('.pgm-card-wrap');
         if (card) {
@@ -613,6 +618,7 @@ components.html("""
             if (txt.indexOf('TOGGLE_GROWTH') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_Q') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_EDIT') >= 0) hide = true;
+            if (txt.indexOf('TOGGLE_LANG') >= 0) hide = true;
             if (hide) {
                 // Walk up hiding wrappers — use offscreen positioning to keep buttons clickable
                 var el = btn;
@@ -681,7 +687,7 @@ components.html("""
         var overlay = doc.createElement('div');
         overlay.className = 'pgm-loading';
         overlay.style.display = 'none';
-        overlay.innerHTML = '<div class="pgm-loading-icon">🚀</div><div class="pgm-loading-text">Cargando...</div>';
+        overlay.innerHTML = '<div class="pgm-loading-icon">\\u{1F680}</div><div class="pgm-loading-text">' + (localStorage.getItem('pgm_lang') === 'en' ? 'Loading...' : 'Cargando...') + '</div>';
         doc.body.appendChild(overlay);
 
         var loadObs = new MutationObserver(function() {
@@ -704,6 +710,26 @@ _tour_role_label = ROLE_LABELS.get(user["role"], user["role"])
 _tour_has_control = "true" if has_control_access() else "false"
 _tour_is_admin = "true" if is_admin() else "false"
 _tour_manual = "true" if _tour_trigger else "false"
+_tour_role_key = f"tour.role_{_tour_role}"
+_tour_role_desc = t(_tour_role_key) if t(_tour_role_key) != _tour_role_key else t("tour.role_default")
+_tour_welcome_desc = t("tour.your_role", role=_tour_role_label, desc=_tour_role_desc)
+
+def _js_safe(s):
+    """Escape string for safe embedding in JS single-quoted strings."""
+    return s.replace("\\", "\\\\").replace("'", "\\'")
+
+_tour_welcome_desc = _js_safe(_tour_welcome_desc)
+_tour_sidebar_desc = _js_safe(t("tour.sidebar_desc"))
+_tour_tabs_desc = _js_safe(t("tour.tabs_desc"))
+_tour_tablero_desc = _js_safe(t("tour.tablero_desc"))
+_tour_actividades_desc = _js_safe(t("tour.actividades_desc"))
+_tour_presales_desc = _js_safe(t("tour.presales_desc"))
+_tour_historial_desc = _js_safe(t("tour.historial_desc"))
+_tour_control_desc = _js_safe(t("tour.control_desc"))
+_tour_equipo_admin_desc = _js_safe(t("tour.equipo_admin_desc"))
+_tour_equipo_desc = _js_safe(t("tour.equipo_desc"))
+_tour_excel_desc = _js_safe(t("tour.excel_desc"))
+_tour_finish_desc = _js_safe(t("tour.finish_desc"))
 
 components.html(f"""
 <script>
@@ -805,25 +831,14 @@ components.html(f"""
     if (!MANUAL_TRIGGER && !shouldAutoStart()) return;
 
     // Role descriptions
-    var roleDescs = {{
-        'admin': 'Tienes acceso completo: gestión de equipo, configuración, control y todas las oportunidades.',
-        'vp': 'Ves todas las oportunidades del equipo y tienes acceso al panel de Control.',
-        'account_manager': 'Gestionas tus oportunidades y actividades asignadas. Tienes acceso al panel de Control.',
-        'regional_sales_manager': 'Supervisas las oportunidades de tu región con acceso al panel de Control.',
-        'partner_manager': 'Gestionas oportunidades con partners y tienes acceso al panel de Control.',
-        'regional_partner_manager': 'Supervisas partners regionales con acceso al panel de Control.',
-        'presales_manager': 'Coordinas el equipo de preventa y tienes acceso al panel de Control.',
-        'presales': 'Tu foco son las actividades asignadas: seguimiento, envío y respuesta de tareas.'
-    }};
-
     function buildSteps() {{
         var steps = [];
 
         // 1. Welcome
         steps.push({{
             popover: {{
-                title: '👋 ¡Bienvenido/a a PG Machine!',
-                description: 'Tu rol: <strong>' + ROLE_LABEL + '</strong><br><br>' + (roleDescs[ROLE] || 'Explora las funcionalidades de la plataforma.'),
+                title: '{_js_safe(t("tour.welcome_title"))}',
+                description: '{_tour_welcome_desc}',
                 side: 'over',
                 align: 'center'
             }}
@@ -834,8 +849,8 @@ components.html(f"""
             steps.push({{
                 element: 'section[data-testid="stSidebar"]',
                 popover: {{
-                    title: '📋 Barra Lateral',
-                    description: 'Aquí encuentras tu perfil, el botón para cerrar sesión, la carga masiva de Excel y el botón <strong>❓ Tour</strong> para repetir esta guía.',
+                    title: '{_js_safe(t("tour.sidebar_title"))}',
+                    description: '{_tour_sidebar_desc}',
                     side: 'right',
                     align: 'start'
                 }}
@@ -846,8 +861,8 @@ components.html(f"""
         steps.push({{
             element: '.stTabs [data-baseweb="tab-list"]',
             popover: {{
-                title: '🗂️ Navegación por Pestañas',
-                description: 'Usa estas pestañas para moverte entre las distintas secciones de la aplicación.',
+                title: '{_js_safe(t("tour.tabs_title"))}',
+                description: '{_tour_tabs_desc}',
                 side: 'bottom',
                 align: 'center'
             }}
@@ -857,8 +872,8 @@ components.html(f"""
         steps.push({{
             element: nthTab(0),
             popover: {{
-                title: '📊 Tablero',
-                description: 'Vista principal con tarjetas de oportunidades. Usa los filtros de categoría arriba y haz clic en cualquier tarjeta para ver el detalle.',
+                title: '{_js_safe(t("tour.tablero_title"))}',
+                description: '{_tour_tablero_desc}',
                 side: 'bottom',
                 align: 'start'
             }}
@@ -868,8 +883,8 @@ components.html(f"""
         steps.push({{
             element: nthTab(1),
             popover: {{
-                title: '📋 Actividades',
-                description: 'Tabla con todas las actividades. Filtra por alcance (Todas/Mis tareas), estado y tipo. Gestiona el flujo: Pendiente → Enviada → Respondida.',
+                title: '{_js_safe(t("tour.actividades_title"))}',
+                description: '{_tour_actividades_desc}',
                 side: 'bottom',
                 align: 'start'
             }}
@@ -880,8 +895,8 @@ components.html(f"""
             steps.push({{
                 element: nthTab(1),
                 popover: {{
-                    title: '🎯 Tu Flujo de Trabajo',
-                    description: 'Como <strong>Presales</strong>, tu foco está aquí. Usa el filtro <em>"Mis tareas"</em> para ver solo lo asignado a ti. El flujo es: <strong>Pendiente → Enviada → Respondida</strong>.',
+                    title: '{_js_safe(t("tour.presales_title"))}',
+                    description: '{_tour_presales_desc}',
                     side: 'bottom',
                     align: 'start'
                 }}
@@ -892,8 +907,8 @@ components.html(f"""
         steps.push({{
             element: nthTab(2),
             popover: {{
-                title: '📜 Historial',
-                description: 'Vista cronológica de todas las actividades, agrupadas por oportunidad. Útil para seguimiento y auditoría.',
+                title: '{_js_safe(t("tour.historial_title"))}',
+                description: '{_tour_historial_desc}',
                 side: 'bottom',
                 align: 'start'
             }}
@@ -905,8 +920,8 @@ components.html(f"""
             steps.push({{
                 element: nthTab(tabIdx),
                 popover: {{
-                    title: '📈 Control',
-                    description: 'Dashboard de analítica: métricas de SLA, actividad del equipo y rendimiento general.',
+                    title: '{_js_safe(t("tour.control_title"))}',
+                    description: '{_tour_control_desc}',
                     side: 'bottom',
                     align: 'start'
                 }}
@@ -919,8 +934,8 @@ components.html(f"""
             steps.push({{
                 element: nthTab(tabIdx),
                 popover: {{
-                    title: '👥 Equipo (Admin)',
-                    description: 'Gestiona tu equipo con 4 sub-pestañas: <strong>Miembros</strong> (roles y especialidades), <strong>Equipos</strong> (crear/mover), <strong>Configuración</strong> (SLA y categorías) e <strong>Invitaciones</strong>.',
+                    title: '{_js_safe(t("tour.equipo_admin_title"))}',
+                    description: '{_tour_equipo_admin_desc}',
                     side: 'bottom',
                     align: 'start'
                 }}
@@ -929,8 +944,8 @@ components.html(f"""
             steps.push({{
                 element: nthTab(tabIdx),
                 popover: {{
-                    title: '👥 Equipo',
-                    description: 'Consulta los miembros de tu equipo y gestiona invitaciones para nuevos integrantes.',
+                    title: '{_js_safe(t("tour.equipo_title"))}',
+                    description: '{_tour_equipo_desc}',
                     side: 'bottom',
                     align: 'start'
                 }}
@@ -942,8 +957,8 @@ components.html(f"""
             steps.push({{
                 element: 'section[data-testid="stSidebar"] details',
                 popover: {{
-                    title: '📥 Carga Masiva',
-                    description: 'Importa oportunidades desde Excel. Soporta formato Leads Propios y Forecast BMC.',
+                    title: '{_js_safe(t("tour.excel_title"))}',
+                    description: '{_tour_excel_desc}',
                     side: 'right',
                     align: 'start'
                 }}
@@ -953,8 +968,8 @@ components.html(f"""
         // 10. Final step
         steps.push({{
             popover: {{
-                title: '🎉 ¡Listo!',
-                description: 'Ya conoces las secciones principales. Recuerda que puedes repetir este tour en cualquier momento desde el botón <strong>❓ Tour</strong> en la barra lateral.',
+                title: '{_js_safe(t("tour.finish_title"))}',
+                description: '{_tour_finish_desc}',
                 side: 'over',
                 align: 'center'
             }}
@@ -977,10 +992,10 @@ components.html(f"""
 
             var driverObj = window.parent.driver.js.driver({{
                 showProgress: true,
-                progressText: '{{current}} de {{total}}',
-                nextBtnText: 'Siguiente',
-                prevBtnText: 'Anterior',
-                doneBtnText: '¡Entendido!',
+                progressText: '{_js_safe(t("tour.progress", current="{{current}}", total="{{total}}"))}',
+                nextBtnText: '{_js_safe(t("tour.next"))}',
+                prevBtnText: '{_js_safe(t("tour.prev"))}',
+                doneBtnText: '{_js_safe(t("tour.done"))}',
                 allowClose: true,
                 overlayColor: 'rgba(0, 0, 0, 0.5)',
                 stagePadding: 8,
@@ -1057,7 +1072,7 @@ _scope_team = st.session_state.get("scope_team", False)
 _scope_cls = "team-mode" if _scope_team else ""
 _scope_lbl_mias = "" if _scope_team else "active"
 _scope_lbl_team = "active" if _scope_team else ""
-_scope_toggle_html = f'<span class="scope-toggle pgm-toggle-scope {_scope_cls}"><span class="scope-label {_scope_lbl_mias}">Mías</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_scope_lbl_team}">Equipo</span></span>'
+_scope_toggle_html = f'<span class="scope-toggle pgm-toggle-scope {_scope_cls}"><span class="scope-label {_scope_lbl_mias}">{t("toggle.mine")}</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_scope_lbl_team}">{t("toggle.team")}</span></span>'
 _growth_on = st.session_state.get("growth_only", True)
 _growth_cls = "active" if _growth_on else ""
 _growth_html = f'<span class="bar-pill pgm-toggle-growth {_growth_cls}">🚀 Growth</span>'
@@ -1068,9 +1083,10 @@ _q_lbl_4q = "active" if _q_4q else ""
 _q_toggle_html = f'<span class="q-toggle pgm-toggle-q {_q_cls}"><span class="scope-label {_q_lbl_2q}">2Q</span><span class="scope-track"><span class="scope-knob"></span></span><span class="scope-label {_q_lbl_4q}">4Q</span></span>'
 _edit_on = st.session_state.get("bulk_edit_mode", False)
 _edit_cls = "active" if _edit_on else ""
-_edit_lbl = "✅ Listo" if _edit_on else "✏️ Editar"
+_edit_lbl = t("toggle.done_edit") if _edit_on else t("toggle.edit")
 _edit_html = f'<span class="bar-pill pgm-toggle-edit {_edit_cls}">{_edit_lbl}</span>'
-user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}{_scope_toggle_html}{_growth_html}{_q_toggle_html}{_edit_html}</div>'
+_lang_html = lang_toggle_html()
+user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}{_lang_html}{_scope_toggle_html}{_growth_html}{_q_toggle_html}{_edit_html}</div>'
 
 # --- 2. DATOS DESDE SUPABASE ---
 if 'selected_id' not in st.session_state:
@@ -1246,7 +1262,7 @@ def _traffic_light(act):
     now = datetime.now()
 
     if estado == "Respondida":
-        return "🟩", "Respondida"
+        return "🟩", t("estado.respondida")
 
     if estado == "Enviada":
         enviada_ts = _naive(datetime.fromisoformat(act["enviada_ts"])) if act.get("enviada_ts") else now
@@ -1254,8 +1270,8 @@ def _traffic_light(act):
         deadline = enviada_ts + timedelta(days=sla_dias)
         remaining = deadline - now
         if remaining.total_seconds() <= 0:
-            return "🟥", "Bloqueada"
-        return "🟪", f"Esp. rpta {remaining.days}d"
+            return "🟥", t("estado.bloqueada")
+        return "🟪", t("estado.esp_rpta", days=remaining.days)
 
     # Pendiente
     fecha_str = act.get("fecha", "")
@@ -1266,9 +1282,9 @@ def _traffic_light(act):
 
     hoy = date.today()
     if fecha > hoy:
-        return "🔵", f"📅 Programada {fecha.strftime('%d/%m')}"
+        return "🔵", t("estado.programada", date=fecha.strftime('%d/%m'))
     if fecha == hoy:
-        return "🟧", "⚡ Hoy"
+        return "🟧", t("estado.hoy")
 
     # SLA check
     sla_deadline_str = act.get("sla_deadline")
@@ -1277,13 +1293,13 @@ def _traffic_light(act):
         created = _naive(datetime.fromisoformat(act["created_at"])) if isinstance(act.get("created_at"), str) else (_naive(act.get("created_at")) or now)
         remaining = deadline - now
         if remaining.total_seconds() <= 0:
-            return "🟥", "Vencida"
+            return "🟥", t("estado.vencida")
         total = deadline - created
         ratio = remaining / total if total.total_seconds() > 0 else 0
         hours_left = remaining.total_seconds() / 3600
         if ratio > 0.5:
-            return ("🟩", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟩", f"{remaining.days}d rest.")
-        return ("🟨", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟨", f"{remaining.days}d rest.")
+            return ("🟩", t("estado.hours_left", h=f"{hours_left:.0f}")) if hours_left < 24 else ("🟩", t("estado.days_left", d=remaining.days))
+        return ("🟨", t("estado.hours_left", h=f"{hours_left:.0f}")) if hours_left < 24 else ("🟨", t("estado.days_left", d=remaining.days))
 
     # Fallback from sla_key
     sla_cfg = SLA_OPCIONES.get(act.get("sla_key", ""), {})
@@ -1294,13 +1310,13 @@ def _traffic_light(act):
         deadline = created + timedelta(days=sla_cfg.get("dias", 7))
     remaining = deadline - now
     if remaining.total_seconds() <= 0:
-        return "🟥", "Vencida"
+        return "🟥", t("estado.vencida")
     total = deadline - created
     ratio = remaining / total if total.total_seconds() > 0 else 0
     hours_left = remaining.total_seconds() / 3600
     if ratio > 0.5:
-        return ("🟩", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟩", f"{remaining.days}d rest.")
-    return ("🟨", f"{hours_left:.0f}h rest.") if hours_left < 24 else ("🟨", f"{remaining.days}d rest.")
+        return ("🟩", t("estado.hours_left", h=f"{hours_left:.0f}")) if hours_left < 24 else ("🟩", t("estado.days_left", d=remaining.days))
+    return ("🟨", t("estado.hours_left", h=f"{hours_left:.0f}")) if hours_left < 24 else ("🟨", t("estado.days_left", d=remaining.days))
 
 _ESTADO_ORDER = {"Bloqueada": 0, "Pendiente": 1, "Enviada": 2, "Respondida": 3}
 
@@ -1309,7 +1325,7 @@ def _act_status_order(a):
     e = a.get("estado", "")
     if e == "Enviada":
         _, lbl = _traffic_light(a)
-        if lbl == "Bloqueada":
+        if lbl == t("estado.bloqueada"):
             status = 0
         else:
             status = 2
@@ -1378,9 +1394,9 @@ def _meeting_audit_html(activity: dict) -> str:
         time_range = f"{start_str}\u2013{end_str}"
     except (ValueError, TypeError):
         time_range = ""
-    parts = ["\U0001f4c5 Agendada"]
+    parts = [t("detail.scheduled")]
     if sched_str:
-        parts[0] += f" el {sched_str}"
+        parts[0] = t("detail.scheduled_on", date=sched_str)
     if time_range:
         parts.append(time_range)
     if attendees:
@@ -1407,35 +1423,35 @@ def _metro_station_html(a: dict, ctx_html: str = "") -> str:
             assigned_name = a["creator_profile"]["full_name"]
 
     light, label = _traffic_light(a)
-    if a["estado"] == "Enviada" and label == "Bloqueada":
+    if a["estado"] == "Enviada" and label == t("estado.bloqueada"):
         card_cls = "metro-card bloqueada"
-        estado_html = '<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 BLOQUEADA</span>'
+        estado_html = f'<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 {t("estado.bloqueada")}</span>'
     elif a["estado"] == "Enviada":
         card_cls = "metro-card enviada"
-        estado_html = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
+        estado_html = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 {display_estado("Enviada")} — {label}</span>'
     elif a["estado"] == "Respondida":
         card_cls = "metro-card respondida"
         resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
-        resp_label = "Reunión Completada" if a.get("tipo") == "Reunión" else "Respondida"
+        resp_label = t("estado.reunion_completada") if a.get("tipo") == "Reunión" else display_estado("Respondida")
         estado_html = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 {resp_label}{resp_date}</span>'
     elif a["estado"] == "Pendiente":
         card_cls = "metro-card pendiente"
-        if a.get("tipo") == "Reunión" and "Programada" in label:
+        if a.get("tipo") == "Reunión" and t("estado.programada", date="").strip() in label:
             estado_html = f'<span class="act-estado" style="color:#1d4ed8;background:#dbeafe;">{label}</span>'
         else:
-            estado_html = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
+            estado_html = f'<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 {display_estado("Pendiente")}</span>'
     else:
         card_cls = "metro-card"
-        estado_html = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
+        estado_html = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{display_estado(a["estado"])}</span>'
 
     tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
-    tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
+    tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {display_tipo(a["tipo"])}</span>'
     obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
     dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
     asig_initials = _get_initials(assigned_name) if assigned_name else ""
     asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
     desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
-    fb_label = "Resumen de la Reunión" if a.get("tipo") == "Reunión" else "Feedback"
+    fb_label = t("form.meeting_summary") if a.get("tipo") == "Reunión" else t("form.feedback")
     fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
     meeting_html = _meeting_audit_html(a) if a.get("tipo") == "Reunión" else ''
 
@@ -1456,7 +1472,7 @@ def _render_outlook_button(activity: dict, opportunity: dict, key: str):
         font-weight:600;cursor:pointer;text-decoration:none;transition:background 0.2s;"
         onmouseover="this.style.background='#0284c7'"
         onmouseout="this.style.background='#0ea5e9'">
-        📅 Agendar Reunión
+        {t("detail.schedule_meeting")}
     </a>
     """, height=32)
 
@@ -1465,46 +1481,46 @@ def _render_outlook_button(activity: dict, opportunity: dict, key: str):
 import pathlib as _pathlib
 _guide_path = _pathlib.Path(__file__).parent / "USER_GUIDE.md"
 
-@st.dialog("📖 Guía del Usuario", width="large")
+@st.dialog(t("sidebar.guide_title"), width="large")
 def _show_user_guide():
     if _guide_path.exists():
         st.markdown(_guide_path.read_text(encoding="utf-8"))
     else:
-        st.info("La guía del usuario no está disponible.")
+        st.info(t("sidebar.guide_unavailable"))
 
 with st.sidebar:
-    st.title("🚀 PG Machine")
+    st.title(t("sidebar.title"))
     st.caption(f"👤 {user['full_name']} ({user_role_label})")
-    if st.button("Cerrar Sesión", key="logout_btn"):
+    if st.button(t("sidebar.logout"), key="logout_btn"):
         logout()
-    if st.button("❓ Tour", key="tour_btn", use_container_width=True):
+    if st.button(t("sidebar.tour"), key="tour_btn", use_container_width=True):
         st.session_state.selected_id = None
         st.session_state["_trigger_tour"] = True
         st.rerun()
-    if st.button("📖 Guía", key="guide_btn", use_container_width=True):
+    if st.button(t("sidebar.guide"), key="guide_btn", use_container_width=True):
         _show_user_guide()
 
     st.divider()
 
     import io
-    with st.expander("📥 CARGA MASIVA (EXCEL)", expanded=True):
-        perfil = st.radio("Formato:", ["Leads Propios", "Forecast BMC"])
-        if perfil == "Leads Propios":
+    with st.expander(t("sidebar.bulk_upload"), expanded=True):
+        perfil = st.radio(t("sidebar.format"), [t("sidebar.leads_propios"), t("sidebar.forecast_bmc")])
+        if perfil == t("sidebar.leads_propios"):
             tpl_df = pd.DataFrame(columns=["Proyecto", "Empresa", "Partner", "Annual Contract Value (ACV)", "Close Date"])
             tpl_buf = io.BytesIO()
             tpl_df.to_excel(tpl_buf, index=False, engine="openpyxl")
-            st.download_button("📄 Descargar plantilla Leads", tpl_buf.getvalue(), file_name="plantilla_leads.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button(t("sidebar.download_template_leads"), tpl_buf.getvalue(), file_name="plantilla_leads.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
         else:
             tpl_df = pd.DataFrame(columns=["Opportunity Name", "Account Name", "Annual Contract Value (ACV)", "Amount (USD)", "SFDC Opportunity Id", "Stage", "Partner", "Close Date"])
             tpl_buf = io.BytesIO()
             tpl_df.to_excel(tpl_buf, index=False, engine="openpyxl")
-            st.download_button("📄 Descargar plantilla Official", tpl_buf.getvalue(), file_name="plantilla_official.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-        up = st.file_uploader("Subir Archivo", type=["xlsx"])
-        if up and st.button("Analizar Archivo"):
+            st.download_button(t("sidebar.download_template_official"), tpl_buf.getvalue(), file_name="plantilla_official.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        up = st.file_uploader(t("sidebar.upload_file"), type=["xlsx"])
+        if up and st.button(t("sidebar.analyze")):
             df = pd.read_excel(up)
             items = []
             for _, r in df.iterrows():
-                if perfil == "Leads Propios":
+                if perfil == t("sidebar.leads_propios"):
                     parsed = _parse_date(r.get('Close Date', None))
                     items.append({
                         "proyecto": str(r.get('Proyecto', 'S/N')),
@@ -1561,14 +1577,14 @@ with st.sidebar:
             nuevas = st.session_state.get("import_nuevas", [])
             iguales = st.session_state.get("import_iguales", [])
             con_cambios = st.session_state.get("import_con_cambios", [])
-            st.markdown(f"**Resultado del análisis:**")
-            st.markdown(f"- 🆕 **{len(nuevas)}** nuevas")
-            st.markdown(f"- ✅ **{len(iguales)}** sin cambios (se omiten)")
-            st.markdown(f"- ⚠️ **{len(con_cambios)}** con diferencias")
+            st.markdown(t("sidebar.analysis_result"))
+            st.markdown(f"- {t('sidebar.new_count', n=len(nuevas))}")
+            st.markdown(f"- {t('sidebar.unchanged_count', n=len(iguales))}")
+            st.markdown(f"- {t('sidebar.diff_count', n=len(con_cambios))}")
             if nuevas:
                 st.markdown("---")
-                st.markdown("**🆕 Nuevas oportunidades:**")
-                select_all_new = st.checkbox("Todas", value=True, key="sel_all_new")
+                st.markdown(t("sidebar.new_opps"))
+                select_all_new = st.checkbox(t("sidebar.all"), value=True, key="sel_all_new")
                 for i, item in enumerate(nuevas):
                     monto_str = f"USD {float(item.get('monto', 0)):,.0f} ACV"
                     partner_str = f" | 🤝 {item['partner']}" if item.get("partner") else ""
@@ -1579,8 +1595,8 @@ with st.sidebar:
                     )
             if con_cambios:
                 st.markdown("---")
-                st.markdown("**⚠️ Con diferencias (sobrescribir con Excel):**")
-                select_all_chg = st.checkbox("Todas", value=False, key="sel_all_chg")
+                st.markdown(t("sidebar.with_diffs"))
+                select_all_chg = st.checkbox(t("sidebar.all"), value=False, key="sel_all_chg")
                 for i, (item, existing_opp, diffs) in enumerate(con_cambios):
                     diff_summary = ", ".join(f"{f}: {v['actual']} → {v['excel']}" for f, v in diffs.items())
                     monto_str = f"USD {float(item.get('monto', 0)):,.0f} ACV"
@@ -1593,7 +1609,7 @@ with st.sidebar:
                     )
             st.markdown("---")
             bc1, bc2 = st.columns(2)
-            if bc1.button("Ejecutar Importación", key="exec_import", use_container_width=True):
+            if bc1.button(t("sidebar.run_import"), key="exec_import", use_container_width=True):
                 created = 0
                 updated = 0
                 skipped_new = 0
@@ -1608,14 +1624,14 @@ with st.sidebar:
                         updated += 1
                 parts = []
                 if created:
-                    parts.append(f"{created} creadas")
+                    parts.append(t("sidebar.created", n=created))
                 if updated:
-                    parts.append(f"{updated} actualizadas")
+                    parts.append(t("sidebar.updated", n=updated))
                 if iguales:
-                    parts.append(f"{len(iguales)} sin cambios")
+                    parts.append(t("sidebar.unchanged", n=len(iguales)))
                 if skipped_new:
-                    parts.append(f"{skipped_new} omitidas")
-                st.success(f"Importación completada: {', '.join(parts)}")
+                    parts.append(t("sidebar.skipped", n=skipped_new))
+                st.success(t("sidebar.import_done", details=', '.join(parts)))
                 keys_to_clear = ["import_nuevas", "import_iguales", "import_con_cambios", "import_analizado"]
                 keys_to_clear += [f"imp_new_{i}" for i in range(len(nuevas))]
                 keys_to_clear += [f"imp_chg_{i}" for i in range(len(con_cambios))]
@@ -1623,7 +1639,7 @@ with st.sidebar:
                 for k in keys_to_clear:
                     st.session_state.pop(k, None)
                 st.rerun()
-            if bc2.button("Cancelar", key="cancel_import", use_container_width=True):
+            if bc2.button(t("sidebar.cancel"), key="cancel_import", use_container_width=True):
                 keys_to_clear = ["import_nuevas", "import_iguales", "import_con_cambios", "import_analizado"]
                 keys_to_clear += [f"imp_new_{i}" for i in range(len(nuevas))]
                 keys_to_clear += [f"imp_chg_{i}" for i in range(len(con_cambios))]
@@ -1633,26 +1649,26 @@ with st.sidebar:
                 st.rerun()
 
     st.divider()
-    st.write("✍️ **ALTA MANUAL**")
+    st.write(t("sidebar.manual_entry"))
     with st.form("manual_entry"):
-        nc = st.text_input("Cuenta")
-        np = st.text_input("Proyecto")
-        ncat = st.selectbox("Categoría", CATEGORIAS)
+        nc = st.text_input(t("sidebar.account"))
+        np = st.text_input(t("sidebar.project"))
+        ncat = st.selectbox(t("sidebar.category"), CATEGORIAS)
         # Always render both sets of fields (Streamlit forms can't conditionally render)
-        nm = st.number_input("Monto USD", value=0)
+        nm = st.number_input(t("sidebar.amount_usd"), value=0)
         _new_urg_opts = ["", "alta", "media", "baja"]
-        _new_urg_labels = {"": "— Sin prioridad —", "alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
-        n_urgency = st.selectbox("Prioridad (GTM)", _new_urg_opts, format_func=lambda x: _new_urg_labels[x])
-        n_gtm_type = st.text_input("Tipo GTM")
-        n_opp_id = st.text_input("Opportunity ID")
-        n_stage = st.text_input("Stage")
-        n_partner = st.text_input("Partner")
-        n_close = st.date_input("Close Date", value=None)
+        _new_urg_labels = {"": t("sidebar.no_priority"), "alta": t("sidebar.high"), "media": t("sidebar.medium"), "baja": t("sidebar.low")}
+        n_urgency = st.selectbox(t("sidebar.priority_gtm"), _new_urg_opts, format_func=lambda x: _new_urg_labels[x])
+        n_gtm_type = st.text_input(t("sidebar.gtm_type"))
+        n_opp_id = st.text_input(t("sidebar.opp_id"))
+        n_stage = st.text_input(t("sidebar.stage"))
+        n_partner = st.text_input(t("sidebar.partner"))
+        n_close = st.date_input(t("sidebar.close_date"), value=None)
         # Campos dinámicos
         extra_vals = {}
         for ecol in EXTRA_OPP_COLS:
             extra_vals[ecol] = st.text_input(ecol.replace("_", " ").title(), key=f"manual_{ecol}")
-        if st.form_submit_button("Añadir Individual"):
+        if st.form_submit_button(t("sidebar.add_individual")):
             if nc and np:
                 parsed = _parse_date(n_close)
                 _new_is_gtm = "GTM" in ncat.strip().upper()
@@ -1685,7 +1701,7 @@ if st.session_state.selected_id:
     st.markdown(user_bar_html, unsafe_allow_html=True)
     opp = _ss_cache("_c_detail_opp", dal.get_opportunity, st.session_state.selected_id)
     if not opp:
-        st.error("Oportunidad no encontrada.")
+        st.error(t("msg.opp_not_found"))
         st.session_state.selected_id = None
         st.rerun()
 
@@ -1717,13 +1733,13 @@ if st.session_state.selected_id:
     if opp.get("opp_id"):
         meta_parts.append(f'<span class="meta-id">{opp["opp_id"]}</span>')
     if opp.get("close_date"):
-        meta_parts.append(f'<span class="meta-close">Cierre: {_fmt_date(opp["close_date"])}</span>')
+        meta_parts.append(f'<span class="meta-close">{t("detail.close_label", date=_fmt_date(opp["close_date"]))}</span>')
     for ecol in EXTRA_OPP_COLS:
         ecol_val = str(opp.get(ecol, "") or "").strip()
         if ecol_val and ecol_val.lower() != "nan":
             meta_parts.append(f'<span class="meta-pill meta-stage">{ecol.replace("_", " ").title()}: {ecol_val}</span>')
     _metro_active = " active" if st.session_state.get("metro_view") else ""
-    action_html = f'<span class="meta-actions"><span class="meta-btn meta-btn-timeline{_metro_active}">🚇 Línea</span><span class="meta-btn meta-btn-edit-opp">✏ Editar</span><span class="meta-btn meta-btn-new-act">+ Nueva</span><span class="meta-btn meta-btn-kill">☠ Cerrar</span><span class="meta-btn meta-btn-back">⬅ Volver</span><span class="meta-btn meta-btn-del">🗑 Eliminar</span></span>'
+    action_html = f'<span class="meta-actions"><span class="meta-btn meta-btn-timeline{_metro_active}">{t("detail.metro_line")}</span><span class="meta-btn meta-btn-edit-opp">{t("detail.edit")}</span><span class="meta-btn meta-btn-new-act">{t("detail.new_activity")}</span><span class="meta-btn meta-btn-kill">{t("detail.kill")}</span><span class="meta-btn meta-btn-back">{t("detail.back")}</span><span class="meta-btn meta-btn-del">{t("detail.delete")}</span></span>'
     st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}{action_html}</div>', unsafe_allow_html=True)
 
     # --- Hidden action buttons (wired via JS) ---
@@ -1735,15 +1751,15 @@ if st.session_state.selected_id:
     if _hid_c2.button("🗑️ Eliminar", key="del_opp", use_container_width=True):
         st.session_state[f"confirm_del_opp_{opp['id']}"] = True
     if st.session_state.get(f"confirm_del_opp_{opp['id']}"):
-        st.warning(f"Eliminar **{opp['proyecto']}** y todas sus actividades?")
+        st.warning(t("msg.delete_opp_confirm", name=opp['proyecto']))
         dc1, dc2 = st.columns(2)
-        if dc1.button("Confirmar", key="confirm_del_opp_yes", use_container_width=True):
+        if dc1.button(t("msg.confirm_btn"), key="confirm_del_opp_yes", use_container_width=True):
             dal.delete_opportunity(opp["id"])
             st.session_state.selected_id = None
             st.session_state.metro_view = False
             st.session_state.pop(f"confirm_del_opp_{opp['id']}", None)
             st.rerun()
-        if dc2.button("Cancelar", key="confirm_del_opp_no", use_container_width=True):
+        if dc2.button(t("msg.cancel_btn"), key="confirm_del_opp_no", use_container_width=True):
             st.session_state.pop(f"confirm_del_opp_{opp['id']}", None)
             st.rerun()
 
@@ -1765,34 +1781,34 @@ if st.session_state.selected_id:
     if st.session_state.get("show_kill_opp"):
         _is_gtm = "GTM" in opp.get("categoria", "").strip().upper()
         st.markdown('<div class="action-panel" style="border-top-color:#991b1b;">', unsafe_allow_html=True)
-        st.markdown("#### ☠ Cerrar Oportunidad" if not _is_gtm else "#### ☠ Cerrar GTM")
+        st.markdown(t("kill.title") if not _is_gtm else t("kill.title_gtm"))
         if _is_gtm:
-            kill_reason = st.radio("Motivo de cierre:", [
-                "✅ Done — Objetivo logrado",
-                "📅 No prioritario este año",
-                "🚫 Creada por error",
+            kill_reason = st.radio(t("kill.reason"), [
+                t("kill.done"),
+                t("kill.not_priority"),
+                t("kill.error"),
             ], key="kill_reason_radio")
-            _reason_map = {"✅ Done — Objetivo logrado": "done", "📅 No prioritario este año": "not_priority", "🚫 Creada por error": "error"}
+            _reason_map = {t("kill.done"): "done", t("kill.not_priority"): "not_priority", t("kill.error"): "error"}
         else:
-            kill_reason = st.radio("Motivo de cierre:", [
-                "🏆 Ganada!",
-                "❌ Perdida",
-                "🚫 Creada por error",
+            kill_reason = st.radio(t("kill.reason"), [
+                t("kill.won"),
+                t("kill.lost"),
+                t("kill.error"),
             ], key="kill_reason_radio")
-            _reason_map = {"🏆 Ganada!": "ganada", "❌ Perdida": "perdida", "🚫 Creada por error": "error"}
+            _reason_map = {t("kill.won"): "ganada", t("kill.lost"): "perdida", t("kill.error"): "error"}
         _kr_c1, _kr_c2, _kr_c3 = st.columns([1, 1, 4])
-        if _kr_c1.button("✅ Confirmar", key="confirm_kill", use_container_width=True):
+        if _kr_c1.button(t("kill.confirm"), key="confirm_kill", use_container_width=True):
             dal.kill_opportunity(opp["id"], _reason_map[kill_reason])
             st.session_state.selected_id = None
             st.session_state.pop("show_kill_opp", None)
             st.rerun()
-        if _kr_c2.button("Cancelar", key="cancel_kill", use_container_width=True):
+        if _kr_c2.button(t("msg.cancel_btn"), key="cancel_kill", use_container_width=True):
             st.session_state.pop("show_kill_opp", None)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     # --- History ---
-    st.caption("📜 Historial e Interacción")
+    st.caption(t("detail.history"))
     activities = _ss_cache("_c_detail_acts", dal.get_activities_for_opportunity, opp["id"])
 
     if st.session_state.get("metro_view"):
@@ -1802,7 +1818,7 @@ if st.session_state.selected_id:
             metro_html = '<div class="metro-timeline">' + ''.join(_metro_station_html(a) for a in metro_acts) + '</div>'
             st.markdown(metro_html, unsafe_allow_html=True)
         else:
-            st.info("No hay actividades registradas aún.")
+            st.info(t("msg.no_activities"))
     else:
         # --- Interactive Card View ---
         activities.sort(key=_act_status_order)
@@ -1822,26 +1838,26 @@ if st.session_state.selected_id:
                 light, label = _traffic_light(a)
                 tipo_lower = a.get("tipo", "").lower().replace("ó", "o")
                 tipo_class = f'tipo-{tipo_lower}' if a.get("tipo") else ""
-                if a["estado"] == "Enviada" and label == "Bloqueada":
+                if a["estado"] == "Enviada" and label == t("estado.bloqueada"):
                     card_class = f"hist-card {tipo_class} bloqueada"
-                    estado_pill = '<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 BLOQUEADA</span>'
+                    estado_pill = f'<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 {t("estado.bloqueada")}</span>'
                 elif a["estado"] == "Enviada":
                     card_class = f"hist-card {tipo_class} enviada"
-                    estado_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
+                    estado_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 {display_estado("Enviada")} — {label}</span>'
                 elif a["estado"] == "Respondida":
                     card_class = f"hist-card {tipo_class} respondida"
                     resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
-                    resp_label = "Reunión Completada" if a.get("tipo") == "Reunión" else "Respondida"
+                    resp_label = t("estado.reunion_completada") if a.get("tipo") == "Reunión" else display_estado("Respondida")
                     estado_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 {resp_label}{resp_date}</span>'
                 elif a["estado"] == "Pendiente":
                     card_class = f"hist-card {tipo_class} pendiente"
-                    if a.get("tipo") == "Reunión" and "Programada" in label:
+                    if a.get("tipo") == "Reunión" and t("estado.programada", date="").strip() in label:
                         estado_pill = f'<span class="act-estado" style="color:#1d4ed8;background:#dbeafe;">{label}</span>'
                     else:
-                        estado_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
+                        estado_pill = f'<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 {display_estado("Pendiente")}</span>'
                 else:
                     card_class = f"hist-card {tipo_class}"
-                    estado_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
+                    estado_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{display_estado(a["estado"])}</span>'
 
                 asig_initials = _get_initials(assigned_name) if assigned_name else ""
                 fecha_display = _fmt_date(a.get("fecha", ""))
@@ -1850,23 +1866,23 @@ if st.session_state.selected_id:
                 tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
 
                 # Metadata elements
-                tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
+                tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {display_tipo(a["tipo"])}</span>'
                 obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
                 dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
                 asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                 fecha_html = f'<span class="act-fecha">{fecha_display}</span>'
                 desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
-                fb_label = "Resumen de la Reunión" if a.get("tipo") == "Reunión" else "Feedback"
+                fb_label = t("form.meeting_summary") if a.get("tipo") == "Reunión" else t("form.feedback")
                 fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
 
                 # Action buttons
                 estado_btns = ''
                 if a["estado"] == "Pendiente":
-                    send_label = "✅ Reunión Realizada" if a.get("tipo") == "Reunión" else "✅ Enviado"
+                    send_label = t("detail.meeting_done_label") if a.get("tipo") == "Reunión" else t("detail.sent_label")
                     estado_btns = f'<span class="act-btn act-btn-send">{send_label}</span>'
                 elif a["estado"] == "Enviada":
-                    estado_btns = '<span class="act-btn act-btn-resp">📩 Respondida</span><span class="act-btn act-btn-resend">🔄 Reenviar</span>'
-                act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">✏ Editar</span><span class="act-btn act-btn-move">↗ Mover</span><span class="act-btn act-btn-del">🗑 Eliminar</span></span>'
+                    estado_btns = f'<span class="act-btn act-btn-resp">{t("detail.responded_btn")}</span><span class="act-btn act-btn-resend">{t("detail.resend_btn")}</span>'
+                act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">{t("detail.edit_btn")}</span><span class="act-btn act-btn-move">{t("detail.move_btn")}</span><span class="act-btn act-btn-del">{t("detail.delete_btn")}</span></span>'
 
                 # Build meta-row: assignee first, then → destinatario, then description
                 meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{estado_pill}{fecha_html}'
@@ -1912,12 +1928,12 @@ if st.session_state.selected_id:
                     if a.get("tipo") == "Reunión":
                         if st.session_state.get(f"show_reunion_{aid}"):
                             with st.form(f"reunion_form_{aid}"):
-                                resumen = st.text_area("Resumen de la Reunión")
-                                reunion_fecha = st.date_input("Fecha de la reunión", value=date.today(), key=f"reunion_fecha_{aid}")
+                                resumen = st.text_area(t("form.meeting_summary"))
+                                reunion_fecha = st.date_input(t("form.meeting_date"), value=date.today(), key=f"reunion_fecha_{aid}")
                                 st.divider()
-                                crear_seguimiento = st.checkbox("🔁 Crear reunión de seguimiento", value=False, key=f"seg_reunion_{aid}")
-                                seg_fecha = st.date_input("Fecha seguimiento", value=date.today() + timedelta(days=7), key=f"segf_reunion_{aid}")
-                                if st.form_submit_button("Confirmar"):
+                                crear_seguimiento = st.checkbox(t("form.create_followup_meeting"), value=False, key=f"seg_reunion_{aid}")
+                                seg_fecha = st.date_input(t("form.followup_date"), value=date.today() + timedelta(days=7), key=f"segf_reunion_{aid}")
+                                if st.form_submit_button(t("form.confirm")):
                                     dal.update_activity(aid, {"estado": "Respondida", "feedback": resumen, "respondida_ts": str(reunion_fecha)})
                                     if crear_seguimiento:
                                         dal.create_activity(a["opportunity_id"], a["team_id"], user_id, {
@@ -1944,12 +1960,12 @@ if st.session_state.selected_id:
                 elif a["estado"] == "Enviada":
                     if st.session_state.get(f"show_fb_{aid}"):
                         with st.form(f"fb_form_{aid}"):
-                            feedback = st.text_area("Feedback del cliente")
-                            resp_fecha = st.date_input("Fecha de respuesta", value=date.today(), key=f"resp_fecha_{aid}")
+                            feedback = st.text_area(t("form.client_feedback"))
+                            resp_fecha = st.date_input(t("form.response_date"), value=date.today(), key=f"resp_fecha_{aid}")
                             st.divider()
-                            crear_seguimiento = st.checkbox("🔁 Crear actividad de seguimiento", value=False, key=f"seg_{aid}")
-                            seg_fecha = st.date_input("Fecha seguimiento", value=date.today() + timedelta(days=7), key=f"segf_{aid}")
-                            if st.form_submit_button("Confirmar Respuesta"):
+                            crear_seguimiento = st.checkbox(t("form.create_followup_activity"), value=False, key=f"seg_{aid}")
+                            seg_fecha = st.date_input(t("form.followup_date"), value=date.today() + timedelta(days=7), key=f"segf_{aid}")
+                            if st.form_submit_button(t("form.confirm_response")):
                                 dal.update_activity(aid, {"estado": "Respondida", "feedback": feedback, "respondida_ts": str(resp_fecha)})
                                 if crear_seguimiento:
                                     dal.create_activity(a["opportunity_id"], a["team_id"], user_id, {
@@ -1986,13 +2002,13 @@ if st.session_state.selected_id:
 
                 # Delete confirmation
                 if st.session_state.get(f"confirm_del_act_{aid}"):
-                    st.warning("Eliminar esta actividad?")
+                    st.warning(t("msg.delete_activity_confirm"))
                     da1, da2 = st.columns(2)
-                    if da1.button("Confirmar", key=f"cdel_act_y_{aid}", use_container_width=True):
+                    if da1.button(t("msg.confirm_btn"), key=f"cdel_act_y_{aid}", use_container_width=True):
                         dal.delete_activity(aid)
                         st.session_state.pop(f"confirm_del_act_{aid}", None)
                         st.rerun()
-                    if da2.button("Cancelar", key=f"cdel_act_n_{aid}", use_container_width=True):
+                    if da2.button(t("msg.cancel_btn"), key=f"cdel_act_n_{aid}", use_container_width=True):
                         st.session_state.pop(f"confirm_del_act_{aid}", None)
                         st.rerun()
 
@@ -2000,27 +2016,27 @@ if st.session_state.selected_id:
                 if st.session_state.get(f"show_edit_{aid}"):
                     with st.form(f"edit_act_{aid}"):
                         ea_c1, ea_c2, ea_c3 = st.columns(3)
-                        ea_tipo = ea_c1.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"],
-                            index=["Email", "Llamada", "Reunión", "Asignación"].index(a.get("tipo", "Email")) if a.get("tipo", "Email") in ["Email", "Llamada", "Reunión", "Asignación"] else 0,
+                        ea_tipo = ea_c1.selectbox(t("form.channel"), tipo_selectbox_options(),
+                            index=tipo_selectbox_index(a.get("tipo", "Email")),
                             key=f"et_{aid}")
                         sla_keys = list(SLA_OPCIONES.keys())
-                        ea_sla = ea_c2.selectbox("SLA", sla_keys,
+                        ea_sla = ea_c2.selectbox(t("form.sla"), sla_keys,
                             index=sla_keys.index(a["sla_key"]) if a.get("sla_key") in sla_keys else 0,
                             key=f"es_{aid}")
-                        ea_fecha = ea_c3.date_input("Fecha", value=_parse_date(a.get("fecha", "")) or date.today(), key=f"ef_{aid}")
+                        ea_fecha = ea_c3.date_input(t("form.date"), value=_parse_date(a.get("fecha", "")) or date.today(), key=f"ef_{aid}")
                         ea_c4, ea_c5 = st.columns(2)
-                        ea_objetivo = ea_c4.text_input("Objetivo", value=a.get("objetivo", ""), key=f"eo_{aid}")
-                        ea_dest = ea_c5.text_input("Destinatario", value=a.get("destinatario", ""), key=f"ed_{aid}")
+                        ea_objetivo = ea_c4.text_input(t("form.objective"), value=a.get("objetivo", ""), key=f"eo_{aid}")
+                        ea_dest = ea_c5.text_input(t("form.recipient"), value=a.get("destinatario", ""), key=f"ed_{aid}")
                         sla_rpta_keys = list(SLA_RESPUESTA.keys())
                         sla_rpta_vals = list(SLA_RESPUESTA.values())
                         cur_sla_idx = sla_rpta_vals.index(a.get("sla_respuesta_dias", 7)) if a.get("sla_respuesta_dias", 7) in sla_rpta_vals else 1
-                        ea_sla_rpta = st.selectbox("SLA Respuesta", sla_rpta_keys, index=cur_sla_idx, key=f"esr_{aid}")
-                        ea_desc = st.text_area("Descripción", value=a.get("descripcion", ""), height=60, key=f"edc_{aid}")
+                        ea_sla_rpta = st.selectbox(t("form.sla_response"), sla_rpta_keys, index=cur_sla_idx, key=f"esr_{aid}")
+                        ea_desc = st.text_area(t("form.description_only"), value=a.get("descripcion", ""), height=60, key=f"edc_{aid}")
                         fc1, fc2 = st.columns(2)
-                        if fc1.form_submit_button("💾 Guardar"):
+                        if fc1.form_submit_button(t("form.save")):
                             new_sla_hours = _sla_to_hours(ea_sla)
                             dal.update_activity(aid, {
-                                "tipo": ea_tipo, "sla_key": ea_sla, "sla_hours": new_sla_hours,
+                                "tipo": db_tipo(ea_tipo), "sla_key": ea_sla, "sla_hours": new_sla_hours,
                                 "fecha": str(ea_fecha), "objetivo": ea_objetivo,
                                 "destinatario": ea_dest, "sla_respuesta_dias": SLA_RESPUESTA[ea_sla_rpta],
                                 "descripcion": ea_desc,
@@ -2030,7 +2046,7 @@ if st.session_state.selected_id:
                     # Photo management (outside st.form)
                     edit_photos = a.get("photos") or []
                     if edit_photos:
-                        st.caption("Fotos actuales:")
+                        st.caption(t("form.current_photos"))
                         photo_cols = st.columns(min(len(edit_photos), 5))
                         for pi, p in enumerate(edit_photos):
                             with photo_cols[pi]:
@@ -2040,11 +2056,11 @@ if st.session_state.selected_id:
                                     st.rerun()
                     remaining = 5 - len(edit_photos)
                     if remaining > 0:
-                        new_photos = st.file_uploader(f"📷 Agregar fotos ({remaining} restantes)", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True, key=f"edit_photos_{aid}")
+                        new_photos = st.file_uploader(t("form.add_photos", n=remaining), type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True, key=f"edit_photos_{aid}")
                         if new_photos:
                             if len(new_photos) > remaining:
-                                st.warning(f"Máximo {remaining} fotos más. Solo se subirán las primeras {remaining}.")
-                            if st.button("📤 Subir fotos", key=f"upload_photos_{aid}"):
+                                st.warning(t("form.max_photos_warning", n=remaining))
+                            if st.button(t("form.upload_photos"), key=f"upload_photos_{aid}"):
                                 _upload_ok = True
                                 for photo in new_photos[:remaining]:
                                     if not dal.upload_activity_photo(team_id, aid, photo.name, photo.read(), photo.type):
@@ -2059,54 +2075,54 @@ if st.session_state.selected_id:
                     if move_options:
                         move_labels = list(move_options.values())
                         move_ids = list(move_options.keys())
-                        selected_label = st.selectbox("Mover a oportunidad:", move_labels, key=f"move_sel_{aid}")
+                        selected_label = st.selectbox(t("detail.move_to"), move_labels, key=f"move_sel_{aid}")
                         selected_idx = move_labels.index(selected_label)
                         mc1, mc2 = st.columns(2)
-                        if mc1.button("✅ Confirmar", key=f"move_ok_{aid}", use_container_width=True):
+                        if mc1.button(t("msg.confirm_btn"), key=f"move_ok_{aid}", use_container_width=True):
                             dal.move_activity(aid, move_ids[selected_idx])
                             st.session_state.pop(f"show_move_{aid}", None)
                             st.rerun()
-                        if mc2.button("Cancelar", key=f"move_no_{aid}", use_container_width=True):
+                        if mc2.button(t("msg.cancel_btn"), key=f"move_no_{aid}", use_container_width=True):
                             st.session_state.pop(f"show_move_{aid}", None)
                             st.rerun()
                     else:
-                        st.info("No hay otras oportunidades disponibles.")
-                        if st.button("Cerrar", key=f"move_close_{aid}"):
+                        st.info(t("msg.no_other_opps"))
+                        if st.button(t("msg.close"), key=f"move_close_{aid}"):
                             st.session_state.pop(f"show_move_{aid}", None)
                             st.rerun()
 
         if not activities:
-            st.info("No hay actividades registradas aún.")
+            st.info(t("msg.no_activities"))
 
     # --- Edit Opportunity (toggled from meta-bar) ---
     if st.session_state.get("show_edit_opp"):
         _edit_is_gtm = "GTM" in opp.get("categoria", "").strip().upper()
-        st.caption("✏️ Editar GTM" if _edit_is_gtm else "✏️ Editar Oportunidad")
+        st.caption(t("detail.edit_gtm") if _edit_is_gtm else t("detail.edit_opp"))
         with st.form("edit_opp"):
             ed_c1, ed_c2, ed_c3 = st.columns(3)
-            ed_cuenta = ed_c1.text_input("Cuenta", value=opp["cuenta"])
-            ed_proyecto = ed_c2.text_input("Proyecto", value=opp["proyecto"])
+            ed_cuenta = ed_c1.text_input(t("sidebar.account"), value=opp["cuenta"])
+            ed_proyecto = ed_c2.text_input(t("sidebar.project"), value=opp["proyecto"])
             if _edit_is_gtm:
                 _urg_opts = ["", "alta", "media", "baja"]
-                _urg_labels_edit = {"": "— Sin prioridad —", "alta": "🔴 Alta", "media": "🟡 Media", "baja": "🔵 Baja"}
+                _urg_labels_edit = {"": t("sidebar.no_priority"), "alta": t("sidebar.high"), "media": t("sidebar.medium"), "baja": t("sidebar.low")}
                 _cur_urg = opp.get("urgency") or ""
                 _cur_urg_idx = _urg_opts.index(_cur_urg) if _cur_urg in _urg_opts else 0
-                ed_urgency = ed_c3.selectbox("Prioridad", _urg_opts, index=_cur_urg_idx, format_func=lambda x: _urg_labels_edit[x])
-                ed_gtm_type = st.text_input("Tipo GTM", value=opp.get("gtm_type", "") or "")
+                ed_urgency = ed_c3.selectbox(t("sidebar.priority_gtm"), _urg_opts, index=_cur_urg_idx, format_func=lambda x: _urg_labels_edit[x])
+                ed_gtm_type = st.text_input(t("sidebar.gtm_type"), value=opp.get("gtm_type", "") or "")
             else:
-                ed_monto = ed_c3.number_input("Monto USD", value=float(opp.get("monto") or 0))
+                ed_monto = ed_c3.number_input(t("sidebar.amount_usd"), value=float(opp.get("monto") or 0))
             ed_c4, ed_c5, ed_c6 = st.columns(3)
-            ed_cat = ed_c4.selectbox("Categoría", CATEGORIAS, index=CATEGORIAS.index(opp["categoria"]) if opp["categoria"] in CATEGORIAS else 0)
-            ed_opp_id = ed_c5.text_input("Opportunity ID", value=opp.get("opp_id", ""))
-            ed_stage = ed_c6.text_input("Stage", value=opp.get("stage", ""))
-            ed_partner = st.text_input("Partner", value=opp.get("partner", ""))
+            ed_cat = ed_c4.selectbox(t("sidebar.category"), CATEGORIAS, index=CATEGORIAS.index(opp["categoria"]) if opp["categoria"] in CATEGORIAS else 0)
+            ed_opp_id = ed_c5.text_input(t("sidebar.opp_id"), value=opp.get("opp_id", ""))
+            ed_stage = ed_c6.text_input(t("sidebar.stage"), value=opp.get("stage", ""))
+            ed_partner = st.text_input(t("sidebar.partner"), value=opp.get("partner", ""))
             close_val = _parse_date(opp.get("close_date", ""))
-            ed_close = st.date_input("Close Date", value=close_val)
+            ed_close = st.date_input(t("sidebar.close_date"), value=close_val)
             # Campos dinámicos
             ed_extra = {}
             for ecol in EXTRA_OPP_COLS:
                 ed_extra[ecol] = st.text_input(ecol.replace("_", " ").title(), value=str(opp.get(ecol, "") or ""), key=f"ed_{ecol}")
-            if st.form_submit_button("💾 Guardar Cambios"):
+            if st.form_submit_button(t("form.save_changes")):
                 update_data = {
                     "cuenta": ed_cuenta, "proyecto": ed_proyecto,
                     "categoria": ed_cat,
@@ -2127,35 +2143,35 @@ if st.session_state.selected_id:
 
     # --- New Activity (toggled from meta-bar) ---
     if st.session_state.get("show_new_act"):
-        st.caption("➕ Nueva Actividad")
-        tipo = st.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"])
-        new_act_photos = st.file_uploader("📷 Fotos", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True, key="new_act_photos")
+        st.caption(t("detail.new_act_caption"))
+        tipo = st.selectbox(t("form.channel"), tipo_selectbox_options())
+        new_act_photos = st.file_uploader(t("form.photos"), type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True, key="new_act_photos")
         if new_act_photos and len(new_act_photos) > 5:
-            st.warning("Máximo 5 fotos por actividad.")
+            st.warning(t("form.max_5_photos"))
         with st.form("act_form"):
             c1, c2, c3 = st.columns(3)
-            sla_key = c1.selectbox("SLA", list(SLA_OPCIONES.keys()))
-            fecha = c2.date_input("Fecha", value=date.today())
-            objetivo = c3.text_input("Objetivo")
+            sla_key = c1.selectbox(t("form.sla"), list(SLA_OPCIONES.keys()))
+            fecha = c2.date_input(t("form.date"), value=date.today())
+            objetivo = c3.text_input(t("form.objective"))
             asignado_a_id = None
-            if tipo == "Asignación":
+            if db_tipo(tipo) == "Asignación":
                 c4, c5, c6 = st.columns(3)
-                destinatario = c4.text_input("Destinatario")
+                destinatario = c4.text_input(t("form.recipient"))
                 recurso_opciones = [""] + list(RECURSOS_PRESALES.values())
                 recurso_ids = [""] + list(RECURSOS_PRESALES.keys())
-                sel_idx = c5.selectbox("Asignado a", range(len(recurso_opciones)), format_func=lambda i: recurso_opciones[i])
+                sel_idx = c5.selectbox(t("form.assigned_to"), range(len(recurso_opciones)), format_func=lambda i: recurso_opciones[i])
                 if sel_idx > 0:
                     asignado_a_id = recurso_ids[sel_idx]
-                sla_rpta = c6.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
+                sla_rpta = c6.selectbox(t("form.sla_response"), list(SLA_RESPUESTA.keys()), index=1)
             else:
                 c4, c5 = st.columns(2)
-                destinatario = c4.text_input("Destinatario")
-                sla_rpta = c5.selectbox("SLA Respuesta", list(SLA_RESPUESTA.keys()), index=1)
-            desc = st.text_area("Descripción / Notas", height=80)
-            if st.form_submit_button("Guardar Actividad"):
+                destinatario = c4.text_input(t("form.recipient"))
+                sla_rpta = c5.selectbox(t("form.sla_response"), list(SLA_RESPUESTA.keys()), index=1)
+            desc = st.text_area(t("form.description"), height=80)
+            if st.form_submit_button(t("form.save_activity")):
                 sla_hours = _sla_to_hours(sla_key)
                 new_act = dal.create_activity(opp["id"], team_id, user_id, {
-                    "tipo": tipo, "fecha": str(fecha), "objetivo": objetivo,
+                    "tipo": db_tipo(tipo), "fecha": str(fecha), "objetivo": objetivo,
                     "descripcion": desc, "sla_key": sla_key, "sla_hours": sla_hours,
                     "sla_respuesta_dias": SLA_RESPUESTA[sla_rpta],
                     "destinatario": destinatario, "assigned_to": asignado_a_id,
@@ -2174,15 +2190,15 @@ if st.session_state.selected_id:
                 if _upload_ok:
                     st.rerun()
                 else:
-                    st.info("La actividad fue creada. Las fotos con error no se subieron.")
+                    st.info(t("form.activity_created_photo_error"))
 
 else:
     # --- VISTAS PRINCIPALES ---
-    _cal_tab_label = f"📅 Calendario ({_cal_inbox_count})" if _cal_inbox_count > 0 else "📅 Calendario"
-    tabs = ["📊 Tablero", "📋 Actividades", "📜 Historial", "📈 Performance", _cal_tab_label, "✈️ Viajes"]
+    _cal_tab_label = t("tabs.calendario_count", n=_cal_inbox_count) if _cal_inbox_count > 0 else t("tabs.calendario")
+    tabs = [t("tabs.tablero"), t("tabs.actividades"), t("tabs.historial"), t("tabs.performance"), _cal_tab_label, t("tabs.viajes")]
     if has_control_access():
-        tabs.append("📊 Control")
-    tabs.append("👥 Equipo")
+        tabs.append(t("tabs.control"))
+    tabs.append(t("tabs.equipo"))
 
     selected_tabs = st.tabs(tabs)
 
@@ -2231,29 +2247,29 @@ else:
             bulk_sel_col, bulk_act_col = st.columns([0.75, 0.25])
             with bulk_sel_col:
                 bulk_ids = st.multiselect(
-                    "Seleccionar para eliminar",
+                    t("detail.select_delete"),
                     options=list(opp_options.keys()),
                     format_func=lambda oid: opp_options.get(oid, oid),
                     key="bulk_del_select",
-                    placeholder="Seleccionar scorecards para eliminar en lote...",
+                    placeholder=t("detail.bulk_placeholder"),
                     label_visibility="collapsed",
                 )
             with bulk_act_col:
                 if bulk_ids:
-                    if st.button(f"🗑 Eliminar {len(bulk_ids)} seleccionados", key="bulk_del_btn", use_container_width=True, type="primary"):
+                    if st.button(t("detail.delete_selected", n=len(bulk_ids)), key="bulk_del_btn", use_container_width=True, type="primary"):
                         st.session_state.bulk_del_confirm = list(bulk_ids)
                         st.rerun()
             if st.session_state.get("bulk_del_confirm"):
                 ids_to_del = st.session_state.bulk_del_confirm
                 names = [opp_options.get(oid, oid) for oid in ids_to_del]
-                st.warning(f"¿Eliminar **{len(ids_to_del)}** oportunidades?\n\n" + ", ".join(names))
+                st.warning(t("msg.delete_confirm", n=len(ids_to_del), names=", ".join(names)))
                 bd1, bd2 = st.columns(2)
-                if bd1.button("Confirmar eliminación", key="bulk_del_yes", use_container_width=True):
+                if bd1.button(t("msg.confirm_delete"), key="bulk_del_yes", use_container_width=True):
                     for oid in ids_to_del:
                         dal.delete_opportunity(oid)
                     st.session_state.pop("bulk_del_confirm", None)
                     st.rerun()
-                if bd2.button("Cancelar", key="bulk_del_no", use_container_width=True):
+                if bd2.button(t("msg.cancel_btn"), key="bulk_del_no", use_container_width=True):
                     st.session_state.pop("bulk_del_confirm", None)
                     st.rerun()
 
@@ -2295,7 +2311,7 @@ else:
                 if o.get("opp_id"):
                     right_parts.append(f'<span class="opp-id-box">{o["opp_id"]}</span>')
                 if o.get("close_date"):
-                    right_parts.append(f'<span class="close-date">Cierre: {_fmt_date(o["close_date"])}</span>')
+                    right_parts.append(f'<span class="close-date">{t("detail.close_label", date=_fmt_date(o["close_date"]))}</span>')
                 right_html = f'<div class="opp-right">{"".join(right_parts)}</div>'
                 header_html = f'<div class="opp-top"><div class="opp-left">{name_html}{row2_html}</div>{right_html}</div>'
                 partner_val = (o.get("partner") or "").strip()
@@ -2322,7 +2338,7 @@ else:
                     asig_init = _get_initials(asig_name) if asig_name else ""
                     asig = f' <span class="act-asig">{asig_init}</span>' if asig_init else ""
                     resp_dt = f' — {_fmt_date(a["respondida_ts"])}' if a.get("estado") == "Respondida" and a.get("respondida_ts") else ''
-                    display_label = "Reunión Completada" if a.get("tipo") == "Reunión" and a.get("estado") == "Respondida" else label
+                    display_label = t("estado.reunion_completada") if a.get("tipo") == "Reunión" and a.get("estado") == "Respondida" else label
                     status_html = f'<span class="act-status">{display_label}{resp_dt}</span>'
                     # Color border-left by activity type
                     tipo = a.get("tipo", "")
@@ -2427,17 +2443,21 @@ else:
         if st.button("TOGGLE_EDIT", key="toggle_edit_mode"):
             st.session_state["bulk_edit_mode"] = not st.session_state.get("bulk_edit_mode", False)
             st.rerun()
+        if st.button("TOGGLE_LANG", key="btn_toggle_lang"):
+            new_lang = "en" if get_lang() == "es" else "es"
+            set_lang(new_lang)
+            st.rerun()
 
     # --- TAB: ACTIVIDADES ---
     with selected_tabs[1]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
 
-        ALL_COLUMNS = ["Semáforo", "Estado", "Categoría", "Cuenta", "Proyecto", "Monto USD", "Canal", "Objetivo", "Destinatario", "Asignado a", "Fecha", "SLA", "SLA Respuesta (días)", "Estado Interno", "Feedback", "Descripción"]
-        DEFAULT_COLUMNS = ["Semáforo", "Estado", "Categoría", "Cuenta", "Proyecto", "Canal", "Objetivo", "Destinatario", "Fecha", "Estado Interno"]
+        ALL_COLUMNS = [t("col.semaforo"), t("col.estado"), t("col.categoria"), t("col.cuenta"), t("col.proyecto"), t("col.monto_usd"), t("col.canal"), t("col.objetivo"), t("col.destinatario"), t("col.asignado_a"), t("col.fecha"), t("col.sla"), t("col.sla_response_days"), t("col.estado_interno"), t("col.feedback"), t("col.descripcion")]
+        DEFAULT_COLUMNS = [t("col.semaforo"), t("col.estado"), t("col.categoria"), t("col.cuenta"), t("col.proyecto"), t("col.canal"), t("col.objetivo"), t("col.destinatario"), t("col.fecha"), t("col.estado_interno")]
 
         # Filter: my tasks vs team tasks
-        scope_options = ["📋 Mis tareas", "👥 Tareas del equipo", "🌐 Todas"]
-        act_scope = st.radio("Vista", scope_options, horizontal=True, key="act_scope", index=2)
+        scope_options = [t("scope.my_tasks"), t("scope.team_tasks"), t("scope.all")]
+        act_scope = st.radio(t("scope.view"), scope_options, horizontal=True, key="act_scope", index=2)
 
         if can_see_all_opportunities():
             all_activities_full = _ss_cache("_c_acts", dal.get_all_activities, team_id)
@@ -2445,9 +2465,9 @@ else:
             all_activities_full = _ss_cache("_c_acts_user", dal.get_all_activities_for_user, team_id, user_id, user["role"])
 
         # Apply scope filter
-        if act_scope == "📋 Mis tareas":
+        if act_scope == t("scope.my_tasks"):
             all_activities_full = [a for a in all_activities_full if a.get("assigned_to") == user_id or a.get("created_by") == user_id]
-        elif act_scope == "👥 Tareas del equipo":
+        elif act_scope == t("scope.team_tasks"):
             pass  # show all team activities (already filtered by team_id)
 
         all_activities_full.sort(key=_act_status_order)
@@ -2466,59 +2486,59 @@ else:
 
             all_acts_display.append({
                 "_sort": _act_status_order(a),
-                "Semáforo": light,
-                "Estado": label,
-                "Categoría": opp_data.get("categoria", ""),
-                "Cuenta": opp_data.get("cuenta", ""),
-                "Proyecto": opp_data.get("proyecto", ""),
-                "Monto USD": opp_data.get("monto", 0),
-                "Canal": a.get("tipo", ""),
-                "Objetivo": a.get("objetivo", ""),
-                "Destinatario": a.get("destinatario", ""),
-                "Asignado a": assigned_name,
-                "Fecha": _fmt_date(a.get("fecha", "")),
-                "SLA": a.get("sla_key", ""),
-                "SLA Respuesta (días)": a.get("sla_respuesta_dias", ""),
-                "Estado Interno": a.get("estado", ""),
-                "Feedback": a.get("feedback", ""),
-                "Descripción": a.get("descripcion", ""),
+                t("col.semaforo"): light,
+                t("col.estado"): label,
+                t("col.categoria"): opp_data.get("categoria", ""),
+                t("col.cuenta"): opp_data.get("cuenta", ""),
+                t("col.proyecto"): opp_data.get("proyecto", ""),
+                t("col.monto_usd"): opp_data.get("monto", 0),
+                t("col.canal"): display_tipo(a.get("tipo", "")),
+                t("col.objetivo"): a.get("objetivo", ""),
+                t("col.destinatario"): a.get("destinatario", ""),
+                t("col.asignado_a"): assigned_name,
+                t("col.fecha"): _fmt_date(a.get("fecha", "")),
+                t("col.sla"): a.get("sla_key", ""),
+                t("col.sla_response_days"): a.get("sla_respuesta_dias", ""),
+                t("col.estado_interno"): display_estado(a.get("estado", "")),
+                t("col.feedback"): a.get("feedback", ""),
+                t("col.descripcion"): a.get("descripcion", ""),
             })
             act_refs.append(a)
 
         if not all_acts_display:
-            st.info("No hay actividades registradas aún.")
+            st.info(t("msg.no_activities_table"))
         else:
             if 'act_columns' not in st.session_state:
                 st.session_state.act_columns = DEFAULT_COLUMNS
-            selected_cols = st.multiselect("Columnas visibles", ALL_COLUMNS, default=st.session_state.act_columns, key="col_selector")
+            selected_cols = st.multiselect(t("scope.visible_cols"), ALL_COLUMNS, default=st.session_state.act_columns, key="col_selector")
             st.session_state.act_columns = selected_cols
 
             fc1, fc2, fc3, fc4 = st.columns(4)
-            cats_disponibles = sorted(set(r["Categoría"] for r in all_acts_display))
-            fil_cat = fc1.multiselect("Categoría", cats_disponibles, default=cats_disponibles)
-            estados_disponibles = sorted(set(r["Estado Interno"] for r in all_acts_display))
-            fil_estado = fc2.multiselect("Estado", estados_disponibles, default=estados_disponibles)
-            canales_disponibles = sorted(set(r["Canal"] for r in all_acts_display))
-            fil_canal = fc3.multiselect("Canal", canales_disponibles, default=canales_disponibles)
-            cuentas_disponibles = sorted(set(r["Cuenta"] for r in all_acts_display))
-            fil_cuenta = fc4.multiselect("Cuenta", cuentas_disponibles, default=cuentas_disponibles)
+            cats_disponibles = sorted(set(r[t("col.categoria")] for r in all_acts_display))
+            fil_cat = fc1.multiselect(t("scope.category"), cats_disponibles, default=cats_disponibles)
+            estados_disponibles = sorted(set(r[t("col.estado_interno")] for r in all_acts_display))
+            fil_estado = fc2.multiselect(t("scope.estado"), estados_disponibles, default=estados_disponibles)
+            canales_disponibles = sorted(set(r[t("col.canal")] for r in all_acts_display))
+            fil_canal = fc3.multiselect(t("scope.channel"), canales_disponibles, default=canales_disponibles)
+            cuentas_disponibles = sorted(set(r[t("col.cuenta")] for r in all_acts_display))
+            fil_cuenta = fc4.multiselect(t("scope.account"), cuentas_disponibles, default=cuentas_disponibles)
 
             df_acts = pd.DataFrame(all_acts_display)
             mask = (
-                (df_acts["Categoría"].isin(fil_cat)) &
-                (df_acts["Estado Interno"].isin(fil_estado)) &
-                (df_acts["Canal"].isin(fil_canal)) &
-                (df_acts["Cuenta"].isin(fil_cuenta))
+                (df_acts[t("col.categoria")].isin(fil_cat)) &
+                (df_acts[t("col.estado_interno")].isin(fil_estado)) &
+                (df_acts[t("col.canal")].isin(fil_canal)) &
+                (df_acts[t("col.cuenta")].isin(fil_cuenta))
             )
             df_filtered = df_acts[mask]
 
             st.divider()
             m1, m2, m3, m4, m5 = st.columns(5)
-            m1.metric("Total", len(df_filtered))
-            m2.metric("Pendientes", len(df_filtered[df_filtered["Estado Interno"] == "Pendiente"]))
-            m3.metric("Enviadas", len(df_filtered[df_filtered["Estado Interno"] == "Enviada"]))
-            m4.metric("Respondidas", len(df_filtered[df_filtered["Estado Interno"] == "Respondida"]))
-            m5.metric("🟥 Bloqueadas/Vencidas", len(df_filtered[df_filtered["Estado"].isin(["Bloqueada", "Vencida"])]))
+            m1.metric(t("metrics.total"), len(df_filtered))
+            m2.metric(t("metrics.pending"), len(df_filtered[df_filtered[t("col.estado_interno")] == "Pendiente"]))
+            m3.metric(t("metrics.sent"), len(df_filtered[df_filtered[t("col.estado_interno")] == "Enviada"]))
+            m4.metric(t("metrics.responded"), len(df_filtered[df_filtered[t("col.estado_interno")] == "Respondida"]))
+            m5.metric(t("metrics.blocked_expired"), len(df_filtered[df_filtered[t("col.estado")].isin([t("estado.bloqueada"), t("estado.vencida")])]))
 
             st.divider()
             sorted_indices = df_filtered.sort_values("_sort").index.tolist()
@@ -2542,15 +2562,15 @@ else:
                 if st.session_state.get("edit_act_tab_idx") == row_idx:
                     with st.form(f"edit_act_tab_{row_idx}"):
                         ea_c1, ea_c2, ea_c3 = st.columns(3)
-                        ea_tipo = ea_c1.selectbox("Canal", ["Email", "Llamada", "Reunión", "Asignación"],
-                            index=["Email", "Llamada", "Reunión", "Asignación"].index(a_ref.get("tipo", "Email")) if a_ref.get("tipo") in ["Email", "Llamada", "Reunión", "Asignación"] else 0)
+                        ea_tipo = ea_c1.selectbox(t("form.channel"), tipo_selectbox_options(),
+                            index=tipo_selectbox_index(a_ref.get("tipo", "Email")))
                         sla_keys = list(SLA_OPCIONES.keys())
-                        ea_sla = ea_c2.selectbox("SLA", sla_keys,
+                        ea_sla = ea_c2.selectbox(t("form.sla"), sla_keys,
                             index=sla_keys.index(a_ref["sla_key"]) if a_ref.get("sla_key") in sla_keys else 0)
-                        ea_fecha = ea_c3.date_input("Fecha", value=_parse_date(a_ref.get("fecha", "")) or date.today())
-                        ea_objetivo = st.text_input("Objetivo", value=a_ref.get("objetivo", ""))
+                        ea_fecha = ea_c3.date_input(t("form.date"), value=_parse_date(a_ref.get("fecha", "")) or date.today())
+                        ea_objetivo = st.text_input(t("form.objective"), value=a_ref.get("objetivo", ""))
                         ea_c4, ea_c5, ea_c6 = st.columns(3)
-                        ea_dest = ea_c4.text_input("Destinatario", value=a_ref.get("destinatario", ""))
+                        ea_dest = ea_c4.text_input(t("form.recipient"), value=a_ref.get("destinatario", ""))
                         # Asignado selector
                         recurso_opciones_tab = [""] + list(RECURSOS_PRESALES.values())
                         recurso_ids_tab = [""] + list(RECURSOS_PRESALES.keys())
@@ -2558,37 +2578,37 @@ else:
                         assigned_idx = 0
                         if current_assigned and current_assigned in recurso_ids_tab:
                             assigned_idx = recurso_ids_tab.index(current_assigned)
-                        ea_asig_idx = ea_c5.selectbox("Asignado a", range(len(recurso_opciones_tab)), format_func=lambda i: recurso_opciones_tab[i], index=assigned_idx)
+                        ea_asig_idx = ea_c5.selectbox(t("form.assigned_to"), range(len(recurso_opciones_tab)), format_func=lambda i: recurso_opciones_tab[i], index=assigned_idx)
                         sla_rpta_keys = list(SLA_RESPUESTA.keys())
                         sla_rpta_vals = list(SLA_RESPUESTA.values())
                         cur_sla_idx = sla_rpta_vals.index(a_ref.get("sla_respuesta_dias", 7)) if a_ref.get("sla_respuesta_dias", 7) in sla_rpta_vals else 1
-                        ea_sla_rpta = ea_c6.selectbox("SLA Respuesta", sla_rpta_keys, index=cur_sla_idx)
-                        ea_estado = st.selectbox("Estado", ["Pendiente", "Enviada", "Respondida"],
-                            index=["Pendiente", "Enviada", "Respondida"].index(a_ref.get("estado", "Pendiente")) if a_ref.get("estado") in ["Pendiente", "Enviada", "Respondida"] else 0)
-                        ea_fb_label = "Resumen de la Reunión" if a_ref.get("tipo") == "Reunión" else "Feedback"
+                        ea_sla_rpta = ea_c6.selectbox(t("form.sla_response"), sla_rpta_keys, index=cur_sla_idx)
+                        ea_estado = st.selectbox(t("form.estado"), estado_selectbox_options(),
+                            index=estado_selectbox_index(a_ref.get("estado", "Pendiente")))
+                        ea_fb_label = t("form.meeting_summary") if a_ref.get("tipo") == "Reunión" else t("form.feedback")
                         ea_feedback = st.text_area(ea_fb_label, value=a_ref.get("feedback", ""))
-                        ea_desc = st.text_area("Descripción", value=a_ref.get("descripcion", ""))
-                        if st.form_submit_button("💾 Guardar"):
+                        ea_desc = st.text_area(t("form.description_only"), value=a_ref.get("descripcion", ""))
+                        if st.form_submit_button(t("form.save")):
                             new_assigned = recurso_ids_tab[ea_asig_idx] if ea_asig_idx > 0 else None
                             new_sla_hours = _sla_to_hours(ea_sla)
                             dal.update_activity(a_ref["id"], {
-                                "tipo": ea_tipo, "sla_key": ea_sla, "sla_hours": new_sla_hours,
+                                "tipo": db_tipo(ea_tipo), "sla_key": ea_sla, "sla_hours": new_sla_hours,
                                 "fecha": str(ea_fecha), "objetivo": ea_objetivo,
                                 "destinatario": ea_dest, "assigned_to": new_assigned,
                                 "sla_respuesta_dias": SLA_RESPUESTA[ea_sla_rpta],
-                                "estado": ea_estado, "feedback": ea_feedback,
+                                "estado": db_estado(ea_estado), "feedback": ea_feedback,
                                 "descripcion": ea_desc,
                             })
                             st.session_state.pop("edit_act_tab_idx", None)
                             st.rerun()
-                    if st.button("❌ Cerrar", key=f"close_eab_{row_idx}"):
+                    if st.button(t("detail.close_btn"), key=f"close_eab_{row_idx}"):
                         st.session_state.pop("edit_act_tab_idx", None)
                         st.rerun()
 
     # --- TAB: HISTORIAL ---
     with selected_tabs[2]:
         st.markdown(user_bar_html, unsafe_allow_html=True)
-        st.markdown("### 📜 Historial de Interacciones")
+        st.markdown(t("history.title"))
 
         # Fetch activities (respects role permissions)
         if can_see_all_opportunities():
@@ -2597,30 +2617,30 @@ else:
             hist_activities = _ss_cache("_c_acts_user", dal.get_all_activities_for_user, team_id, user_id, user["role"])
 
         # Grouping selector
-        group_options = ["Cuenta", "Proyecto", "Destinatario", "Asignado a"]
-        hist_group = st.radio("Agrupar por", group_options, horizontal=True, key="historial_group_by")
+        group_options = [t("history.group_account"), t("history.group_project"), t("history.group_recipient"), t("history.group_assigned")]
+        hist_group = st.radio(t("history.group_by"), group_options, horizontal=True, key="historial_group_by")
 
         # Build groups
         hist_groups = {}
         for a in hist_activities:
             opp = a.get("opportunity", {}) or {}
-            if hist_group == "Cuenta":
-                key = opp.get("cuenta", "Sin cuenta") or "Sin cuenta"
-            elif hist_group == "Proyecto":
-                key = opp.get("proyecto", "Sin proyecto") or "Sin proyecto"
-            elif hist_group == "Destinatario":
-                key = a.get("destinatario", "Sin destinatario") or "Sin destinatario"
+            if hist_group == t("history.group_account"):
+                key = opp.get("cuenta", t("history.no_account")) or t("history.no_account")
+            elif hist_group == t("history.group_project"):
+                key = opp.get("proyecto", t("history.no_project")) or t("history.no_project")
+            elif hist_group == t("history.group_recipient"):
+                key = a.get("destinatario", t("history.no_recipient")) or t("history.no_recipient")
             else:  # Asignado a
                 if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
                     key = a["assigned_profile"]["full_name"]
                 elif a.get("creator_profile") and a["creator_profile"].get("full_name"):
                     key = a["creator_profile"]["full_name"]
                 else:
-                    key = "Sin asignar"
+                    key = t("history.no_assigned")
             hist_groups.setdefault(key, []).append(a)
 
         # Search filter
-        hist_search = st.text_input("🔍 Buscar", key="hist_search", placeholder="Filtrar grupos...")
+        hist_search = st.text_input(t("history.search"), key="hist_search", placeholder=t("history.search_placeholder"))
         hist_metro = st.session_state.get("historial_metro_view", False)
         if hist_search:
             hist_groups = {k: v for k, v in hist_groups.items() if hist_search.lower() in k.lower()}
@@ -2628,16 +2648,16 @@ else:
         sorted_groups = sorted(hist_groups.items(), key=lambda x: x[0].lower())
 
         if not sorted_groups:
-            st.info("No se encontraron interacciones.")
+            st.info(t("msg.no_interactions"))
         else:
             # Layout: desktop side-by-side, mobile stacked
             if is_mobile:
                 # --- Mobile: group list then timeline ---
                 for g_name, g_acts in sorted_groups:
                     n_pend = len([a for a in g_acts if a.get("estado") == "Pendiente"])
-                    n_env = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] != "Bloqueada"])
+                    n_env = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] != t("estado.bloqueada")])
                     n_resp = len([a for a in g_acts if a.get("estado") == "Respondida"])
-                    n_bloq = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] == "Bloqueada"])
+                    n_bloq = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] == t("estado.bloqueada")])
                     dots = ""
                     if n_pend: dots += f'<span class="historial-dot historial-dot-pendiente"></span> {n_pend} '
                     if n_env: dots += f'<span class="historial-dot historial-dot-enviada"></span> {n_env} '
@@ -2645,8 +2665,8 @@ else:
                     if n_bloq: dots += f'<span class="historial-dot historial-dot-bloqueada"></span> {n_bloq} '
                     is_sel = st.session_state.historial_selected == g_name
                     cls = "historial-item active" if is_sel else "historial-item"
-                    st.markdown(f'<div class="{cls}"><div class="historial-name">{g_name}</div><div class="historial-stats"><span class="historial-count">{len(g_acts)} actividades</span> {dots}</div></div>', unsafe_allow_html=True)
-                    if st.button(f"Ver {g_name}", key=f"hsel_{g_name}", use_container_width=True):
+                    st.markdown(f'<div class="{cls}"><div class="historial-name">{g_name}</div><div class="historial-stats"><span class="historial-count">{t("history.activities_count", n=len(g_acts))}</span> {dots}</div></div>', unsafe_allow_html=True)
+                    if st.button(f"{t('history.view')} {g_name}", key=f"hsel_{g_name}", use_container_width=True):
                         st.session_state.historial_selected = g_name if not is_sel else None
                         st.rerun()
                     if is_sel:
@@ -2659,7 +2679,7 @@ else:
                         _toggle_html = f'<span class="hist-metro-toggle{_mt_active}"><span class="toggle-label">🚇 Línea</span><span class="toggle-track"><span class="toggle-knob"></span></span></span>'
                         st.markdown(f'''<div class="timeline-header">
                             <div class="tl-name">{g_name}</div>
-                            <div class="tl-stats"><span>Total: {len(timeline_acts)}</span><span style="color:#fbbf24;">Pendientes: {t_pend}</span><span style="color:#a78bfa;">Enviadas: {t_env}</span><span style="color:#4ade80;">Respondidas: {t_resp}</span>{_toggle_html}</div>
+                            <div class="tl-stats"><span>{t("history.total", n=len(timeline_acts))}</span><span style="color:#fbbf24;">{t("history.pending", n=t_pend)}</span><span style="color:#a78bfa;">{t("history.sent", n=t_env)}</span><span style="color:#4ade80;">{t("history.responded", n=t_resp)}</span>{_toggle_html}</div>
                         </div>''', unsafe_allow_html=True)
                         if st.button("🚇 HIST_METRO", key=f"hist_metro_mob_{g_name}"):
                             st.session_state["historial_metro_view"] = not st.session_state.get("historial_metro_view", False)
@@ -2667,9 +2687,9 @@ else:
                         if hist_metro:
                             def _hist_ctx(a):
                                 opp = a.get("opportunity", {}) or {}
-                                if hist_group != "Proyecto":
+                                if hist_group != t("history.group_project"):
                                     return f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
-                                elif hist_group != "Cuenta":
+                                elif hist_group != t("history.group_account"):
                                     return f'<div class="timeline-opp-ctx">🏢 {opp.get("cuenta", "")}</div>'
                                 return ""
                             metro_html = '<div class="metro-timeline">' + ''.join(_metro_station_html(a, _hist_ctx(a)) for a in timeline_acts) + '</div>'
@@ -2680,23 +2700,23 @@ else:
                                 tipo_lower = a.get("tipo", "").lower().replace("ó", "o")
                                 tipo_class = f'tipo-{tipo_lower}' if a.get("tipo") else ""
                                 light, label = _traffic_light(a)
-                                if a["estado"] == "Enviada" and label == "Bloqueada":
+                                if a["estado"] == "Enviada" and label == t("estado.bloqueada"):
                                     card_cls = f"timeline-card {tipo_class} bloqueada"
-                                    est_pill = '<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 BLOQUEADA</span>'
+                                    est_pill = f'<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 {t("estado.bloqueada")}</span>'
                                 elif a["estado"] == "Enviada":
                                     card_cls = f"timeline-card {tipo_class} enviada"
-                                    est_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
+                                    est_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 {display_estado("Enviada")} — {label}</span>'
                                 elif a["estado"] == "Respondida":
                                     card_cls = f"timeline-card {tipo_class} respondida"
                                     resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
-                                    resp_label = "Reunión Completada" if a.get("tipo") == "Reunión" else "Respondida"
+                                    resp_label = t("estado.reunion_completada") if a.get("tipo") == "Reunión" else display_estado("Respondida")
                                     est_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 {resp_label}{resp_date}</span>'
                                 elif a["estado"] == "Pendiente":
                                     card_cls = f"timeline-card {tipo_class} pendiente"
-                                    if a.get("tipo") == "Reunión" and "Programada" in label:
+                                    if a.get("tipo") == "Reunión" and t("estado.programada", date="").strip() in label:
                                         est_pill = f'<span class="act-estado" style="color:#1d4ed8;background:#dbeafe;">{label}</span>'
                                     else:
-                                        est_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
+                                        est_pill = f'<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 {display_estado("Pendiente")}</span>'
                                 else:
                                     card_cls = f"timeline-card {tipo_class}"
                                     est_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
@@ -2708,19 +2728,19 @@ else:
                                 tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
                                 tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
                                 tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
-                                tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
+                                tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {display_tipo(a["tipo"])}</span>'
                                 obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
                                 dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
                                 asig_initials = _get_initials(assigned_name) if assigned_name else ""
                                 asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                                 fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
                                 desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
-                                fb_label = "Resumen de la Reunión" if a.get("tipo") == "Reunión" else "Feedback"
+                                fb_label = t("form.meeting_summary") if a.get("tipo") == "Reunión" else t("form.feedback")
                                 fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
                                 ctx_html = ""
-                                if hist_group != "Proyecto":
+                                if hist_group != t("history.group_project"):
                                     ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
-                                elif hist_group != "Cuenta":
+                                elif hist_group != t("history.group_account"):
                                     ctx_html = f'<div class="timeline-opp-ctx">🏢 {opp.get("cuenta", "")}</div>'
                                 meeting_html = _meeting_audit_html(a) if a.get("tipo") == "Reunión" else ''
                                 meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{est_pill}{fecha_html}'
@@ -2731,9 +2751,9 @@ else:
                 with col_list:
                     for g_name, g_acts in sorted_groups:
                         n_pend = len([a for a in g_acts if a.get("estado") == "Pendiente"])
-                        n_env = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] != "Bloqueada"])
+                        n_env = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] != t("estado.bloqueada")])
                         n_resp = len([a for a in g_acts if a.get("estado") == "Respondida"])
-                        n_bloq = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] == "Bloqueada"])
+                        n_bloq = len([a for a in g_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] == t("estado.bloqueada")])
                         dots = ""
                         if n_pend: dots += f'<span class="historial-dot historial-dot-pendiente"></span> {n_pend} '
                         if n_env: dots += f'<span class="historial-dot historial-dot-enviada"></span> {n_env} '
@@ -2741,7 +2761,7 @@ else:
                         if n_bloq: dots += f'<span class="historial-dot historial-dot-bloqueada"></span> {n_bloq} '
                         is_sel = st.session_state.historial_selected == g_name
                         cls = "historial-item active" if is_sel else "historial-item"
-                        st.markdown(f'<div class="{cls}"><div class="historial-name">{g_name}</div><div class="historial-stats"><span class="historial-count">{len(g_acts)} actividades</span> {dots}</div></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="{cls}"><div class="historial-name">{g_name}</div><div class="historial-stats"><span class="historial-count">{t("history.activities_count", n=len(g_acts))}</span> {dots}</div></div>', unsafe_allow_html=True)
                         if st.button(f"{'📌 ' if is_sel else ''}{g_name}", key=f"hsel_{g_name}", use_container_width=True):
                             st.session_state.historial_selected = g_name if not is_sel else None
                             st.rerun()
@@ -2757,7 +2777,7 @@ else:
                         _toggle_html_d = f'<span class="hist-metro-toggle{_mt_active_d}"><span class="toggle-label">🚇 Línea</span><span class="toggle-track"><span class="toggle-knob"></span></span></span>'
                         st.markdown(f'''<div class="timeline-header">
                             <div class="tl-name">{sel_name}</div>
-                            <div class="tl-stats"><span>Total: {len(timeline_acts)}</span><span style="color:#fbbf24;">Pendientes: {t_pend}</span><span style="color:#a78bfa;">Enviadas: {t_env}</span><span style="color:#4ade80;">Respondidas: {t_resp}</span>{_toggle_html_d}</div>
+                            <div class="tl-stats"><span>{t("history.total", n=len(timeline_acts))}</span><span style="color:#fbbf24;">{t("history.pending", n=t_pend)}</span><span style="color:#a78bfa;">{t("history.sent", n=t_env)}</span><span style="color:#4ade80;">{t("history.responded", n=t_resp)}</span>{_toggle_html_d}</div>
                         </div>''', unsafe_allow_html=True)
                         if st.button("🚇 HIST_METRO", key="hist_metro_desk"):
                             st.session_state["historial_metro_view"] = not st.session_state.get("historial_metro_view", False)
@@ -2765,9 +2785,9 @@ else:
                         if hist_metro:
                             def _hist_ctx_d(a):
                                 opp = a.get("opportunity", {}) or {}
-                                if hist_group != "Proyecto":
+                                if hist_group != t("history.group_project"):
                                     return f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
-                                elif hist_group != "Cuenta":
+                                elif hist_group != t("history.group_account"):
                                     return f'<div class="timeline-opp-ctx">🏢 {opp.get("cuenta", "")}</div>'
                                 return ""
                             metro_html = '<div class="metro-timeline">' + ''.join(_metro_station_html(a, _hist_ctx_d(a)) for a in timeline_acts) + '</div>'
@@ -2778,23 +2798,23 @@ else:
                                 tipo_lower = a.get("tipo", "").lower().replace("ó", "o")
                                 tipo_class = f'tipo-{tipo_lower}' if a.get("tipo") else ""
                                 light, label = _traffic_light(a)
-                                if a["estado"] == "Enviada" and label == "Bloqueada":
+                                if a["estado"] == "Enviada" and label == t("estado.bloqueada"):
                                     card_cls = f"timeline-card {tipo_class} bloqueada"
-                                    est_pill = '<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 BLOQUEADA</span>'
+                                    est_pill = f'<span class="act-estado" style="color:#ef4444;background:#fef2f2;">🟥 {t("estado.bloqueada")}</span>'
                                 elif a["estado"] == "Enviada":
                                     card_cls = f"timeline-card {tipo_class} enviada"
-                                    est_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 Enviada — {label}</span>'
+                                    est_pill = f'<span class="act-estado" style="color:#7c3aed;background:#ede9fe;">🟪 {display_estado("Enviada")} — {label}</span>'
                                 elif a["estado"] == "Respondida":
                                     card_cls = f"timeline-card {tipo_class} respondida"
                                     resp_date = f' — {_fmt_date(a["respondida_ts"])}' if a.get("respondida_ts") else ''
-                                    resp_label = "Reunión Completada" if a.get("tipo") == "Reunión" else "Respondida"
+                                    resp_label = t("estado.reunion_completada") if a.get("tipo") == "Reunión" else display_estado("Respondida")
                                     est_pill = f'<span class="act-estado" style="color:#047857;background:#d1fae5;">🟩 {resp_label}{resp_date}</span>'
                                 elif a["estado"] == "Pendiente":
                                     card_cls = f"timeline-card {tipo_class} pendiente"
-                                    if a.get("tipo") == "Reunión" and "Programada" in label:
+                                    if a.get("tipo") == "Reunión" and t("estado.programada", date="").strip() in label:
                                         est_pill = f'<span class="act-estado" style="color:#1d4ed8;background:#dbeafe;">{label}</span>'
                                     else:
-                                        est_pill = '<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 Pendiente</span>'
+                                        est_pill = f'<span class="act-estado" style="color:#d97706;background:#fef3c7;">🟨 {display_estado("Pendiente")}</span>'
                                 else:
                                     card_cls = f"timeline-card {tipo_class}"
                                     est_pill = f'<span class="act-estado" style="color:#64748b;background:#f1f5f9;">{a["estado"]}</span>'
@@ -2806,25 +2826,25 @@ else:
                                 tipo_icons = {"Email": "📧", "Llamada": "📞", "Reunión": "🤝", "Asignación": "👤"}
                                 tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
                                 tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
-                                tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {a["tipo"]}</span>'
+                                tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {display_tipo(a["tipo"])}</span>'
                                 obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
                                 dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
                                 asig_initials = _get_initials(assigned_name) if assigned_name else ""
                                 asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                                 fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
                                 desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
-                                fb_label = "Resumen de la Reunión" if a.get("tipo") == "Reunión" else "Feedback"
+                                fb_label = t("form.meeting_summary") if a.get("tipo") == "Reunión" else t("form.feedback")
                                 fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
                                 ctx_html = ""
-                                if hist_group != "Proyecto":
+                                if hist_group != t("history.group_project"):
                                     ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
-                                elif hist_group != "Cuenta":
+                                elif hist_group != t("history.group_account"):
                                     ctx_html = f'<div class="timeline-opp-ctx">🏢 {opp.get("cuenta", "")}</div>'
                                 meeting_html = _meeting_audit_html(a) if a.get("tipo") == "Reunión" else ''
                                 meta_row = f'{tipo_html}{asig_html}{dest_html}{obj_html}{est_pill}{fecha_html}'
                                 st.markdown(f'<div class="{card_cls}"><div class="act-top"><div class="act-meta-row">{meta_row}</div></div>{desc_html}{fb_html}{meeting_html}{ctx_html}</div>', unsafe_allow_html=True)
                     else:
-                        st.markdown('<div style="text-align:center;color:#94a3b8;padding:40px;font-size:0.9rem;">← Seleccioná un grupo para ver su historial cronológico</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div style="text-align:center;color:#94a3b8;padding:40px;font-size:0.9rem;">{t("msg.select_group")}</div>', unsafe_allow_html=True)
 
     # --- TAB: PERFORMANCE ---
     with selected_tabs[3]:
@@ -2874,8 +2894,8 @@ else:
         _pipeline_cats = [c for c in CATEGORIAS if "GTM" not in c.strip().upper()]
         _gtm_cats = [c for c in CATEGORIAS if "GTM" in c.strip().upper()]
 
-        st.markdown("### 📈 Performance")
-        _perf_hide_protect = st.toggle("🚀 Solo Growth", key="perf_hide_protect", value=st.session_state.get("growth_only", False))
+        st.markdown(t("perf.title"))
+        _perf_hide_protect = st.toggle(t("perf.growth_only"), key="perf_hide_protect", value=st.session_state.get("growth_only", False))
 
         def _is_protect(o):
             return "renewal" in (o.get("proyecto") or "").lower()
@@ -2898,7 +2918,7 @@ else:
         # =============================================
         # PIPELINE SECTION (LEADS → OFFICIAL → Ganada)
         # =============================================
-        st.markdown("##### 🔻 Pipeline de Ventas — LEADS → OFFICIAL → Ganada")
+        st.markdown(t("perf.pipeline_title"))
 
         # ---- Funnel (live data) ----
         _funnel_colors = {"LEADS": "#3b82f6", "OFFICIAL": "#10b981", "GANADA": "#16a34a"}
@@ -2924,7 +2944,7 @@ else:
         st.divider()
 
         # ---- Week-over-Week Deltas (from live vs prev snapshot) ----
-        st.markdown("##### 📊 Semana vs Semana")
+        st.markdown(t("perf.week_vs_week"))
         _prev_snap = None
         if len(_perf_snapshots) >= 2:
             _prev_snap = _perf_snapshots[1].get("snapshot_data", {})
@@ -2943,12 +2963,12 @@ else:
         if _prev_snap:
             _g_prev = sum(_prev_snap.get(c, {}).get("ganada_amount", 0) for c in _pipeline_cats)
             _g_delta = _ganada_amt - _g_prev
-        _delta_cols[-1].metric("🏆 Ganadas", f"USD {_ganada_amt:,.0f}", delta=f"USD {_g_delta:,.0f}" if _g_delta is not None else None)
+        _delta_cols[-1].metric(t("perf.won"), f"USD {_ganada_amt:,.0f}", delta=f"USD {_g_delta:,.0f}" if _g_delta is not None else None)
 
         st.divider()
 
         # ---- Weekly Trend (current week uses live user-scoped data to match scorecards) ----
-        st.markdown("##### 📈 Tendencia Semanal (últimas 12 semanas)")
+        st.markdown(t("perf.weekly_trend"))
         # Build live data for current week so chart matches scorecards
         _live_chart = {}
         for cat in _pipeline_cats:
@@ -2957,32 +2977,34 @@ else:
         _live_chart["Ganadas"] = _ganada_amt
         if _perf_snapshots:
             _trend_rows = []
+            _won_label = t("perf.won")
+            _week_label = t("perf.week")
             for snap in reversed(_perf_snapshots):
                 week = snap.get("week_ending", "")
                 sd = snap.get("snapshot_data", {})
-                row = {"Semana": week}
+                row = {_week_label: week}
                 if str(week)[:10] == str(_perf_week)[:10]:
                     # Current week: use live user-scoped data (same as scorecards)
                     for cat in _pipeline_cats:
                         row[cat] = _live_chart.get(cat, 0)
-                    row["Ganadas"] = _live_chart.get("Ganadas", 0)
+                    row[_won_label] = _live_chart.get("Ganadas", 0)
                 else:
                     for cat in _pipeline_cats:
                         row[cat] = sd.get(cat, {}).get("active_amount", 0)
-                    row["Ganadas"] = sum(sd.get(c, {}).get("ganada_amount", 0) for c in _pipeline_cats)
+                    row[_won_label] = sum(sd.get(c, {}).get("ganada_amount", 0) for c in _pipeline_cats)
                 _trend_rows.append(row)
             _trend_df = pd.DataFrame(_trend_rows)
             if not _trend_df.empty:
-                _chart_cols = [c for c in _pipeline_cats if c in _trend_df.columns] + (["Ganadas"] if "Ganadas" in _trend_df.columns else [])
+                _chart_cols = [c for c in _pipeline_cats if c in _trend_df.columns] + ([_won_label] if _won_label in _trend_df.columns else [])
                 if _chart_cols:
-                    st.bar_chart(_trend_df.set_index("Semana")[_chart_cols])
+                    st.bar_chart(_trend_df.set_index(_week_label)[_chart_cols])
         else:
-            st.info("Aún no hay datos históricos. Volvé la próxima semana para ver tendencias.")
+            st.info(t("msg.no_historic_data"))
 
         st.divider()
 
         # ---- Conversion Metrics (pipeline only, respects toggle) ----
-        st.markdown("##### 🎯 Métricas de Conversión")
+        st.markdown(t("perf.conversion_title"))
         _total_pipe = len(_pipe_live)
         _total_ganadas = _ganada_cnt
         _monto_ganado = _ganada_amt
@@ -2990,17 +3012,17 @@ else:
         _tasa_conversion = (_total_ganadas / _total_pipe * 100) if _total_pipe > 0 else 0
 
         _conv_c1, _conv_c2, _conv_c3, _conv_c4 = st.columns(4)
-        _conv_c1.metric("🏆 Ganadas", _total_ganadas)
-        _conv_c2.metric("💰 Monto Ganado", f"USD {_monto_ganado:,.0f}")
-        _conv_c3.metric("📊 Tasa Conversión", f"{_tasa_conversion:.1f}%")
-        _conv_c4.metric("❌ Perdidas", _total_perdidas)
+        _conv_c1.metric(t("perf.won_count"), _total_ganadas)
+        _conv_c2.metric(t("perf.won_amount"), f"USD {_monto_ganado:,.0f}")
+        _conv_c3.metric(t("perf.conversion_rate"), f"{_tasa_conversion:.1f}%")
+        _conv_c4.metric(t("perf.lost"), _total_perdidas)
         st.progress(min(_tasa_conversion / 100, 1.0))
 
         st.divider()
 
         # ---- Closed Pipeline List (respects toggle) ----
         _killed_pipeline = [o for o in _pipe_live if o.get("killed_at")]
-        with st.expander(f"☠ Oportunidades Cerradas ({len(_killed_pipeline)})", expanded=False):
+        with st.expander(t("perf.closed_opps", n=len(_killed_pipeline)), expanded=False):
             if _killed_pipeline:
                 for ko in _killed_pipeline:
                     _kr = ko.get("kill_reason", "")
@@ -3011,14 +3033,14 @@ else:
                     _ko_date = ko.get("killed_at", "")[:10] if ko.get("killed_at") else ""
                     st.markdown(f'<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:{_kr_bg};border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;font-size:0.78rem;"><span style="font-weight:700;color:#1e293b;flex:1;">{ko.get("proyecto", "")}</span><span style="color:#64748b;font-size:0.7rem;">{ko.get("cuenta", "")}</span><span style="font-weight:800;color:#16a34a;">USD {_ko_monto:,.0f}</span><span style="font-weight:700;color:{_kr_color};background:white;padding:2px 8px;border-radius:10px;font-size:0.65rem;border:1px solid {_kr_color};">{_kr_badge}</span><span style="color:#94a3b8;font-size:0.65rem;">{_ko_date}</span></div>', unsafe_allow_html=True)
             else:
-                st.info("No hay oportunidades de pipeline cerradas aún.")
+                st.info(t("perf.no_closed"))
 
         # =============================================
         # GTM SECTION (Goals Tracker)
         # =============================================
         if _gtm_cats:
             st.divider()
-            st.markdown("##### 🎯 GTM — Objetivos & Actividades")
+            st.markdown(t("perf.gtm_title"))
 
             _gtm_opps = [o for o in _all_opps_snap if "GTM" in o.get("categoria", "").strip().upper()]
             _gtm_active = [o for o in _gtm_opps if not o.get("killed_at")]
@@ -3028,15 +3050,15 @@ else:
 
             # Summary metrics
             _gtm_c1, _gtm_c2, _gtm_c3, _gtm_c4 = st.columns(4)
-            _gtm_c1.metric("🔄 Activos", len(_gtm_active))
-            _gtm_c2.metric("✅ Done", len(_gtm_done))
-            _gtm_c3.metric("📅 No Prioritario", len(_gtm_not_pri))
-            _gtm_c4.metric("🚫 Error", len(_gtm_error))
+            _gtm_c1.metric(t("perf.active"), len(_gtm_active))
+            _gtm_c2.metric(t("perf.done"), len(_gtm_done))
+            _gtm_c3.metric(t("perf.not_priority"), len(_gtm_not_pri))
+            _gtm_c4.metric(t("perf.error"), len(_gtm_error))
 
             _gtm_total = len(_gtm_opps)
             _gtm_completion = (len(_gtm_done) / _gtm_total * 100) if _gtm_total > 0 else 0
             st.progress(min(_gtm_completion / 100, 1.0))
-            st.caption(f"Tasa de completitud: **{_gtm_completion:.0f}%** ({len(_gtm_done)}/{_gtm_total})")
+            st.caption(t("perf.completion_rate", rate=f"{_gtm_completion:.0f}", done=len(_gtm_done), total=_gtm_total))
 
             # Active GTM items by urgency
             if _gtm_active:
@@ -3055,7 +3077,7 @@ else:
             # Closed GTM (from already-filtered _all_opps_snap)
             _killed_gtm = [o for o in _gtm_opps if o.get("killed_at")]
             if _killed_gtm:
-                with st.expander(f"☠ GTM Cerrados ({len(_killed_gtm)})", expanded=False):
+                with st.expander(t("perf.closed_gtm", n=len(_killed_gtm)), expanded=False):
                     for ko in _killed_gtm:
                         _kr = ko.get("kill_reason", "")
                         _kr_badge = {"done": "✅ Done", "not_priority": "📅 No Prioritario", "error": "🚫 Error"}.get(_kr, _kr)
@@ -3072,33 +3094,33 @@ else:
 
         # Header + refresh + manual add button
         _cal_hdr_cols = st.columns([5, 1, 1])
-        _cal_hdr_cols[0].markdown(f"### 📅 Bandeja de Calendario — {len(_cal_events)} pendientes")
-        if _cal_hdr_cols[1].button("🔄 Actualizar", key="cal_refresh"):
+        _cal_hdr_cols[0].markdown(t("cal.title", n=len(_cal_events)))
+        if _cal_hdr_cols[1].button(t("cal.refresh"), key="cal_refresh"):
             st.session_state.pop("_c_cal_count", None)
             st.session_state.pop("_c_cal_events", None)
             st.rerun()
-        if _cal_hdr_cols[2].button("+ Agregar", key="cal_manual_add"):
+        if _cal_hdr_cols[2].button(t("cal.add"), key="cal_manual_add"):
             st.session_state["_show_cal_form"] = True
             st.rerun()
 
         # Manual entry form
         if st.session_state.get("_show_cal_form"):
             with st.form("cal_manual_form"):
-                st.caption("📅 Nueva Reunión de Calendario")
+                st.caption(t("cal.new_meeting"))
                 _cm_c1, _cm_c2 = st.columns(2)
-                _cm_subject = _cm_c1.text_input("Asunto")
-                _cm_organizer = _cm_c2.text_input("Organizador")
+                _cm_subject = _cm_c1.text_input(t("cal.subject"))
+                _cm_organizer = _cm_c2.text_input(t("cal.organizer"))
                 _cm_c3, _cm_c4, _cm_c5 = st.columns(3)
-                _cm_fecha = _cm_c3.date_input("Fecha", value=date.today())
-                _cm_hora_inicio = _cm_c4.time_input("Hora inicio", value=datetime.now().replace(hour=10, minute=0).time())
-                _cm_hora_fin = _cm_c5.time_input("Hora fin", value=datetime.now().replace(hour=11, minute=0).time())
+                _cm_fecha = _cm_c3.date_input(t("form.date"), value=date.today())
+                _cm_hora_inicio = _cm_c4.time_input(t("cal.start_time"), value=datetime.now().replace(hour=10, minute=0).time())
+                _cm_hora_fin = _cm_c5.time_input(t("cal.end_time"), value=datetime.now().replace(hour=11, minute=0).time())
                 _cm_c6, _cm_c7 = st.columns(2)
-                _cm_attendees = _cm_c6.text_input("Asistentes (separados por coma)")
-                _cm_location = _cm_c7.text_input("Ubicación")
-                _cm_body = st.text_area("Notas", height=60)
+                _cm_attendees = _cm_c6.text_input(t("cal.attendees"))
+                _cm_location = _cm_c7.text_input(t("cal.location"))
+                _cm_body = st.text_area(t("cal.notes"), height=60)
                 _cm_cols = st.columns([1, 1, 4])
-                _cm_submit = _cm_cols[0].form_submit_button("💾 Guardar")
-                _cm_cancel = _cm_cols[1].form_submit_button("Cancelar")
+                _cm_submit = _cm_cols[0].form_submit_button(t("cal.save"))
+                _cm_cancel = _cm_cols[1].form_submit_button(t("cal.cancel"))
                 if _cm_submit and _cm_subject:
                     _cm_start = datetime.combine(_cm_fecha, _cm_hora_inicio).isoformat()
                     _cm_end = datetime.combine(_cm_fecha, _cm_hora_fin).isoformat()
@@ -3260,27 +3282,27 @@ else:
                     _match_label += f" → 👤 {team_members[_auto_member_idx]['full_name']}"
 
                 _card_html = f'''<div class="cal-inbox-card">
-                    <div class="cal-subj">{_ce_subj or "(sin asunto)"}</div>
+                    <div class="cal-subj">{_ce_subj or t("cal.no_subject")}</div>
                     <div class="cal-time">🕐 {_ce_time_str}</div>'''
                 if _match_label:
-                    _card_html += f'<div class="cal-meta" style="color:#059669;font-weight:600;">🔗 Auto: {_match_label}</div>'
+                    _card_html += f'<div class="cal-meta" style="color:#059669;font-weight:600;">{t("cal.auto_label", match=_match_label)}</div>'
                 if _ce_org:
-                    _card_html += f'<div class="cal-meta">👤 Organizador: {_ce_org}</div>'
+                    _card_html += f'<div class="cal-meta">{t("cal.organizer_label", name=_ce_org)}</div>'
                 if _ce_att_str:
-                    _card_html += f'<div><span class="cal-attendees">👥 {_ce_att_str}</span></div>'
+                    _card_html += f'<div><span class="cal-attendees">{t("cal.attendees_label", attendees=_ce_att_str)}</span></div>'
                 if _ce_loc:
-                    _card_html += f'<div class="cal-meta">📍 {_ce_loc}</div>'
+                    _card_html += f'<div class="cal-meta">{t("cal.location_label", location=_ce_loc)}</div>'
                 _card_html += '</div>'
                 st.markdown(_card_html, unsafe_allow_html=True)
 
                 _ce_cols = st.columns([3, 2, 1, 1])
-                _opp_options = ["— Seleccionar oportunidad —"] + [f'{o["cuenta"]} / {o["proyecto"]}' for o in _cal_all_opps]
-                _sel_opp_idx = _ce_cols[0].selectbox("Oportunidad", range(len(_opp_options)), format_func=lambda i: _opp_options[i], key=f"cal_opp_{_ce_id}", index=_auto_opp_idx, label_visibility="collapsed")
+                _opp_options = [t("cal.select_opp")] + [f'{o["cuenta"]} / {o["proyecto"]}' for o in _cal_all_opps]
+                _sel_opp_idx = _ce_cols[0].selectbox(t("cal.select_opp"), range(len(_opp_options)), format_func=lambda i: _opp_options[i], key=f"cal_opp_{_ce_id}", index=_auto_opp_idx, label_visibility="collapsed")
                 _member_options = [{"id": m["id"], "label": m["full_name"]} for m in team_members]
                 _member_labels = [m["label"] for m in _member_options]
-                _sel_member_idx = _ce_cols[1].selectbox("Responsable", range(len(_member_labels)), format_func=lambda i: _member_labels[i], key=f"cal_member_{_ce_id}", index=_auto_member_idx, label_visibility="collapsed")
+                _sel_member_idx = _ce_cols[1].selectbox(t("cal.responsible"), range(len(_member_labels)), format_func=lambda i: _member_labels[i], key=f"cal_member_{_ce_id}", index=_auto_member_idx, label_visibility="collapsed")
 
-                if _ce_cols[2].button("✅ Asignar", key=f"cal_assign_{_ce_id}"):
+                if _ce_cols[2].button(t("cal.assign"), key=f"cal_assign_{_ce_id}"):
                     if _sel_opp_idx > 0:
                         _target_opp = _cal_all_opps[_sel_opp_idx - 1]
                         _ce_fecha = str(_ce_start[:10]) if _ce_start else str(date.today())
@@ -3310,15 +3332,15 @@ else:
                             dal.assign_calendar_event(_ce_id, _target_opp["id"], _new_act["id"], user_id)
                         st.rerun()
                     else:
-                        st.toast("Selecciona una oportunidad primero", icon="⚠️")
+                        st.toast(t("msg.select_opp_first"), icon="⚠️")
 
-                if _ce_cols[3].button("❌ Descartar", key=f"cal_dismiss_{_ce_id}"):
+                if _ce_cols[3].button(t("cal.dismiss"), key=f"cal_dismiss_{_ce_id}"):
                     dal.dismiss_calendar_event(_ce_id)
                     st.rerun()
 
                 st.divider()
         else:
-            st.info("No hay reuniones pendientes en la bandeja.")
+            st.info(t("msg.no_pending_meetings"))
 
     # --- TAB: VIAJES ---
     with selected_tabs[5]:
@@ -3344,7 +3366,7 @@ else:
         # --- Helper: status badge ---
         def _estado_badge(estado):
             colors = {"planeado": ("#3b82f6", "#eff6ff"), "en_curso": ("#d97706", "#fffbeb"), "completado": ("#16a34a", "#f0fdf4"), "cancelado": ("#ef4444", "#fef2f2")}
-            labels = {"planeado": "Planeado", "en_curso": "En Curso", "completado": "Completado", "cancelado": "Cancelado"}
+            labels = {"planeado": t("trip.planned"), "en_curso": t("trip.in_progress"), "completado": t("trip.completed"), "cancelado": t("trip.cancelled")}
             c, bg = colors.get(estado, ("#64748b", "#f8fafc"))
             return f'<span style="font-size:0.65rem;font-weight:700;color:{c};background:{bg};border:1px solid {c};padding:2px 8px;border-radius:10px;">{labels.get(estado, estado)}</span>'
 
@@ -3354,13 +3376,13 @@ else:
         if st.session_state.viaje_selected_id:
             _viaje = dal.get_viaje(st.session_state.viaje_selected_id)
             if not _viaje:
-                st.error("Viaje no encontrado.")
+                st.error(t("msg.trip_not_found"))
                 st.session_state.viaje_selected_id = None
                 st.rerun()
             else:
                 # Back button + header
                 _vd_cols = st.columns([1, 5, 2])
-                if _vd_cols[0].button("← Volver", key="viaje_back"):
+                if _vd_cols[0].button(t("trip.back"), key="viaje_back"):
                     st.session_state.viaje_selected_id = None
                     st.session_state.pop("_c_viajes", None)
                     st.rerun()
@@ -3375,27 +3397,27 @@ else:
                 # Status controls
                 _vs_cols = st.columns(4)
                 if _viaje["estado"] == "planeado":
-                    if _vs_cols[0].button("🚀 Iniciar Viaje", key="viaje_start", use_container_width=True):
+                    if _vs_cols[0].button(t("trip.start"), key="viaje_start", use_container_width=True):
                         dal.update_viaje(_viaje["id"], {"estado": "en_curso"})
                         st.rerun()
                 if _viaje["estado"] == "en_curso":
-                    if _vs_cols[0].button("✅ Completar Viaje", key="viaje_complete", use_container_width=True):
+                    if _vs_cols[0].button(t("trip.complete"), key="viaje_complete", use_container_width=True):
                         dal.update_viaje(_viaje["id"], {"estado": "completado"})
                         st.rerun()
                 if _viaje["estado"] in ("planeado", "en_curso"):
-                    if _vs_cols[1].button("❌ Cancelar", key="viaje_cancel", use_container_width=True):
+                    if _vs_cols[1].button(t("trip.cancel"), key="viaje_cancel", use_container_width=True):
                         dal.update_viaje(_viaje["id"], {"estado": "cancelado"})
                         st.rerun()
 
                 # Edit trip button
                 if _viaje["estado"] in ("planeado", "en_curso"):
-                    if _vs_cols[2].button("✏️ Editar", key="viaje_edit_btn", use_container_width=True):
+                    if _vs_cols[2].button(t("trip.edit"), key="viaje_edit_btn", use_container_width=True):
                         st.session_state._show_viaje_form = "edit"
                         st.rerun()
 
                 # Delete trip
                 if _viaje["estado"] in ("planeado", "cancelado"):
-                    if _vs_cols[3].button("🗑️ Eliminar", key="viaje_delete_btn", use_container_width=True):
+                    if _vs_cols[3].button(t("trip.delete"), key="viaje_delete_btn", use_container_width=True):
                         dal.delete_viaje(_viaje["id"])
                         st.session_state.viaje_selected_id = None
                         st.session_state.pop("_c_viajes", None)
@@ -3406,14 +3428,14 @@ else:
                 # --- Edit form (inline) ---
                 if st.session_state.get("_show_viaje_form") == "edit":
                     with st.form("viaje_edit_form"):
-                        st.markdown("#### ✏️ Editar Viaje")
+                        st.markdown(t("trip.edit_form_title"))
                         _ve_c1, _ve_c2 = st.columns(2)
-                        _ve_destino = _ve_c1.text_input("Destino", value=_viaje["destino"])
-                        _ve_notas = _ve_c2.text_input("Notas", value=_viaje.get("notas", ""))
+                        _ve_destino = _ve_c1.text_input(t("trip.destination"), value=_viaje["destino"])
+                        _ve_notas = _ve_c2.text_input(t("trip.notes"), value=_viaje.get("notas", ""))
                         _ve_c3, _ve_c4 = st.columns(2)
-                        _ve_fi = _ve_c3.date_input("Fecha inicio", value=_parse_date(_viaje["fecha_inicio"]) or date.today())
-                        _ve_ff = _ve_c4.date_input("Fecha fin", value=_parse_date(_viaje["fecha_fin"]) or date.today())
-                        _ve_sub = st.form_submit_button("Guardar Cambios")
+                        _ve_fi = _ve_c3.date_input(t("trip.start_date"), value=_parse_date(_viaje["fecha_inicio"]) or date.today())
+                        _ve_ff = _ve_c4.date_input(t("trip.end_date"), value=_parse_date(_viaje["fecha_fin"]) or date.today())
+                        _ve_sub = st.form_submit_button(t("trip.save_changes"))
                         if _ve_sub:
                             dal.update_viaje(_viaje["id"], {
                                 "destino": _ve_destino,
@@ -3424,18 +3446,18 @@ else:
                             st.session_state._show_viaje_form = False
                             st.session_state.pop("_c_viajes", None)
                             st.rerun()
-                    if st.button("Cancelar edición", key="viaje_edit_cancel"):
+                    if st.button(t("trip.cancel_edit"), key="viaje_edit_cancel"):
                         st.session_state._show_viaje_form = False
                         st.rerun()
 
                 # --- Visit Checklist ---
-                st.markdown("#### 📋 Visitas")
+                st.markdown(t("trip.visits_title"))
                 _visitas = _viaje.get("visitas", [])
                 if not isinstance(_visitas, list):
                     _visitas = json.loads(_visitas) if isinstance(_visitas, str) else []
 
                 if not _visitas:
-                    st.info("No hay visitas planificadas. Agrega visitas desde el botón de abajo.")
+                    st.info(t("msg.no_visits_planned"))
 
                 _visitas_changed = False
                 for _vi, _visit in enumerate(_visitas):
@@ -3459,7 +3481,7 @@ else:
                         _v_bg = "#eff6ff"
                         _v_icon = "📍"
 
-                    _tipo_label = {"existing": "Cuenta existente", "new": "Cuenta nueva", "calendar": "Desde calendario"}.get(_v_tipo, _v_tipo)
+                    _tipo_label = {"existing": t("trip.existing_account"), "new": t("trip.new_account_type"), "calendar": t("trip.from_calendar_type")}.get(_v_tipo, _v_tipo)
                     _v_card = f'''<div style="background:{_v_bg};border:1px solid #e2e8f0;border-left:4px solid {_v_border};border-radius:8px;padding:10px 14px;margin-bottom:6px;">
                         <div style="display:flex;align-items:center;gap:8px;">
                             <span style="font-size:1.1rem;">{_v_icon}</span>
@@ -3470,7 +3492,7 @@ else:
                     if _v_notes:
                         _v_card += f'<div style="font-size:0.72rem;color:#64748b;margin-top:4px;">📝 {_v_notes}</div>'
                     if _v_status == "done" and _visit.get("done_at"):
-                        _v_card += f'<div style="font-size:0.65rem;color:#16a34a;margin-top:2px;">Completada: {_visit["done_at"][:16]}</div>'
+                        _v_card += f'<div style="font-size:0.65rem;color:#16a34a;margin-top:2px;">{t("trip.completed_label", date=_visit["done_at"][:16])}</div>'
                     _v_card += '</div>'
                     st.markdown(_v_card, unsafe_allow_html=True)
 
@@ -3478,7 +3500,7 @@ else:
                     if _viaje["estado"] in ("planeado", "en_curso"):
                         _vb_cols = st.columns(4)
                         if _v_status == "planned":
-                            if _vb_cols[0].button("✅ Hecho", key=f"visit_done_{_vi}", use_container_width=True):
+                            if _vb_cols[0].button(t("trip.done_btn"), key=f"visit_done_{_vi}", use_container_width=True):
                                 # Mark visit as done: create opportunity if new, then create activity
                                 _current_visit = _visitas[_vi]
                                 _opp_id = _current_visit.get("opp_id")
@@ -3499,7 +3521,7 @@ else:
                                     _new_act = dal.create_activity(_opp_id, team_id, user_id, {
                                         "tipo": "Reunión",
                                         "fecha": str(date.today()),
-                                        "objetivo": f"Visita en {_viaje['destino']}",
+                                        "objetivo": t("trip.visit_at", dest=_viaje['destino']),
                                         "assigned_to": user_id,
                                     })
                                     _visitas[_vi]["done_act_id"] = _new_act.get("id")
@@ -3510,14 +3532,14 @@ else:
                                 st.session_state.pop("_c_viajes", None)
                                 st.rerun()
 
-                            if _vb_cols[1].button("⏭️ Omitir", key=f"visit_skip_{_vi}", use_container_width=True):
+                            if _vb_cols[1].button(t("trip.skip_btn"), key=f"visit_skip_{_vi}", use_container_width=True):
                                 _visitas[_vi]["status"] = "skipped"
                                 dal.update_viaje(_viaje["id"], {"visitas": json.dumps(_visitas)})
                                 st.session_state.pop("_c_viajes", None)
                                 st.rerun()
 
                         elif _v_status == "skipped":
-                            if _vb_cols[0].button("↩️ Revertir", key=f"visit_revert_{_vi}", use_container_width=True):
+                            if _vb_cols[0].button(t("trip.revert_btn"), key=f"visit_revert_{_vi}", use_container_width=True):
                                 _visitas[_vi]["status"] = "planned"
                                 dal.update_viaje(_viaje["id"], {"visitas": json.dumps(_visitas)})
                                 st.session_state.pop("_c_viajes", None)
@@ -3534,16 +3556,16 @@ else:
                 # --- Add visit on the go ---
                 if _viaje["estado"] in ("planeado", "en_curso"):
                     st.divider()
-                    st.markdown("#### + Agregar Visita")
+                    st.markdown(t("trip.add_visit"))
 
-                    _av_source = st.radio("Fuente", ["Desde Cuentas", "Nueva Cuenta", "Desde Calendario"], key="viaje_add_source", horizontal=True)
+                    _av_source = st.radio(t("trip.source"), [t("trip.from_accounts"), t("trip.new_account"), t("trip.from_calendar")], key="viaje_add_source", horizontal=True)
 
-                    if _av_source == "Desde Cuentas":
+                    if _av_source == t("trip.from_accounts"):
                         _av_opps = _ss_cache("_c_opps", dal.get_opportunities, team_id)
                         if _av_opps:
                             _av_opp_labels = [f'{o["cuenta"]} / {o["proyecto"]}' for o in _av_opps]
-                            _av_selected = st.multiselect("Seleccionar oportunidades", _av_opp_labels, key="viaje_add_opps")
-                            if st.button("Agregar seleccionadas", key="viaje_add_existing"):
+                            _av_selected = st.multiselect(t("trip.select_opps"), _av_opp_labels, key="viaje_add_opps")
+                            if st.button(t("trip.add_selected"), key="viaje_add_existing"):
                                 if _av_selected:
                                     _existing_ids = {v.get("opp_id") for v in _visitas if v.get("opp_id")}
                                     _v_counter = len(_visitas)
@@ -3567,13 +3589,13 @@ else:
                                     st.session_state.pop("_c_viajes", None)
                                     st.rerun()
                         else:
-                            st.info("No hay oportunidades disponibles.")
+                            st.info(t("msg.no_opps_available"))
 
-                    elif _av_source == "Nueva Cuenta":
+                    elif _av_source == t("trip.new_account"):
                         _av_nc1, _av_nc2 = st.columns(2)
-                        _av_n_cuenta = _av_nc1.text_input("Cuenta", key="viaje_new_cuenta")
-                        _av_n_proyecto = _av_nc2.text_input("Proyecto", key="viaje_new_proyecto")
-                        if st.button("Agregar nueva cuenta", key="viaje_add_new"):
+                        _av_n_cuenta = _av_nc1.text_input(t("trip.new_account_label"), key="viaje_new_cuenta")
+                        _av_n_proyecto = _av_nc2.text_input(t("trip.new_project_label"), key="viaje_new_proyecto")
+                        if st.button(t("trip.add_new_account"), key="viaje_add_new"):
                             if _av_n_cuenta.strip():
                                 _v_counter = len(_visitas)
                                 _visitas.append({
@@ -3591,14 +3613,14 @@ else:
                                 st.session_state.pop("_c_viajes", None)
                                 st.rerun()
                             else:
-                                st.warning("Ingresa un nombre de cuenta.")
+                                st.warning(t("msg.enter_account_name"))
 
-                    elif _av_source == "Desde Calendario":
+                    elif _av_source == t("trip.from_calendar"):
                         _av_cal_events = _ss_cache("_c_cal_events", dal.get_pending_calendar_events_for_user, team_id, user_id, user["role"])
                         if _av_cal_events:
-                            _av_cal_labels = [f'{e.get("subject", "(sin asunto)")} — {str(e.get("start_time", ""))[:10]}' for e in _av_cal_events]
-                            _av_cal_sel = st.multiselect("Seleccionar reuniones", _av_cal_labels, key="viaje_add_cal")
-                            if st.button("Importar desde calendario", key="viaje_add_cal_btn"):
+                            _av_cal_labels = [f'{e.get("subject", t("cal.no_subject"))} — {str(e.get("start_time", ""))[:10]}' for e in _av_cal_events]
+                            _av_cal_sel = st.multiselect(t("trip.select_meetings"), _av_cal_labels, key="viaje_add_cal")
+                            if st.button(t("trip.import_calendar"), key="viaje_add_cal_btn"):
                                 if _av_cal_sel:
                                     _v_counter = len(_visitas)
                                     for _cal_label in _av_cal_sel:
@@ -3620,42 +3642,42 @@ else:
                                     st.session_state.pop("_c_viajes", None)
                                     st.rerun()
                         else:
-                            st.info("No hay eventos de calendario pendientes.")
+                            st.info(t("msg.no_calendar_events"))
 
         # ==========================================
         # VIEW: Create Trip Form
         # ==========================================
         elif st.session_state._show_viaje_form == "new":
-            st.markdown("### ✈️ Nuevo Viaje")
+            st.markdown(t("trip.new_trip_title"))
 
             with st.form("viaje_form"):
                 _vf_c1, _vf_c2 = st.columns(2)
-                _vf_destino = _vf_c1.text_input("Destino *", placeholder="San Pedro Sula")
-                _vf_notas = _vf_c2.text_input("Notas", placeholder="Visita a clientes zona norte")
+                _vf_destino = _vf_c1.text_input(t("trip.dest_required"), placeholder=t("trip.dest_placeholder"))
+                _vf_notas = _vf_c2.text_input(t("trip.notes"), placeholder=t("trip.notes_placeholder"))
                 _vf_c3, _vf_c4 = st.columns(2)
-                _vf_fi = _vf_c3.date_input("Fecha inicio *", value=date.today())
-                _vf_ff = _vf_c4.date_input("Fecha fin *", value=date.today() + timedelta(days=2))
+                _vf_fi = _vf_c3.date_input(t("trip.start_required"), value=date.today())
+                _vf_ff = _vf_c4.date_input(t("trip.end_required"), value=date.today() + timedelta(days=2))
 
                 st.markdown("---")
-                st.markdown("#### Agregar visitas al viaje")
+                st.markdown(t("trip.add_visits_title"))
 
                 # Pre-add visits from existing opportunities
                 _vf_opps = _ss_cache("_c_opps", dal.get_opportunities, team_id)
                 _vf_opp_labels = [f'{o["cuenta"]} / {o["proyecto"]}' for o in _vf_opps] if _vf_opps else []
-                _vf_sel_opps = st.multiselect("Desde cuentas existentes", _vf_opp_labels, key="vf_existing_opps")
+                _vf_sel_opps = st.multiselect(t("trip.from_existing"), _vf_opp_labels, key="vf_existing_opps")
 
                 # New account inputs
-                st.caption("O agregar cuenta nueva:")
+                st.caption(t("trip.add_new_label"))
                 _vf_nc1, _vf_nc2 = st.columns(2)
-                _vf_new_cuenta = _vf_nc1.text_input("Nueva cuenta", key="vf_new_cuenta")
-                _vf_new_proyecto = _vf_nc2.text_input("Proyecto", key="vf_new_proyecto")
+                _vf_new_cuenta = _vf_nc1.text_input(t("trip.new_account_label"), key="vf_new_cuenta")
+                _vf_new_proyecto = _vf_nc2.text_input(t("trip.new_project_label"), key="vf_new_proyecto")
 
-                _vf_submit = st.form_submit_button("Crear Viaje", use_container_width=True)
+                _vf_submit = st.form_submit_button(t("trip.create_btn"), use_container_width=True)
                 if _vf_submit:
                     if not _vf_destino.strip():
-                        st.error("El destino es obligatorio.")
+                        st.error(t("msg.dest_required"))
                     elif _vf_ff < _vf_fi:
-                        st.error("La fecha fin no puede ser anterior a la fecha inicio.")
+                        st.error(t("msg.end_before_start"))
                     else:
                         # Build visits list
                         _vf_visitas = []
@@ -3701,7 +3723,7 @@ else:
                         st.session_state.pop("_c_viajes", None)
                         st.rerun()
 
-            if st.button("← Cancelar", key="viaje_form_cancel"):
+            if st.button(t("trip.cancel_btn"), key="viaje_form_cancel"):
                 st.session_state._show_viaje_form = False
                 st.rerun()
 
@@ -3710,14 +3732,15 @@ else:
         # ==========================================
         else:
             _vl_hdr = st.columns([5, 1])
-            _vl_hdr[0].markdown("### ✈️ Viajes")
-            if _vl_hdr[1].button("+ Nuevo Viaje", key="viaje_new_btn", use_container_width=True):
+            _vl_hdr[0].markdown(t("trip.title"))
+            if _vl_hdr[1].button(t("trip.new"), key="viaje_new_btn", use_container_width=True):
                 st.session_state._show_viaje_form = "new"
                 st.rerun()
 
             # Status filter
-            _vl_filter = st.radio("Filtrar por estado", ["Todos", "Planeado", "En Curso", "Completado", "Cancelado"], key="viaje_filter", horizontal=True)
-            _filter_map = {"Todos": None, "Planeado": "planeado", "En Curso": "en_curso", "Completado": "completado", "Cancelado": "cancelado"}
+            _vl_filter_options = [t("trip.all"), t("trip.planned"), t("trip.in_progress"), t("trip.completed"), t("trip.cancelled")]
+            _vl_filter = st.radio(t("trip.filter_status"), _vl_filter_options, key="viaje_filter", horizontal=True)
+            _filter_map = {t("trip.all"): None, t("trip.planned"): "planeado", t("trip.in_progress"): "en_curso", t("trip.completed"): "completado", t("trip.cancelled"): "cancelado"}
             _vl_estado_filter = _filter_map.get(_vl_filter)
 
             _filtered_viajes = _viajes_list
@@ -3725,7 +3748,7 @@ else:
                 _filtered_viajes = [v for v in _viajes_list if v["estado"] == _vl_estado_filter]
 
             if not _filtered_viajes:
-                st.info("No hay viajes registrados. Crea uno con el botón '+ Nuevo Viaje'.")
+                st.info(t("msg.no_trips"))
             else:
                 for _vj in _filtered_viajes:
                     _vj_visitas = _vj.get("visitas", [])
@@ -3742,15 +3765,15 @@ else:
                             <span style="color:#64748b;font-size:0.75rem;margin-left:auto;">📅 {_vj.get("fecha_inicio", "")} → {_vj.get("fecha_fin", "")}</span>
                         </div>
                         <div style="display:flex;gap:16px;margin-top:6px;font-size:0.72rem;color:#64748b;">
-                            <span>📍 {_vj_total} visitas</span>
-                            <span style="color:#3b82f6;">🔵 {_vp} pendientes</span>
-                            <span style="color:#16a34a;">✅ {_vd} hechas</span>
-                            <span style="color:#94a3b8;">⏭️ {_vs} omitidas</span>
+                            <span>{t("trip.visits", n=_vj_total)}</span>
+                            <span style="color:#3b82f6;">{t("trip.pending_visits", n=_vp)}</span>
+                            <span style="color:#16a34a;">{t("trip.done_visits", n=_vd)}</span>
+                            <span style="color:#94a3b8;">{t("trip.skipped_visits", n=_vs)}</span>
                         </div>
                     </div>'''
                     st.markdown(_vj_card, unsafe_allow_html=True)
 
-                    if st.button(f"Abrir viaje: {_vj['destino']}", key=f"viaje_open_{_vj['id']}", use_container_width=True):
+                    if st.button(t("trip.open_trip", dest=_vj['destino']), key=f"viaje_open_{_vj['id']}", use_container_width=True):
                         st.session_state.viaje_selected_id = _vj["id"]
                         st.rerun()
 
@@ -3758,7 +3781,7 @@ else:
     if has_control_access():
         with selected_tabs[6]:
             st.markdown(user_bar_html, unsafe_allow_html=True)
-            st.markdown("### 📈 Panel de Control — RSM")
+            st.markdown(t("control.title"))
 
             # Fetch all activities for the team
             ctrl_activities = _ss_cache("_c_acts", dal.get_all_activities, team_id)
@@ -3789,23 +3812,23 @@ else:
             pendientes = [a for a in ctrl_activities if a.get("estado") == "Pendiente"]
             enviadas = [a for a in ctrl_activities if a.get("estado") == "Enviada"]
             respondidas = [a for a in ctrl_activities if a.get("estado") == "Respondida"]
-            bloqueadas = [a for a in ctrl_activities if a.get("estado") == "Enviada" and _traffic_light(a)[1] == "Bloqueada"]
+            bloqueadas = [a for a in ctrl_activities if a.get("estado") == "Enviada" and _traffic_light(a)[1] == t("estado.bloqueada")]
 
             # --- Section 1: Overview Metrics ---
-            st.markdown("#### Resumen General")
+            st.markdown(t("control.overview"))
             ov1, ov2, ov3, ov4 = st.columns(4)
-            ov1.metric("Total Actividades", len(ctrl_activities))
-            ov2.metric("Pendientes", len(pendientes))
-            ov3.metric("Enviadas (Esp. rpta)", len(enviadas))
-            ov4.metric("Respondidas", len(respondidas))
+            ov1.metric(t("control.total_activities"), len(ctrl_activities))
+            ov2.metric(t("control.pending"), len(pendientes))
+            ov3.metric(t("control.sent_waiting"), len(enviadas))
+            ov4.metric(t("control.responded"), len(respondidas))
 
             if bloqueadas:
-                st.error(f"🟥 **{len(bloqueadas)} actividades BLOQUEADAS** — respuesta vencida")
+                st.error(t("msg.blocked_activities", n=len(bloqueadas)))
 
             st.divider()
 
             # --- Section 2: Activity by Day ---
-            st.markdown("#### Actividad por Día")
+            st.markdown(t("control.activity_by_day"))
 
             # Group activities by fecha for recent days
             day_range = [today - timedelta(days=i) for i in range(7)]
@@ -3821,26 +3844,26 @@ else:
                 day_enviadas.append(len([a for a in enviadas if _act_date(a) == d]))
 
             df_daily = pd.DataFrame({
-                "Día": day_labels,
-                "Programadas": day_created,
-                "Enviadas": day_enviadas,
-                "Respondidas": day_completed,
+                t("perf.day"): day_labels,
+                t("perf.scheduled"): day_created,
+                t("perf.sent"): day_enviadas,
+                t("perf.responded"): day_completed,
             })
-            st.bar_chart(df_daily.set_index("Día"), color=["#f59e0b", "#8b5cf6", "#16a34a"])
+            st.bar_chart(df_daily.set_index(t("perf.day")), color=["#f59e0b", "#8b5cf6", "#16a34a"])
 
             # Day metrics
             acts_today = [a for a in ctrl_activities if _act_date(a) == today]
             acts_yesterday = [a for a in ctrl_activities if _act_date(a) == today - timedelta(days=1)]
             d1, d2, d3, d4 = st.columns(4)
-            d1.metric("Hoy — Programadas", len(acts_today))
-            d2.metric("Hoy — Respondidas", len([a for a in respondidas if _completed_ts(a) == today]))
-            d3.metric("Ayer — Programadas", len(acts_yesterday))
-            d4.metric("Ayer — Respondidas", len([a for a in respondidas if _completed_ts(a) == today - timedelta(days=1)]))
+            d1.metric(t("control.today_scheduled"), len(acts_today))
+            d2.metric(t("control.today_responded"), len([a for a in respondidas if _completed_ts(a) == today]))
+            d3.metric(t("control.yesterday_scheduled"), len(acts_yesterday))
+            d4.metric(t("control.yesterday_responded"), len([a for a in respondidas if _completed_ts(a) == today - timedelta(days=1)]))
 
             st.divider()
 
             # --- Section 3: Weekly Summary ---
-            st.markdown("#### Resumen Semanal")
+            st.markdown(t("control.weekly_summary"))
 
             # Current week (Mon-Sun)
             week_start = today - timedelta(days=today.weekday())
@@ -3852,22 +3875,22 @@ else:
             last_week_resp = [a for a in respondidas if _completed_ts(a) and last_week_start <= _completed_ts(a) < week_start]
 
             w1, w2, w3, w4 = st.columns(4)
-            w1.metric("Esta semana — Programadas", len(this_week),
-                       delta=f"{len(this_week) - len(last_week):+d} vs semana anterior")
-            w2.metric("Esta semana — Respondidas", len(this_week_resp),
-                       delta=f"{len(this_week_resp) - len(last_week_resp):+d} vs semana anterior")
-            w3.metric("Semana anterior — Programadas", len(last_week))
-            w4.metric("Semana anterior — Respondidas", len(last_week_resp))
+            w1.metric(t("control.this_week_scheduled"), len(this_week),
+                       delta=t("control.vs_prev_week", delta=len(this_week) - len(last_week)))
+            w2.metric(t("control.this_week_responded"), len(this_week_resp),
+                       delta=t("control.vs_prev_week", delta=len(this_week_resp) - len(last_week_resp)))
+            w3.metric(t("control.last_week_scheduled"), len(last_week))
+            w4.metric(t("control.last_week_responded"), len(last_week_resp))
 
             # Completion rate
             if this_week:
                 this_rate = len(this_week_resp) / len(this_week) * 100
-                st.progress(min(this_rate / 100, 1.0), text=f"Tasa de cierre esta semana: **{this_rate:.0f}%** ({len(this_week_resp)}/{len(this_week)})")
+                st.progress(min(this_rate / 100, 1.0), text=t("control.close_rate", rate=f"{this_rate:.0f}", done=len(this_week_resp), total=len(this_week)))
 
             st.divider()
 
             # --- Section 4: Upcoming Schedule ---
-            st.markdown("#### Próximas Actividades Programadas")
+            st.markdown(t("control.upcoming"))
 
             upcoming_7 = [a for a in pendientes if today < _act_date(a) <= today + timedelta(days=7)]
             upcoming_14 = [a for a in pendientes if today < _act_date(a) <= today + timedelta(days=14)]
@@ -3875,15 +3898,15 @@ else:
             overdue = [a for a in pendientes if _act_date(a) < today]
 
             u1, u2, u3, u4 = st.columns(4)
-            u1.metric("Próx. 7 días", len(upcoming_7))
-            u2.metric("Próx. 14 días", len(upcoming_14))
-            u3.metric("Próx. 30 días", len(upcoming_30))
-            u4.metric("⚠️ Vencidas (sin enviar)", len(overdue), delta=f"-{len(overdue)}" if overdue else "0", delta_color="inverse")
+            u1.metric(t("control.next_7d"), len(upcoming_7))
+            u2.metric(t("control.next_14d"), len(upcoming_14))
+            u3.metric(t("control.next_30d"), len(upcoming_30))
+            u4.metric(t("control.overdue"), len(overdue), delta=f"-{len(overdue)}" if overdue else "0", delta_color="inverse")
 
             st.divider()
 
             # --- Section 5: Team Member Breakdown ---
-            st.markdown("#### Rendimiento por Miembro")
+            st.markdown(t("control.team_perf"))
 
             member_stats = {}
             for m in team_members:
@@ -3893,33 +3916,33 @@ else:
                 m_pend = len([a for a in m_acts if a.get("estado") == "Pendiente"])
                 m_env = len([a for a in m_acts if a.get("estado") == "Enviada"])
                 m_resp = len([a for a in m_acts if a.get("estado") == "Respondida"])
-                m_bloq = len([a for a in m_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] == "Bloqueada"])
+                m_bloq = len([a for a in m_acts if a.get("estado") == "Enviada" and _traffic_light(a)[1] == t("estado.bloqueada")])
                 m_overdue = len([a for a in m_acts if a.get("estado") == "Pendiente" and _act_date(a) < today])
                 m_upcoming = len([a for a in m_acts if a.get("estado") == "Pendiente" and today <= _act_date(a) <= today + timedelta(days=7)])
                 total = len(m_acts)
                 rate = (m_resp / total * 100) if total > 0 else 0
                 member_stats[mname] = {
-                    "Total": total,
-                    "Pendientes": m_pend,
-                    "Enviadas": m_env,
-                    "Respondidas": m_resp,
-                    "Bloqueadas": m_bloq,
-                    "Vencidas": m_overdue,
-                    "Próx. 7d": m_upcoming,
-                    "% Cierre": f"{rate:.0f}%",
+                    t("metrics.total"): total,
+                    t("metrics.pending"): m_pend,
+                    t("metrics.sent"): m_env,
+                    t("metrics.responded"): m_resp,
+                    t("control.blocked"): m_bloq,
+                    t("control.expired"): m_overdue,
+                    t("control.next_7d_col"): m_upcoming,
+                    t("control.close_pct"): f"{rate:.0f}%",
                 }
 
             if member_stats:
                 df_members = pd.DataFrame(member_stats).T
-                df_members.index.name = "Miembro"
+                df_members.index.name = t("control.member")
                 st.dataframe(df_members, use_container_width=True)
 
                 # Bar chart: respondidas by member
-                resp_by_member = {name: stats["Respondidas"] for name, stats in member_stats.items() if stats["Total"] > 0}
+                resp_by_member = {name: stats[t("metrics.responded")] for name, stats in member_stats.items() if stats[t("metrics.total")] > 0}
                 if resp_by_member:
-                    st.markdown("##### Actividades Respondidas por Miembro")
-                    df_resp_chart = pd.DataFrame({"Miembro": list(resp_by_member.keys()), "Respondidas": list(resp_by_member.values())})
-                    st.bar_chart(df_resp_chart.set_index("Miembro"), color=["#16a34a"])
+                    st.markdown(t("control.responded_by_member"))
+                    df_resp_chart = pd.DataFrame({t("control.member"): list(resp_by_member.keys()), t("metrics.responded"): list(resp_by_member.values())})
+                    st.bar_chart(df_resp_chart.set_index(t("control.member")), color=["#16a34a"])
 
     # --- TAB: EQUIPO (todos los roles) ---
     equipo_tab_idx = 7 if has_control_access() else 6
@@ -3929,17 +3952,17 @@ else:
 
         # Sub-tabs según rol
         if is_admin():
-            equipo_subtabs = st.tabs(["👥 Miembros", "🏢 Equipos", "⚙️ Configuración", "📨 Invitaciones"])
+            equipo_subtabs = st.tabs([t("team.members_tab"), t("team.teams_tab"), t("team.config_tab"), t("team.invitations_tab")])
         else:
-            equipo_subtabs = st.tabs(["👥 Miembros", "📨 Invitaciones"])
+            equipo_subtabs = st.tabs([t("team.members_tab"), t("team.invitations_tab")])
 
         # --- MIEMBROS ---
         with equipo_subtabs[0]:
-            st.subheader("Miembros del Equipo")
+            st.subheader(t("team.members_title"))
             members = _ss_cache("_c_members_all", dal.get_team_members, team_id, False)
 
             if team_info:
-                st.caption(f"Equipo: **{team_info['name']}** — ID: `{team_id}`")
+                st.caption(t("team.team_label", name=team_info['name'], id=team_id))
 
             if is_admin():
                 # Admin: edición completa con todos los roles
@@ -3948,36 +3971,36 @@ else:
                     with st.expander(f"{'🟢' if m['active'] else '🔴'} {m['full_name']} — {m_role_label} {'(' + m['specialty'] + ')' if m.get('specialty') else ''}"):
                         with st.form(f"edit_member_{m['id']}"):
                             mc1, mc2 = st.columns(2)
-                            m_name = mc1.text_input("Nombre", value=m["full_name"], key=f"mn_{m['id']}")
-                            m_email = mc2.text_input("Email", value=m["email"], key=f"me_{m['id']}")
+                            m_name = mc1.text_input(t("team.name"), value=m["full_name"], key=f"mn_{m['id']}")
+                            m_email = mc2.text_input(t("team.email"), value=m["email"], key=f"me_{m['id']}")
                             mc3, mc4, mc5 = st.columns(3)
-                            m_role = mc3.selectbox("Rol", ALL_ROLES,
+                            m_role = mc3.selectbox(t("team.role"), ALL_ROLES,
                                 format_func=lambda r: ROLE_LABELS.get(r, r),
                                 index=ALL_ROLES.index(m["role"]) if m["role"] in ALL_ROLES else len(ALL_ROLES) - 1,
                                 key=f"mr_{m['id']}")
-                            m_specialty = mc4.text_input("Especialidad", value=m.get("specialty", ""), key=f"ms_{m['id']}")
-                            m_phone = mc5.text_input("Teléfono", value=m.get("phone", ""), key=f"mp_{m['id']}")
-                            m_active = st.checkbox("Activo", value=m["active"], key=f"ma_{m['id']}")
-                            if st.form_submit_button("💾 Guardar"):
+                            m_specialty = mc4.text_input(t("team.specialty"), value=m.get("specialty", ""), key=f"ms_{m['id']}")
+                            m_phone = mc5.text_input(t("team.phone"), value=m.get("phone", ""), key=f"mp_{m['id']}")
+                            m_active = st.checkbox(t("team.active"), value=m["active"], key=f"ma_{m['id']}")
+                            if st.form_submit_button(t("form.save")):
                                 dal.update_team_member(m["id"], {
                                     "full_name": m_name, "role": m_role,
                                     "specialty": m_specialty, "phone": m_phone,
                                     "active": m_active,
                                 })
-                                st.success("Miembro actualizado.")
+                                st.success(t("msg.member_updated"))
                                 st.rerun()
                         # Eliminar miembro (no puede eliminarse a sí mismo)
                         if m["id"] != user_id:
-                            if st.button("🗑️ Eliminar miembro", key=f"del_member_{m['id']}"):
+                            if st.button(t("team.delete_member"), key=f"del_member_{m['id']}"):
                                 st.session_state[f"confirm_del_member_{m['id']}"] = True
                             if st.session_state.get(f"confirm_del_member_{m['id']}"):
-                                st.warning(f"Eliminar a **{m['full_name']}**? Se eliminará su perfil y cuenta.")
+                                st.warning(t("msg.delete_member_confirm", name=m['full_name']))
                                 dm1, dm2 = st.columns(2)
-                                if dm1.button("Confirmar", key=f"cdel_m_y_{m['id']}", use_container_width=True):
+                                if dm1.button(t("msg.confirm_btn"), key=f"cdel_m_y_{m['id']}", use_container_width=True):
                                     dal.delete_team_member(m["id"])
                                     st.session_state.pop(f"confirm_del_member_{m['id']}", None)
                                     st.rerun()
-                                if dm2.button("Cancelar", key=f"cdel_m_n_{m['id']}", use_container_width=True):
+                                if dm2.button(t("msg.cancel_btn"), key=f"cdel_m_n_{m['id']}", use_container_width=True):
                                     st.session_state.pop(f"confirm_del_member_{m['id']}", None)
                                     st.rerun()
             else:
@@ -3993,59 +4016,59 @@ else:
         # --- EQUIPOS (solo admin) ---
         if is_admin():
             with equipo_subtabs[1]:
-                st.subheader("Gestión de Equipos")
+                st.subheader(t("team.teams_title"))
 
                 # --- Editar equipo actual ---
-                st.markdown("#### Equipo Actual")
+                st.markdown(t("team.current_team"))
                 with st.form("edit_team_form"):
-                    et_name = st.text_input("Nombre del equipo", value=team_info["name"] if team_info else "", key="edit_team_name")
-                    if st.form_submit_button("💾 Guardar Nombre"):
+                    et_name = st.text_input(t("team.team_name"), value=team_info["name"] if team_info else "", key="edit_team_name")
+                    if st.form_submit_button(t("team.save_name")):
                         if et_name.strip():
                             dal.update_team(team_id, {"name": et_name.strip()})
-                            st.success("Nombre del equipo actualizado.")
+                            st.success(t("msg.team_name_updated"))
                             st.rerun()
                         else:
-                            st.error("El nombre no puede estar vacío.")
+                            st.error(t("msg.team_name_empty"))
 
                 st.divider()
 
                 # --- Crear nuevo equipo ---
-                st.markdown("#### Crear Nuevo Equipo")
+                st.markdown(t("team.create_team_title"))
                 with st.form("create_team_form"):
-                    new_team_name = st.text_input("Nombre del nuevo equipo", key="new_team_name")
-                    if st.form_submit_button("➕ Crear Equipo"):
+                    new_team_name = st.text_input(t("team.new_team_name"), key="new_team_name")
+                    if st.form_submit_button(t("team.create_team_btn")):
                         if new_team_name.strip():
                             new_team = dal.create_team(new_team_name.strip())
                             if new_team:
-                                st.success(f"Equipo **{new_team_name}** creado. ID: `{new_team['id']}`")
+                                st.success(t("msg.team_created", name=new_team_name, id=new_team['id']))
                                 st.rerun()
                             else:
-                                st.error("No se pudo crear el equipo.")
+                                st.error(t("msg.team_create_fail"))
                         else:
-                            st.error("Ingresa un nombre para el equipo.")
+                            st.error(t("msg.team_name_required"))
 
                 st.divider()
 
                 # --- Lista de todos los equipos con cobertura de roles ---
-                st.markdown("#### Todos los Equipos")
+                st.markdown(t("team.all_teams"))
                 all_teams = dal.get_all_teams()
-                for t in all_teams:
-                    is_current = t["id"] == team_id
-                    team_label = f"{'🔹 ' if is_current else ''}{t['name']}"
-                    t_members = dal.get_all_members_for_team(t["id"])
+                for _tm in all_teams:
+                    is_current = _tm["id"] == team_id
+                    team_label = f"{'🔹 ' if is_current else ''}{_tm['name']}"
+                    t_members = dal.get_all_members_for_team(_tm["id"])
                     active_members = [m for m in t_members if m.get("active", True)]
                     filled_roles = {m["role"] for m in active_members}
                     missing_roles = [r for r in ALL_ROLES if r not in filled_roles]
 
-                    with st.expander(f"{team_label} — {len(active_members)} miembros" + (" (actual)" if is_current else "")):
-                        st.caption(f"ID: `{t['id']}`")
+                    with st.expander(f"{team_label} — {t('team.members_count', n=len(active_members))}" + (f" {t('team.current_tag')}" if is_current else "")):
+                        st.caption(f"ID: `{_tm['id']}`")
 
                         # Cobertura de roles
                         if missing_roles:
                             missing_labels = ", ".join(ROLE_LABELS.get(r, r) for r in missing_roles)
-                            st.warning(f"Roles sin cubrir: {missing_labels}")
+                            st.warning(t("msg.roles_missing", roles=missing_labels))
                         else:
-                            st.success("Todos los roles cubiertos")
+                            st.success(t("msg.all_roles_covered"))
 
                         # Tabla de miembros (editable)
                         if t_members:
@@ -4053,166 +4076,162 @@ else:
                                 m_role_label = ROLE_LABELS.get(m["role"], m["role"])
                                 status_icon = "🟢" if m.get("active", True) else "🔴"
                                 with st.expander(f"{status_icon} {m['full_name']} — {m_role_label} {'(' + m['specialty'] + ')' if m.get('specialty') else ''}"):
-                                    with st.form(f"edit_tm_{t['id']}_{m['id']}"):
+                                    with st.form(f"edit_tm_{_tm['id']}_{m['id']}"):
                                         tm_c1, tm_c2 = st.columns(2)
-                                        tm_name = tm_c1.text_input("Nombre", value=m["full_name"], key=f"tmn_{t['id']}_{m['id']}")
-                                        tm_email = tm_c2.text_input("Email", value=m.get("email", ""), key=f"tme_{t['id']}_{m['id']}")
+                                        tm_name = tm_c1.text_input(t("team.name"), value=m["full_name"], key=f"tmn_{_tm['id']}_{m['id']}")
+                                        tm_email = tm_c2.text_input(t("team.email"), value=m.get("email", ""), key=f"tme_{_tm['id']}_{m['id']}")
                                         tm_c3, tm_c4, tm_c5 = st.columns(3)
-                                        tm_role = tm_c3.selectbox("Rol", ALL_ROLES,
+                                        tm_role = tm_c3.selectbox(t("team.role"), ALL_ROLES,
                                             format_func=lambda r: ROLE_LABELS.get(r, r),
                                             index=ALL_ROLES.index(m["role"]) if m["role"] in ALL_ROLES else len(ALL_ROLES) - 1,
-                                            key=f"tmr_{t['id']}_{m['id']}")
-                                        tm_specialty = tm_c4.text_input("Especialidad", value=m.get("specialty", ""), key=f"tms_{t['id']}_{m['id']}")
-                                        tm_phone = tm_c5.text_input("Teléfono", value=m.get("phone", ""), key=f"tmp_{t['id']}_{m['id']}")
-                                        tm_active = st.checkbox("Activo", value=m.get("active", True), key=f"tma_{t['id']}_{m['id']}")
-                                        if st.form_submit_button("💾 Guardar"):
+                                            key=f"tmr_{_tm['id']}_{m['id']}")
+                                        tm_specialty = tm_c4.text_input(t("team.specialty"), value=m.get("specialty", ""), key=f"tms_{_tm['id']}_{m['id']}")
+                                        tm_phone = tm_c5.text_input(t("team.phone"), value=m.get("phone", ""), key=f"tmp_{_tm['id']}_{m['id']}")
+                                        tm_active = st.checkbox(t("team.active"), value=m.get("active", True), key=f"tma_{_tm['id']}_{m['id']}")
+                                        if st.form_submit_button(t("form.save")):
                                             dal.update_team_member(m["id"], {
                                                 "full_name": tm_name, "role": tm_role,
                                                 "specialty": tm_specialty, "phone": tm_phone,
                                                 "active": tm_active,
                                             })
-                                            st.success("Miembro actualizado.")
+                                            st.success(t("msg.member_updated"))
                                             st.rerun()
                                     # Eliminar miembro (no puede eliminarse a sí mismo)
                                     if m["id"] != user_id:
-                                        if st.button("🗑️ Eliminar", key=f"del_tm_{t['id']}_{m['id']}"):
-                                            st.session_state[f"confirm_del_tm_{t['id']}_{m['id']}"] = True
-                                        if st.session_state.get(f"confirm_del_tm_{t['id']}_{m['id']}"):
-                                            st.warning(f"Eliminar a **{m['full_name']}**?")
+                                        if st.button(t("team.delete_member"), key=f"del_tm_{_tm['id']}_{m['id']}"):
+                                            st.session_state[f"confirm_del_tm_{_tm['id']}_{m['id']}"] = True
+                                        if st.session_state.get(f"confirm_del_tm_{_tm['id']}_{m['id']}"):
+                                            st.warning(t("msg.delete_member_confirm", name=m['full_name']))
                                             dtm1, dtm2 = st.columns(2)
-                                            if dtm1.button("Confirmar", key=f"cdel_tm_y_{t['id']}_{m['id']}", use_container_width=True):
+                                            if dtm1.button(t("msg.confirm_btn"), key=f"cdel_tm_y_{_tm['id']}_{m['id']}", use_container_width=True):
                                                 dal.delete_team_member(m["id"])
-                                                st.session_state.pop(f"confirm_del_tm_{t['id']}_{m['id']}", None)
+                                                st.session_state.pop(f"confirm_del_tm_{_tm['id']}_{m['id']}", None)
                                                 st.rerun()
-                                            if dtm2.button("Cancelar", key=f"cdel_tm_n_{t['id']}_{m['id']}", use_container_width=True):
-                                                st.session_state.pop(f"confirm_del_tm_{t['id']}_{m['id']}", None)
+                                            if dtm2.button(t("msg.cancel_btn"), key=f"cdel_tm_n_{_tm['id']}_{m['id']}", use_container_width=True):
+                                                st.session_state.pop(f"confirm_del_tm_{_tm['id']}_{m['id']}", None)
                                                 st.rerun()
 
                             # Mover miembro a otro equipo
                             if len(all_teams) > 1:
                                 st.markdown("---")
-                                st.markdown("**Mover miembro a otro equipo:**")
+                                st.markdown(t("team.move_member_title"))
                                 member_options = {m["id"]: m["full_name"] for m in t_members}
-                                other_teams = {ot["id"]: ot["name"] for ot in all_teams if ot["id"] != t["id"]}
-                                with st.form(f"move_member_{t['id']}"):
+                                other_teams = {ot["id"]: ot["name"] for ot in all_teams if ot["id"] != _tm["id"]}
+                                with st.form(f"move_member_{_tm['id']}"):
                                     mm_c1, mm_c2 = st.columns(2)
                                     member_ids = list(member_options.keys())
                                     member_names = list(member_options.values())
-                                    sel_member = mm_c1.selectbox("Miembro", member_ids, format_func=lambda mid: member_options[mid], key=f"sel_mm_{t['id']}")
+                                    sel_member = mm_c1.selectbox(t("team.member_select"), member_ids, format_func=lambda mid: member_options[mid], key=f"sel_mm_{_tm['id']}")
                                     dest_team_ids = list(other_teams.keys())
-                                    sel_dest = mm_c2.selectbox("Equipo destino", dest_team_ids, format_func=lambda tid: other_teams[tid], key=f"sel_dt_{t['id']}")
-                                    if st.form_submit_button("🔀 Mover"):
+                                    sel_dest = mm_c2.selectbox(t("team.dest_team"), dest_team_ids, format_func=lambda tid: other_teams[tid], key=f"sel_dt_{_tm['id']}")
+                                    if st.form_submit_button(t("team.move_btn")):
                                         dal.move_member_to_team(sel_member, sel_dest)
-                                        st.success(f"Miembro movido a **{other_teams[sel_dest]}**.")
+                                        st.success(t("msg.member_moved", team=other_teams[sel_dest]))
                                         st.rerun()
                         else:
-                            st.info("Sin miembros.")
+                            st.info(t("msg.no_members"))
 
                         # Eliminar equipo (solo si no es el actual y no tiene miembros)
                         if not is_current:
                             if not t_members:
-                                if st.button(f"🗑️ Eliminar equipo", key=f"del_team_{t['id']}"):
-                                    st.session_state[f"confirm_del_team_{t['id']}"] = True
-                                if st.session_state.get(f"confirm_del_team_{t['id']}"):
-                                    st.warning(f"Eliminar el equipo **{t['name']}**?")
+                                if st.button(t("team.delete_team"), key=f"del_team_{_tm['id']}"):
+                                    st.session_state[f"confirm_del_team_{_tm['id']}"] = True
+                                if st.session_state.get(f"confirm_del_team_{_tm['id']}"):
+                                    st.warning(t("msg.delete_team_confirm", name=_tm['name']))
                                     dtc1, dtc2 = st.columns(2)
-                                    if dtc1.button("Confirmar", key=f"cdel_team_y_{t['id']}", use_container_width=True):
-                                        dal.delete_team(t["id"])
-                                        st.session_state.pop(f"confirm_del_team_{t['id']}", None)
+                                    if dtc1.button(t("msg.confirm_btn"), key=f"cdel_team_y_{_tm['id']}", use_container_width=True):
+                                        dal.delete_team(_tm["id"])
+                                        st.session_state.pop(f"confirm_del_team_{_tm['id']}", None)
                                         st.rerun()
-                                    if dtc2.button("Cancelar", key=f"cdel_team_n_{t['id']}", use_container_width=True):
-                                        st.session_state.pop(f"confirm_del_team_{t['id']}", None)
+                                    if dtc2.button(t("msg.cancel_btn"), key=f"cdel_team_n_{_tm['id']}", use_container_width=True):
+                                        st.session_state.pop(f"confirm_del_team_{_tm['id']}", None)
                                         st.rerun()
                             else:
-                                st.caption("Para eliminar este equipo, primero mueve o elimina todos sus miembros.")
+                                st.caption(t("msg.delete_team_members_first"))
 
         # --- CONFIGURACIÓN (solo admin) ---
         if is_admin():
             with equipo_subtabs[2]:
-                st.subheader("Configuración del Equipo")
+                st.subheader(t("team.config_title"))
 
                 # SLA Opciones
-                st.write("**Opciones de SLA**")
+                st.write(t("team.sla_options"))
                 sla_config = dal.get_sla_options(team_id)
-                sla_json = st.text_area("SLA (JSON)", value=json.dumps(sla_config, ensure_ascii=False, indent=2), height=200, key="sla_config_edit")
-                if st.button("Guardar SLA", key="save_sla"):
+                sla_json = st.text_area(t("team.sla_json"), value=json.dumps(sla_config, ensure_ascii=False, indent=2), height=200, key="sla_config_edit")
+                if st.button(t("team.save_sla"), key="save_sla"):
                     try:
                         parsed = json.loads(sla_json)
                         dal.set_team_config(team_id, "sla_opciones", parsed)
-                        st.success("SLA actualizado.")
+                        st.success(t("msg.sla_updated"))
                         st.rerun()
                     except Exception as e:
-                        st.error(f"JSON inválido: {e}")
+                        st.error(t("msg.invalid_json", e=e))
 
                 st.divider()
 
                 # SLA Respuesta
-                st.write("**SLA de Respuesta**")
+                st.write(t("team.sla_response"))
                 sla_rpta_config = dal.get_sla_respuesta(team_id)
-                sla_rpta_json = st.text_area("SLA Respuesta (JSON)", value=json.dumps(sla_rpta_config, ensure_ascii=False, indent=2), height=150, key="sla_rpta_config_edit")
-                if st.button("Guardar SLA Respuesta", key="save_sla_rpta"):
+                sla_rpta_json = st.text_area(t("team.sla_response_json"), value=json.dumps(sla_rpta_config, ensure_ascii=False, indent=2), height=150, key="sla_rpta_config_edit")
+                if st.button(t("team.save_sla_response"), key="save_sla_rpta"):
                     try:
                         parsed = json.loads(sla_rpta_json)
                         dal.set_team_config(team_id, "sla_respuesta", parsed)
-                        st.success("SLA Respuesta actualizado.")
+                        st.success(t("msg.sla_response_updated"))
                         st.rerun()
                     except Exception as e:
-                        st.error(f"JSON inválido: {e}")
+                        st.error(t("msg.invalid_json", e=e))
 
                 st.divider()
 
                 # Categorías
-                st.write("**Categorías**")
+                st.write(t("team.categories"))
                 cats_config = dal.get_categorias(team_id)
-                cats_json = st.text_area("Categorías (JSON array)", value=json.dumps(cats_config, ensure_ascii=False, indent=2), height=100, key="cats_config_edit")
-                if st.button("Guardar Categorías", key="save_cats"):
+                cats_json = st.text_area(t("team.categories_json"), value=json.dumps(cats_config, ensure_ascii=False, indent=2), height=100, key="cats_config_edit")
+                if st.button(t("team.save_categories"), key="save_cats"):
                     try:
                         parsed = json.loads(cats_json)
                         if isinstance(parsed, list):
                             dal.set_team_config(team_id, "categorias", parsed)
-                            st.success("Categorías actualizadas.")
+                            st.success(t("msg.categories_updated"))
                             st.rerun()
                         else:
-                            st.error("Debe ser un array JSON.")
+                            st.error(t("msg.must_be_json_array"))
                     except Exception as e:
-                        st.error(f"JSON inválido: {e}")
+                        st.error(t("msg.invalid_json", e=e))
 
         # --- INVITACIONES ---
         inv_subtab_idx = 3 if is_admin() else 1
         with equipo_subtabs[inv_subtab_idx]:
-            st.subheader("Invitar Miembros")
+            st.subheader(t("team.invite_title"))
 
             app_url = st.secrets.get("APP_URL", "https://your-app.streamlit.app")
 
             # Admin puede elegir a qué equipo invitar; otros solo a su equipo
             if is_admin():
                 inv_all_teams = dal.get_all_teams()
-                inv_team_options = {t["id"]: t["name"] for t in inv_all_teams}
+                inv_team_options = {_it["id"]: _it["name"] for _it in inv_all_teams}
                 inv_team_ids = list(inv_team_options.keys())
                 current_idx = inv_team_ids.index(team_id) if team_id in inv_team_ids else 0
                 invite_target_id = st.selectbox(
-                    "Equipo destino",
+                    t("team.invite_dest_team"),
                     inv_team_ids,
                     format_func=lambda tid: inv_team_options[tid],
                     index=current_idx,
                     key="invite_target_team",
                 )
-                invite_target_name = inv_team_options.get(invite_target_id, "Equipo")
+                invite_target_name = inv_team_options.get(invite_target_id, t("team.default_name"))
             else:
                 invite_target_id = team_id
-                invite_target_name = team_info['name'] if team_info else 'Equipo'
+                invite_target_name = team_info['name'] if team_info else t("team.default_name")
 
             if not has_control_access():
-                st.info("Puedes invitar a otros miembros a unirse al equipo.")
+                st.info(t("msg.invite_info"))
 
-            st.markdown(f"""
-**Pasos para invitar a un nuevo miembro:**
-1. Comparte el siguiente enlace y datos con el invitado
-2. El invitado abre el enlace, selecciona **"Unirse a Equipo"** y se registra con el ID de equipo
-""")
+            st.markdown(t("team.invite_steps"))
             inv_c1, inv_c2 = st.columns(2)
-            inv_c1.text_input("Enlace de la app", value=app_url, disabled=True, key="invite_url")
-            inv_c2.markdown(f"**ID de equipo**")
+            inv_c1.text_input(t("team.app_link"), value=app_url, disabled=True, key="invite_url")
+            inv_c2.markdown(t("team.team_id_label"))
             inv_c2.code(invite_target_id)
 
             st.divider()
@@ -4221,28 +4240,29 @@ else:
             sg_key = st.secrets.get("SENDGRID_API_KEY", "")
             sg_configured = sg_key and len(sg_key) > 50 and sg_key.startswith("SG.")
 
-            with st.expander("📨 Enviar invitación por email (opcional)"):
+            with st.expander(t("team.send_email_invite")):
                 if not sg_configured:
-                    st.warning("SendGrid no está configurado. Para habilitar invitaciones por email, crea una cuenta gratuita en [sendgrid.com](https://sendgrid.com) y agrega tu API key en los secrets de la app.")
+                    st.warning(t("msg.sendgrid_not_configured"))
                 else:
                     with st.form("invite_form"):
-                        inv_email = st.text_input("Email del invitado")
-                        inv_name = st.text_input("Nombre (opcional)")
-                        if st.form_submit_button("📨 Enviar Invitación"):
+                        inv_email = st.text_input(t("team.invite_email"))
+                        inv_name = st.text_input(t("team.invite_name"))
+                        if st.form_submit_button(t("team.send_invite_btn")):
                             if inv_email:
                                 from sendgrid import SendGridAPIClient
                                 from sendgrid.helpers.mail import Mail, Email, To, Content
                                 try:
                                     sg = SendGridAPIClient(api_key=sg_key)
+                                    _inv_name_str = " " + inv_name if inv_name else ""
                                     message = Mail(
                                         from_email=Email(st.secrets.get("SENDGRID_FROM_EMAIL", "noreply@pgmachine.com"), st.secrets.get("SENDGRID_FROM_NAME", "PG Machine")),
                                         to_emails=To(inv_email),
-                                        subject=f"Invitación a PG Machine — {invite_target_name}",
-                                        html_content=Content("text/html", f'<div style="font-family:DM Sans,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>Invitación a PG Machine</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>Hola{" " + inv_name if inv_name else ""},</p><p>Te han invitado a unirte al equipo <b>{invite_target_name}</b> en PG Machine.</p><p>Para registrarte, abre la app y selecciona "Unirse a Equipo":</p><p><b>ID del equipo:</b> <code>{invite_target_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Ir a PG Machine</a></div></div></div>')
+                                        subject=t("team.invite_subject", team=invite_target_name),
+                                        html_content=Content("text/html", f'<div style="font-family:DM Sans,sans-serif;max-width:500px;margin:0 auto;"><div style="background:#1e293b;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;"><h2>{t("team.invite_title")}</h2></div><div style="background:white;padding:20px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;"><p>{t("team.invite_greeting", name=_inv_name_str)}</p><p>{t("team.invite_body", team=invite_target_name)}</p><p>{t("team.invite_instructions")}</p><p>{t("team.invite_team_id_label")} <code>{invite_target_id}</code></p><div style="text-align:center;margin:20px 0;"><a href="{app_url}" style="background:#1a73e8;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">{t("team.invite_cta")}</a></div></div></div>')
                                     )
                                     sg.send(message)
-                                    st.success(f"Invitación enviada a {inv_email} para el equipo **{invite_target_name}**")
+                                    st.success(t("msg.invite_sent", email=inv_email, team=invite_target_name))
                                 except Exception as e:
-                                    st.error(f"Error enviando email: {e}")
+                                    st.error(t("msg.invite_email_error", e=e))
                             else:
-                                st.error("Ingresa un email.")
+                                st.error(t("msg.enter_email"))
