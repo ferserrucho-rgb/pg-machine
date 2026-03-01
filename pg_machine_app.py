@@ -2446,6 +2446,10 @@ else:
         if st.button("TOGGLE_LANG", key="btn_toggle_lang"):
             new_lang = "en" if get_lang() == "es" else "es"
             set_lang(new_lang)
+            # Clear widget keys that store translated values to avoid mismatch
+            for _wk in ("act_scope", "col_selector", "act_columns", "historial_group_by",
+                         "viaje_add_source", "viaje_filter"):
+                st.session_state.pop(_wk, None)
             st.rerun()
 
     # --- TAB: ACTIVIDADES ---
@@ -2508,7 +2512,7 @@ else:
         if not all_acts_display:
             st.info(t("msg.no_activities_table"))
         else:
-            if 'act_columns' not in st.session_state:
+            if 'act_columns' not in st.session_state or not set(st.session_state.act_columns).issubset(ALL_COLUMNS):
                 st.session_state.act_columns = DEFAULT_COLUMNS
             selected_cols = st.multiselect(t("scope.visible_cols"), ALL_COLUMNS, default=st.session_state.act_columns, key="col_selector")
             st.session_state.act_columns = selected_cols
