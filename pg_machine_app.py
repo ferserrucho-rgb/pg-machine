@@ -9,7 +9,7 @@ from datetime import datetime, date, timedelta
 from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_admin, has_control_access, can_see_all_opportunities, logout, get_supabase, ALL_ROLES, ROLE_LABELS
 from lib import dal
 from lib import notifications
-from lib.i18n import t, get_lang, set_lang, display_estado, db_estado, display_tipo, db_tipo, tipo_selectbox_options, tipo_selectbox_index, estado_selectbox_options, estado_selectbox_index, lang_toggle_html
+from lib.i18n import t, get_lang, set_lang, display_estado, db_estado, display_tipo, db_tipo, tipo_selectbox_options, tipo_selectbox_index, estado_selectbox_options, estado_selectbox_index, lang_toggle_html, _at
 
 st.set_page_config(page_title="PG Machine", layout="wide", initial_sidebar_state="expanded")
 
@@ -350,6 +350,13 @@ st.markdown("""
         .scope-toggle .scope-knob, .q-toggle .scope-knob { width: 8px !important; height: 8px !important; }
         /* Activity buttons: larger for small screens */
         .act-btn { padding: 6px 10px !important; min-height: 32px !important; }
+    }
+    .auto-translated { position: relative; }
+    .auto-translated::after {
+        content: "🌐";
+        font-size: 0.6rem;
+        margin-left: 4px;
+        opacity: 0.5;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1446,13 +1453,13 @@ def _metro_station_html(a: dict, ctx_html: str = "") -> str:
 
     tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
     tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {display_tipo(a["tipo"])}</span>'
-    obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
+    obj_html = f'<span class="act-obj">{_at(a.get("objetivo", ""))}</span>' if a.get("objetivo") else ''
     dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
     asig_initials = _get_initials(assigned_name) if assigned_name else ""
     asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
-    desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
+    desc_html = f'<div class="act-desc">{_at(a.get("descripcion", ""))}</div>' if a.get("descripcion") else ''
     fb_label = t("form.meeting_summary") if a.get("tipo") == "Reunión" else t("form.feedback")
-    fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+    fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {_at(a.get("feedback", ""))}</div>' if a.get("feedback") else ''
     meeting_html = _meeting_audit_html(a) if a.get("tipo") == "Reunión" else ''
 
     return f'<div class="metro-station"><div class="metro-dot {dot_cls}"></div><div class="{card_cls}"><div class="metro-fecha">{fecha_display}</div><div class="metro-meta">{tipo_html}{asig_html}{dest_html}{obj_html}{estado_html}</div>{desc_html}{fb_html}{meeting_html}{ctx_html}</div></div>'
@@ -1867,13 +1874,13 @@ if st.session_state.selected_id:
 
                 # Metadata elements
                 tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {display_tipo(a["tipo"])}</span>'
-                obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
+                obj_html = f'<span class="act-obj">{_at(a.get("objetivo", ""))}</span>' if a.get("objetivo") else ''
                 dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
                 asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                 fecha_html = f'<span class="act-fecha">{fecha_display}</span>'
-                desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
+                desc_html = f'<div class="act-desc">{_at(a.get("descripcion", ""))}</div>' if a.get("descripcion") else ''
                 fb_label = t("form.meeting_summary") if a.get("tipo") == "Reunión" else t("form.feedback")
-                fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+                fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {_at(a.get("feedback", ""))}</div>' if a.get("feedback") else ''
 
                 # Action buttons
                 estado_btns = ''
@@ -2327,7 +2334,7 @@ else:
                 act_lines = []
                 for a in opp_acts:
                     light, label = _traffic_light(a)
-                    obj = f' <span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ""
+                    obj = f' <span class="act-obj">{_at(a.get("objetivo", ""))}</span>' if a.get("objetivo") else ""
                     dest = f' → <span class="act-dest">{_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ""
                     asig_name = ""
                     if a.get("assigned_profile") and a["assigned_profile"].get("full_name"):
@@ -2497,15 +2504,15 @@ else:
                 t("col.proyecto"): opp_data.get("proyecto", ""),
                 t("col.monto_usd"): opp_data.get("monto", 0),
                 t("col.canal"): display_tipo(a.get("tipo", "")),
-                t("col.objetivo"): a.get("objetivo", ""),
+                t("col.objetivo"): _at(a.get("objetivo", "")),
                 t("col.destinatario"): a.get("destinatario", ""),
                 t("col.asignado_a"): assigned_name,
                 t("col.fecha"): _fmt_date(a.get("fecha", "")),
                 t("col.sla"): a.get("sla_key", ""),
                 t("col.sla_response_days"): a.get("sla_respuesta_dias", ""),
                 t("col.estado_interno"): display_estado(a.get("estado", "")),
-                t("col.feedback"): a.get("feedback", ""),
-                t("col.descripcion"): a.get("descripcion", ""),
+                t("col.feedback"): _at(a.get("feedback", "")),
+                t("col.descripcion"): _at(a.get("descripcion", "")),
             })
             act_refs.append(a)
 
@@ -2733,14 +2740,14 @@ else:
                                 tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
                                 tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
                                 tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {display_tipo(a["tipo"])}</span>'
-                                obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
+                                obj_html = f'<span class="act-obj">{_at(a.get("objetivo", ""))}</span>' if a.get("objetivo") else ''
                                 dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
                                 asig_initials = _get_initials(assigned_name) if assigned_name else ""
                                 asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                                 fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
-                                desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
+                                desc_html = f'<div class="act-desc">{_at(a.get("descripcion", ""))}</div>' if a.get("descripcion") else ''
                                 fb_label = t("form.meeting_summary") if a.get("tipo") == "Reunión" else t("form.feedback")
-                                fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+                                fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {_at(a.get("feedback", ""))}</div>' if a.get("feedback") else ''
                                 ctx_html = ""
                                 if hist_group != t("history.group_project"):
                                     ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
@@ -2831,14 +2838,14 @@ else:
                                 tipo_icon = tipo_icons.get(a.get("tipo", ""), "📋")
                                 tipo_cls = f'act-tipo-{tipo_lower}' if tipo_lower else ''
                                 tipo_html = f'<span class="act-tipo {tipo_cls}">{tipo_icon} {display_tipo(a["tipo"])}</span>'
-                                obj_html = f'<span class="act-obj">{a["objetivo"]}</span>' if a.get("objetivo") else ''
+                                obj_html = f'<span class="act-obj">{_at(a.get("objetivo", ""))}</span>' if a.get("objetivo") else ''
                                 dest_html = f'<span class="act-dest">→ {_safe_dest(a.get("destinatario"))}</span>' if _safe_dest(a.get("destinatario")) else ''
                                 asig_initials = _get_initials(assigned_name) if assigned_name else ""
                                 asig_html = f'<span class="act-asig"><span class="avatar-badge" style="width:16px;height:16px;font-size:0.5rem;">{asig_initials}</span> {assigned_name}</span>' if assigned_name else ''
                                 fecha_html = f'<span class="act-fecha">{_fmt_date(a.get("fecha", ""))}</span>'
-                                desc_html = f'<div class="act-desc">{a.get("descripcion", "")}</div>' if a.get("descripcion") else ''
+                                desc_html = f'<div class="act-desc">{_at(a.get("descripcion", ""))}</div>' if a.get("descripcion") else ''
                                 fb_label = t("form.meeting_summary") if a.get("tipo") == "Reunión" else t("form.feedback")
-                                fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {a["feedback"]}</div>' if a.get("feedback") else ''
+                                fb_html = f'<div class="act-feedback"><b>{fb_label}:</b> {_at(a.get("feedback", ""))}</div>' if a.get("feedback") else ''
                                 ctx_html = ""
                                 if hist_group != t("history.group_project"):
                                     ctx_html = f'<div class="timeline-opp-ctx">📁 {opp.get("proyecto", "")} — {opp.get("cuenta", "")}</div>'
@@ -3396,7 +3403,7 @@ else:
                 _vd_cols[2].markdown(f'<div style="text-align:right;color:#64748b;font-size:0.8rem;padding-top:8px;">📅 {_vd_fecha_ini} → {_vd_fecha_fin}</div>', unsafe_allow_html=True)
 
                 if _viaje.get("notas"):
-                    st.caption(f"📝 {_viaje['notas']}")
+                    st.caption(f"📝 {_at(_viaje.get('notas', ''))}")
 
                 # Status controls
                 _vs_cols = st.columns(4)
@@ -3494,7 +3501,7 @@ else:
                             <span style="font-size:0.6rem;color:#94a3b8;margin-left:auto;">{_tipo_label}</span>
                         </div>'''
                     if _v_notes:
-                        _v_card += f'<div style="font-size:0.72rem;color:#64748b;margin-top:4px;">📝 {_v_notes}</div>'
+                        _v_card += f'<div style="font-size:0.72rem;color:#64748b;margin-top:4px;">📝 {_at(_v_notes)}</div>'
                     if _v_status == "done" and _visit.get("done_at"):
                         _v_card += f'<div style="font-size:0.65rem;color:#16a34a;margin-top:2px;">{t("trip.completed_label", date=_visit["done_at"][:16])}</div>'
                     _v_card += '</div>'

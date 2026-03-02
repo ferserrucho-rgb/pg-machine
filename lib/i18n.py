@@ -1,9 +1,10 @@
 """
 Internationalization helpers for PG Machine.
 Provides t() translation function, language toggle HTML generators,
-and estado/tipo display↔DB mappers.
+estado/tipo display↔DB mappers, and auto_translate for user-generated content.
 """
 import streamlit as st
+from deep_translator import GoogleTranslator
 from lib.translations import TRANSLATIONS
 
 
@@ -178,3 +179,35 @@ def auth_lang_toggle_html() -> str:
         f'</span>'
         f'</div>'
     )
+
+
+# --- Auto-translate user-generated content ---
+
+@st.cache_data(ttl=3600, max_entries=500)
+def _cached_translate(text: str, target: str) -> str:
+    """Translate text to target language. Cached for 1 hour."""
+    try:
+        return GoogleTranslator(source="auto", target=target).translate(text)
+    except Exception:
+        return text  # fail silently, show original
+
+
+def auto_translate(text: str, target_lang: str = None) -> str:
+    """Translate user content if viewer's language differs.
+    Returns original text if empty, too short, or same language."""
+    if not text or len(text.strip()) < 3:
+        return text
+    target = target_lang or get_lang()
+    if target == "es":
+        return text  # content is already in Spanish (default)
+    return _cached_translate(text, target)
+
+
+def _at(text: str) -> str:
+    """Auto-translate and wrap with indicator if translated."""
+    if not text or get_lang() == "es":
+        return text
+    translated = auto_translate(text)
+    if translated != text:
+        return f'<span class="auto-translated">{translated}</span>'
+    return text
