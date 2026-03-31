@@ -343,6 +343,15 @@ def move_activity(act_id: str, new_opp_id: str) -> dict:
         .execute()
     return resp.data[0] if resp.data else {}
 
+def move_all_activities(from_opp_id: str, to_opp_id: str) -> int:
+    """Mueve todas las actividades de una oportunidad a otra. Retorna cantidad movida."""
+    sb = get_supabase()
+    resp = sb.table("activities") \
+        .update({"opportunity_id": to_opp_id}) \
+        .eq("opportunity_id", from_opp_id) \
+        .execute()
+    return len(resp.data) if resp.data else 0
+
 def delete_activity(act_id: str):
     """Elimina una actividad."""
     sb = get_supabase()

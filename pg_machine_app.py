@@ -97,6 +97,8 @@ st.markdown("""
     .meta-btn-new-act:hover { background: #1a73e8; color: white; }
     .meta-btn-kill { color: #991b1b; background: #fef2f2; border: 1px solid #fca5a5; }
     .meta-btn-kill:hover { background: #991b1b; color: white; }
+    .meta-btn-convert { color: #7c3aed; background: #ede9fe; border: 1px solid #c4b5fd; }
+    .meta-btn-convert:hover { background: #7c3aed; color: white; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
     .hist-card { background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
     .act-top { display: flex; align-items: flex-start; gap: 8px; }
@@ -460,6 +462,13 @@ components.html("""
             return;
         }
 
+        // 5d. Meta-bar convert lead
+        if (e.target.closest('.meta-btn-convert')) {
+            var bar = e.target.closest('.opp-meta-bar');
+            if (bar) { var b = findBtn(bar, 'CONVERT_LEAD'); if (b) b.click(); }
+            return;
+        }
+
         // 5c. Meta-bar timeline toggle
         if (e.target.closest('.meta-btn-timeline')) {
             var bar = e.target.closest('.opp-meta-bar');
@@ -626,6 +635,7 @@ components.html("""
             if (txt.indexOf('TOGGLE_Q') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_EDIT') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_LANG') >= 0) hide = true;
+            if (txt.indexOf('CONVERT_LEAD') >= 0) hide = true;
             if (hide) {
                 // Walk up hiding wrappers — use offscreen positioning to keep buttons clickable
                 var el = btn;
@@ -1746,7 +1756,9 @@ if st.session_state.selected_id:
         if ecol_val and ecol_val.lower() != "nan":
             meta_parts.append(f'<span class="meta-pill meta-stage">{ecol.replace("_", " ").title()}: {ecol_val}</span>')
     _metro_active = " active" if st.session_state.get("metro_view") else ""
-    action_html = f'<span class="meta-actions"><span class="meta-btn meta-btn-timeline{_metro_active}">{t("detail.metro_line")}</span><span class="meta-btn meta-btn-edit-opp">{t("detail.edit")}</span><span class="meta-btn meta-btn-new-act">{t("detail.new_activity")}</span><span class="meta-btn meta-btn-kill">{t("detail.kill")}</span><span class="meta-btn meta-btn-back">{t("detail.back")}</span><span class="meta-btn meta-btn-del">{t("detail.delete")}</span></span>'
+    _is_lead = opp.get("categoria", "").strip().upper() == "LEADS"
+    _convert_btn = f'<span class="meta-btn meta-btn-convert">{t("detail.convert")}</span>' if _is_lead else ""
+    action_html = f'<span class="meta-actions"><span class="meta-btn meta-btn-timeline{_metro_active}">{t("detail.metro_line")}</span>{_convert_btn}<span class="meta-btn meta-btn-edit-opp">{t("detail.edit")}</span><span class="meta-btn meta-btn-new-act">{t("detail.new_activity")}</span><span class="meta-btn meta-btn-kill">{t("detail.kill")}</span><span class="meta-btn meta-btn-back">{t("detail.back")}</span><span class="meta-btn meta-btn-del">{t("detail.delete")}</span></span>'
     st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}{action_html}</div>', unsafe_allow_html=True)
 
     # --- Hidden action buttons (wired via JS) ---
@@ -1783,6 +1795,10 @@ if st.session_state.selected_id:
     if st.button("☠ KILL_OPP", key="toggle_kill_opp"):
         st.session_state["show_kill_opp"] = not st.session_state.get("show_kill_opp", False)
         st.rerun()
+    if _is_lead:
+        if st.button("🔄 CONVERT_LEAD", key="toggle_convert_lead"):
+            st.session_state["show_convert_lead"] = not st.session_state.get("show_convert_lead", False)
+            st.rerun()
 
     # --- Kill panel ---
     if st.session_state.get("show_kill_opp"):
@@ -1812,6 +1828,88 @@ if st.session_state.selected_id:
         if _kr_c2.button(t("msg.cancel_btn"), key="cancel_kill", use_container_width=True):
             st.session_state.pop("show_kill_opp", None)
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- Convert Lead panel ---
+    if _is_lead and st.session_state.get("show_convert_lead"):
+        st.markdown('<div class="action-panel" style="border-top-color:#7c3aed;">', unsafe_allow_html=True)
+        st.markdown(t("convert.title"))
+        _conv_mode = st.radio(t("convert.mode"), [t("convert.mode_new"), t("convert.mode_merge")], key="convert_mode_radio", horizontal=True)
+
+        if _conv_mode == t("convert.mode_new"):
+            # --- Path A: Convert in-place to OFFICIAL ---
+            st.caption(t("convert.new_caption"))
+            with st.form("convert_new_form"):
+                _cn_c1, _cn_c2 = st.columns(2)
+                _cn_opp_id = _cn_c1.text_input(t("sidebar.opp_id"), value=opp.get("opp_id") or "")
+                _cn_stage = _cn_c2.text_input(t("sidebar.stage"), value=opp.get("stage") or "")
+                _cn_c3, _cn_c4 = st.columns(2)
+                _cn_monto = _cn_c3.number_input(t("sidebar.amount_usd"), value=float(opp.get("monto") or 0), min_value=0.0, step=1000.0)
+                _cn_close = _cn_c4.date_input(t("sidebar.close_date"), value=datetime.strptime(opp["close_date"][:10], "%Y-%m-%d").date() if opp.get("close_date") else date.today())
+                if st.form_submit_button(t("convert.confirm_new"), use_container_width=True):
+                    dal.update_opportunity(opp["id"], {
+                        "categoria": "OFFICIAL",
+                        "opp_id": _cn_opp_id or None,
+                        "stage": _cn_stage or None,
+                        "monto": _cn_monto,
+                        "close_date": _cn_close.isoformat(),
+                    })
+                    st.session_state.pop("show_convert_lead", None)
+                    st.session_state.pop("_c_detail_opp", None)
+                    st.rerun()
+        else:
+            # --- Path B: Merge into existing opportunity ---
+            st.caption(t("convert.merge_caption"))
+            _all_opps_for_merge = dal.get_opportunities(team_id)
+            _merge_targets = [o for o in _all_opps_for_merge if o["id"] != opp["id"] and o.get("categoria", "").strip().upper() != "LEADS" and not o.get("killed_at")]
+            if not _merge_targets:
+                st.warning(t("convert.no_targets"))
+            else:
+                _target_labels = {f"[{o['categoria']}] {o['cuenta']} — {o['proyecto']}": o["id"] for o in _merge_targets}
+                _target_choice = st.selectbox(t("convert.target_opp"), list(_target_labels.keys()), key="convert_target_select")
+                _target_id = _target_labels[_target_choice]
+                _target_opp = next(o for o in _merge_targets if o["id"] == _target_id)
+
+                # Conflict resolution
+                _compare_fields = ["partner", "stage", "monto", "opp_id", "close_date"] + EXTRA_OPP_COLS
+                _conflicts = {}
+                for f in _compare_fields:
+                    _lead_val = str(opp.get(f) or "").strip()
+                    _target_val = str(_target_opp.get(f) or "").strip()
+                    if _lead_val and _lead_val.lower() not in ("", "0", "0.0", "nan", "none") and _lead_val != _target_val:
+                        _conflicts[f] = (_lead_val, _target_val)
+
+                _merge_overrides = {}
+                if _conflicts:
+                    st.markdown(t("convert.fields_title"))
+                    for _cf, (_lv, _tv) in _conflicts.items():
+                        _field_label = _cf.replace("_", " ").title()
+                        _choice = st.radio(
+                            f"**{_field_label}**",
+                            [f"{t('convert.keep_target')}: {_tv}", f"{t('convert.use_lead')}: {_lv}"],
+                            key=f"conflict_{_cf}",
+                        )
+                        if _choice.startswith(t("convert.use_lead")):
+                            _merge_overrides[_cf] = opp.get(_cf)
+
+                # Activity count
+                _lead_acts = dal.get_activities_for_opportunity(opp["id"])
+                st.markdown(t("convert.activity_count", n=len(_lead_acts)))
+
+                _cm_c1, _cm_c2, _cm_c3 = st.columns([1, 1, 4])
+                if _cm_c1.button(t("convert.confirm_merge"), key="confirm_merge", use_container_width=True):
+                    dal.move_all_activities(opp["id"], _target_id)
+                    if _merge_overrides:
+                        dal.update_opportunity(_target_id, _merge_overrides)
+                    dal.kill_opportunity(opp["id"], "merged")
+                    st.session_state.pop("show_convert_lead", None)
+                    st.session_state.selected_id = _target_id
+                    st.session_state.pop("_c_detail_opp", None)
+                    st.session_state.pop("_c_detail_acts", None)
+                    st.rerun()
+                if _cm_c2.button(t("msg.cancel_btn"), key="cancel_merge", use_container_width=True):
+                    st.session_state.pop("show_convert_lead", None)
+                    st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     # --- History ---
@@ -3037,9 +3135,9 @@ else:
             if _killed_pipeline:
                 for ko in _killed_pipeline:
                     _kr = ko.get("kill_reason", "")
-                    _kr_badge = {"ganada": "🏆 Ganada", "perdida": "❌ Perdida", "error": "🚫 Error"}.get(_kr, _kr)
-                    _kr_color = {"ganada": "#16a34a", "perdida": "#ef4444", "error": "#64748b"}.get(_kr, "#64748b")
-                    _kr_bg = {"ganada": "#f0fdf4", "perdida": "#fef2f2", "error": "#f8fafc"}.get(_kr, "#f8fafc")
+                    _kr_badge = {"ganada": "🏆 Ganada", "perdida": "❌ Perdida", "error": "🚫 Error", "merged": "🔀 Fusionado"}.get(_kr, _kr)
+                    _kr_color = {"ganada": "#16a34a", "perdida": "#ef4444", "error": "#64748b", "merged": "#7c3aed"}.get(_kr, "#64748b")
+                    _kr_bg = {"ganada": "#f0fdf4", "perdida": "#fef2f2", "error": "#f8fafc", "merged": "#f5f3ff"}.get(_kr, "#f8fafc")
                     _ko_monto = float(ko.get("monto") or 0)
                     _ko_date = ko.get("killed_at", "")[:10] if ko.get("killed_at") else ""
                     st.markdown(f'<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:{_kr_bg};border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;font-size:0.78rem;"><span style="font-weight:700;color:#1e293b;flex:1;">{ko.get("proyecto", "")}</span><span style="color:#64748b;font-size:0.7rem;">{ko.get("cuenta", "")}</span><span style="font-weight:800;color:#16a34a;">USD {_ko_monto:,.0f}</span><span style="font-weight:700;color:{_kr_color};background:white;padding:2px 8px;border-radius:10px;font-size:0.65rem;border:1px solid {_kr_color};">{_kr_badge}</span><span style="color:#94a3b8;font-size:0.65rem;">{_ko_date}</span></div>', unsafe_allow_html=True)
@@ -3091,9 +3189,9 @@ else:
                 with st.expander(t("perf.closed_gtm", n=len(_killed_gtm)), expanded=False):
                     for ko in _killed_gtm:
                         _kr = ko.get("kill_reason", "")
-                        _kr_badge = {"done": "✅ Done", "not_priority": "📅 No Prioritario", "error": "🚫 Error"}.get(_kr, _kr)
-                        _kr_color = {"done": "#16a34a", "not_priority": "#d97706", "error": "#64748b"}.get(_kr, "#64748b")
-                        _kr_bg = {"done": "#f0fdf4", "not_priority": "#fffbeb", "error": "#f8fafc"}.get(_kr, "#f8fafc")
+                        _kr_badge = {"done": "✅ Done", "not_priority": "📅 No Prioritario", "error": "🚫 Error", "merged": "🔀 Fusionado"}.get(_kr, _kr)
+                        _kr_color = {"done": "#16a34a", "not_priority": "#d97706", "error": "#64748b", "merged": "#7c3aed"}.get(_kr, "#64748b")
+                        _kr_bg = {"done": "#f0fdf4", "not_priority": "#fffbeb", "error": "#f8fafc", "merged": "#f5f3ff"}.get(_kr, "#f8fafc")
                         _ko_date = ko.get("killed_at", "")[:10] if ko.get("killed_at") else ""
                         st.markdown(f'<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:{_kr_bg};border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;font-size:0.78rem;"><span style="font-weight:700;color:#1e293b;flex:1;">{ko.get("proyecto", "")}</span><span style="color:#64748b;font-size:0.7rem;">{ko.get("cuenta", "")}</span><span style="font-weight:700;color:{_kr_color};background:white;padding:2px 8px;border-radius:10px;font-size:0.65rem;border:1px solid {_kr_color};">{_kr_badge}</span><span style="color:#94a3b8;font-size:0.65rem;">{_ko_date}</span></div>', unsafe_allow_html=True)
 

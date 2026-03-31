@@ -252,6 +252,24 @@ TRANSLATIONS = {
         "kill.not_priority": "📅 No prioritario este año",
         "kill.confirm": "✅ Confirmar",
 
+        # --- Convert Lead ---
+        "detail.convert": "🔄 Convertir",
+        "convert.title": "#### 🔄 Convertir Lead",
+        "convert.mode": "Modo de conversión:",
+        "convert.mode_new": "🆕 Convertir a Oportunidad",
+        "convert.mode_merge": "🔀 Fusionar con Existente",
+        "convert.new_caption": "Convertir este lead a OFFICIAL. Las actividades se mantienen.",
+        "convert.confirm_new": "✅ Convertir a OFFICIAL",
+        "convert.merge_caption": "Seleccioná la oportunidad destino. Las actividades se moverán y el lead se cerrará.",
+        "convert.target_opp": "Oportunidad destino:",
+        "convert.fields_title": "##### Resolver diferencias",
+        "convert.keep_target": "Mantener destino",
+        "convert.use_lead": "Usar del lead",
+        "convert.activity_count": "📋 Se moverán **{n}** actividades.",
+        "convert.confirm_merge": "✅ Fusionar",
+        "convert.no_targets": "No hay oportunidades disponibles como destino.",
+        "convert.merged_reason": "Fusionado",
+
         # --- Activities table columns ---
         "col.semaforo": "Semáforo",
         "col.estado": "Estado",
@@ -822,6 +840,24 @@ TRANSLATIONS = {
         "kill.done": "✅ Done — Objective achieved",
         "kill.not_priority": "📅 Not a priority this year",
         "kill.confirm": "✅ Confirm",
+
+        # --- Convert Lead ---
+        "detail.convert": "🔄 Convert",
+        "convert.title": "#### 🔄 Convert Lead",
+        "convert.mode": "Conversion mode:",
+        "convert.mode_new": "🆕 Convert to Opportunity",
+        "convert.mode_merge": "🔀 Merge into Existing",
+        "convert.new_caption": "Convert this lead to OFFICIAL. Activities are kept.",
+        "convert.confirm_new": "✅ Convert to OFFICIAL",
+        "convert.merge_caption": "Select the target opportunity. Activities will be moved and the lead will be closed.",
+        "convert.target_opp": "Target opportunity:",
+        "convert.fields_title": "##### Resolve differences",
+        "convert.keep_target": "Keep target",
+        "convert.use_lead": "Use from lead",
+        "convert.activity_count": "📋 **{n}** activities will be moved.",
+        "convert.confirm_merge": "✅ Merge",
+        "convert.no_targets": "No opportunities available as target.",
+        "convert.merged_reason": "Merged",
 
         # --- Activities table columns ---
         "col.semaforo": "Traffic Light",
