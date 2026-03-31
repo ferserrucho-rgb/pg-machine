@@ -270,6 +270,13 @@ TRANSLATIONS = {
         "convert.no_targets": "No hay oportunidades disponibles como destino.",
         "convert.merged_reason": "Fusionado",
 
+        # --- Bulk Complete ---
+        "detail.bulk_complete": "✅ Completar",
+        "bulk.select_placeholder": "Seleccionar actividades para completar...",
+        "bulk.complete_btn": "✅ Completar {n} actividades",
+        "bulk.confirm": "¿Marcar **{n}** actividades como completadas?",
+        "bulk.no_eligible": "No hay actividades elegibles (Pendiente/Enviada).",
+
         # --- Activities table columns ---
         "col.semaforo": "Semáforo",
         "col.estado": "Estado",
@@ -858,6 +865,13 @@ TRANSLATIONS = {
         "convert.confirm_merge": "✅ Merge",
         "convert.no_targets": "No opportunities available as target.",
         "convert.merged_reason": "Merged",
+
+        # --- Bulk Complete ---
+        "detail.bulk_complete": "✅ Complete",
+        "bulk.select_placeholder": "Select activities to complete...",
+        "bulk.complete_btn": "✅ Complete {n} activities",
+        "bulk.confirm": "Mark **{n}** activities as completed?",
+        "bulk.no_eligible": "No eligible activities (Pending/Sent).",
 
         # --- Activities table columns ---
         "col.semaforo": "Traffic Light",

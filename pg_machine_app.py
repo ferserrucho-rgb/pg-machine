@@ -99,6 +99,8 @@ st.markdown("""
     .meta-btn-kill:hover { background: #991b1b; color: white; }
     .meta-btn-convert { color: #7c3aed; background: #ede9fe; border: 1px solid #c4b5fd; }
     .meta-btn-convert:hover { background: #7c3aed; color: white; }
+    .meta-btn-bulk-complete { color: #047857; background: #d1fae5; border: 1px solid #6ee7b7; }
+    .meta-btn-bulk-complete:hover { background: #047857; color: white; }
     .action-panel { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 6px solid #1a73e8; }
     .hist-card { background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-left: 4px solid #94a3b8; font-size: 0.75rem; line-height: 1.4; }
     .act-top { display: flex; align-items: flex-start; gap: 8px; }
@@ -208,6 +210,8 @@ st.markdown("""
     .pgm-card-wrap:hover { border-color: #1a73e8; box-shadow: 0 3px 12px rgba(26,115,232,0.18); background: #f8faff; }
     .card-del-trigger { position: absolute; bottom: 6px; right: 8px; font-size: 0.75rem; color: #cbd5e1; cursor: pointer; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
     .card-del-trigger:hover { color: #ef4444; background: #fef2f2; }
+    .card-bc-trigger { position: absolute; bottom: 6px; left: 8px; font-size: 0.7rem; color: #6ee7b7; cursor: pointer; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 5; transition: all 0.15s; }
+    .card-bc-trigger:hover { color: #047857; background: #d1fae5; }
     .bulk-del-bar { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
     div[data-testid="stRadio"],
     div[class*="stRadio"] { margin-top: -0.4rem !important; margin-bottom: -0.4rem !important; }
@@ -406,6 +410,18 @@ components.html("""
         if (e.target.closest('.pgm-toggle-q')) { clickToggleBtn('TOGGLE_Q'); return; }
         if (e.target.closest('.pgm-toggle-edit')) { clickToggleBtn('TOGGLE_EDIT'); return; }
         if (e.target.closest('.pgm-toggle-lang')) { clickToggleBtn('TOGGLE_LANG'); return; }
+        // 0b. Card bulk-complete trigger
+        if (e.target.closest('.card-bc-trigger')) {
+            var card = e.target.closest('.pgm-card-wrap');
+            if (card) {
+                var oppId = card.getAttribute('data-opp-id');
+                var btns = doc.querySelectorAll('button');
+                for (var i = 0; i < btns.length; i++) {
+                    if ((btns[i].textContent||'').indexOf('CARD_BC_' + oppId) >= 0) { btns[i].click(); break; }
+                }
+            }
+            return;
+        }
         // 1. Dashboard card click (open)
         var card = e.target.closest('.pgm-card-wrap');
         if (card) {
@@ -466,6 +482,13 @@ components.html("""
         if (e.target.closest('.meta-btn-convert')) {
             var bar = e.target.closest('.opp-meta-bar');
             if (bar) { var b = findBtn(bar, 'CONVERT_LEAD'); if (b) b.click(); }
+            return;
+        }
+
+        // 5e. Meta-bar bulk complete
+        if (e.target.closest('.meta-btn-bulk-complete')) {
+            var bar = e.target.closest('.opp-meta-bar');
+            if (bar) { var b = findBtn(bar, 'BULK_COMPLETE'); if (b) b.click(); }
             return;
         }
 
@@ -636,6 +659,8 @@ components.html("""
             if (txt.indexOf('TOGGLE_EDIT') >= 0) hide = true;
             if (txt.indexOf('TOGGLE_LANG') >= 0) hide = true;
             if (txt.indexOf('CONVERT_LEAD') >= 0) hide = true;
+            if (txt.indexOf('BULK_COMPLETE') >= 0) hide = true;
+            if (txt.indexOf('CARD_BC_') >= 0) hide = true;
             if (hide) {
                 // Walk up hiding wrappers — use offscreen positioning to keep buttons clickable
                 var el = btn;
@@ -1173,6 +1198,8 @@ _MUTATION_CACHE_MAP = {
     "update_activity": _CACHE_GROUP_ACT,
     "delete_activity": _CACHE_GROUP_ACT,
     "move_activity": _CACHE_GROUP_ACT,
+    "move_all_activities": _CACHE_GROUP_ACT,
+    "bulk_complete_activities": _CACHE_GROUP_ACT,
     "upload_activity_photo": _CACHE_GROUP_ACT,
     "delete_activity_photo": _CACHE_GROUP_ACT,
     "assign_calendar_event": _CACHE_GROUP_CAL + _CACHE_GROUP_ACT,
@@ -1755,10 +1782,13 @@ if st.session_state.selected_id:
         ecol_val = str(opp.get(ecol, "") or "").strip()
         if ecol_val and ecol_val.lower() != "nan":
             meta_parts.append(f'<span class="meta-pill meta-stage">{ecol.replace("_", " ").title()}: {ecol_val}</span>')
+    _detail_acts_for_meta = _ss_cache("_c_detail_acts", dal.get_activities_for_opportunity, opp["id"])
+    _has_completable = any(a["estado"] in ("Pendiente", "Enviada") for a in _detail_acts_for_meta)
     _metro_active = " active" if st.session_state.get("metro_view") else ""
     _is_lead = opp.get("categoria", "").strip().upper() == "LEADS"
     _convert_btn = f'<span class="meta-btn meta-btn-convert">{t("detail.convert")}</span>' if _is_lead else ""
-    action_html = f'<span class="meta-actions"><span class="meta-btn meta-btn-timeline{_metro_active}">{t("detail.metro_line")}</span>{_convert_btn}<span class="meta-btn meta-btn-edit-opp">{t("detail.edit")}</span><span class="meta-btn meta-btn-new-act">{t("detail.new_activity")}</span><span class="meta-btn meta-btn-kill">{t("detail.kill")}</span><span class="meta-btn meta-btn-back">{t("detail.back")}</span><span class="meta-btn meta-btn-del">{t("detail.delete")}</span></span>'
+    _bulk_complete_btn = f'<span class="meta-btn meta-btn-bulk-complete">{t("detail.bulk_complete")}</span>' if _has_completable else ""
+    action_html = f'<span class="meta-actions"><span class="meta-btn meta-btn-timeline{_metro_active}">{t("detail.metro_line")}</span>{_convert_btn}{_bulk_complete_btn}<span class="meta-btn meta-btn-edit-opp">{t("detail.edit")}</span><span class="meta-btn meta-btn-new-act">{t("detail.new_activity")}</span><span class="meta-btn meta-btn-kill">{t("detail.kill")}</span><span class="meta-btn meta-btn-back">{t("detail.back")}</span><span class="meta-btn meta-btn-del">{t("detail.delete")}</span></span>'
     st.markdown(f'<div class="opp-meta-bar">{"".join(meta_parts)}{action_html}</div>', unsafe_allow_html=True)
 
     # --- Hidden action buttons (wired via JS) ---
@@ -1766,6 +1796,8 @@ if st.session_state.selected_id:
     if _hid_c1.button("⬅️ Volver", use_container_width=True, key="detail_back"):
         st.session_state.selected_id = None
         st.session_state.metro_view = False
+        st.session_state.pop("show_bulk_complete", None)
+        st.session_state.pop("bulk_complete_confirm", None)
         st.rerun()
     if _hid_c2.button("🗑️ Eliminar", key="del_opp", use_container_width=True):
         st.session_state[f"confirm_del_opp_{opp['id']}"] = True
@@ -1798,6 +1830,10 @@ if st.session_state.selected_id:
     if _is_lead:
         if st.button("🔄 CONVERT_LEAD", key="toggle_convert_lead"):
             st.session_state["show_convert_lead"] = not st.session_state.get("show_convert_lead", False)
+            st.rerun()
+    if _has_completable:
+        if st.button("✅ BULK_COMPLETE", key="toggle_bulk_complete"):
+            st.session_state["show_bulk_complete"] = not st.session_state.get("show_bulk_complete", False)
             st.rerun()
 
     # --- Kill panel ---
@@ -1909,6 +1945,36 @@ if st.session_state.selected_id:
                     st.rerun()
                 if _cm_c2.button(t("msg.cancel_btn"), key="cancel_merge", use_container_width=True):
                     st.session_state.pop("show_convert_lead", None)
+                    st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- Bulk Complete panel ---
+    if _has_completable and st.session_state.get("show_bulk_complete"):
+        st.markdown('<div class="action-panel" style="border-top-color:#047857;">', unsafe_allow_html=True)
+        _eligible_acts = [a for a in _detail_acts_for_meta if a["estado"] in ("Pendiente", "Enviada")]
+        _bc_options = {f"[{display_tipo(a['tipo'])}] {a.get('objetivo', '')[:60]} — {_fmt_date(a.get('fecha', ''))}": a["id"] for a in _eligible_acts}
+        _bc_selected = st.multiselect(
+            t("bulk.select_placeholder"),
+            list(_bc_options.keys()),
+            default=list(_bc_options.keys()),
+            key="bulk_complete_select",
+        )
+        if _bc_selected:
+            if not st.session_state.get("bulk_complete_confirm"):
+                if st.button(t("bulk.complete_btn", n=len(_bc_selected)), key="bulk_complete_btn", use_container_width=True):
+                    st.session_state["bulk_complete_confirm"] = True
+                    st.rerun()
+            else:
+                st.warning(t("bulk.confirm", n=len(_bc_selected)))
+                _bc_c1, _bc_c2, _bc_c3 = st.columns([1, 1, 4])
+                if _bc_c1.button(t("msg.confirm_btn"), key="confirm_bulk_complete", use_container_width=True):
+                    _bc_ids = [_bc_options[k] for k in _bc_selected]
+                    dal.bulk_complete_activities(_bc_ids)
+                    st.session_state.pop("show_bulk_complete", None)
+                    st.session_state.pop("bulk_complete_confirm", None)
+                    st.rerun()
+                if _bc_c2.button(t("msg.cancel_btn"), key="cancel_bulk_complete", use_container_width=True):
+                    st.session_state.pop("bulk_complete_confirm", None)
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -2454,11 +2520,45 @@ else:
                 if act_lines:
                     acts_html = '<div class="act-sep"></div>' + "".join(act_lines)
                 del_icon = '<span class="card-del-trigger">&times;</span>'
-                card_html = f'<div class="pgm-card-wrap" data-opp-id="{o["id"]}">{del_icon}{header_html}{meta_html}{acts_html}</div>'
+                _card_completable = [a for a in opp_acts if a.get("estado") in ("Pendiente", "Enviada")]
+                bc_icon = '<span class="card-bc-trigger">✅</span>' if _card_completable else ""
+                card_html = f'<div class="pgm-card-wrap" data-opp-id="{o["id"]}">{del_icon}{bc_icon}{header_html}{meta_html}{acts_html}</div>'
                 st.markdown(card_html, unsafe_allow_html=True)
                 if st.button("▸", key=f"g_{o['id']}"):
                     st.session_state.selected_id = o['id']
                     st.rerun()
+                if st.button(f"CARD_BC_{o['id']}", key=f"card_bc_{o['id']}"):
+                    if st.session_state.get("card_bulk_complete_opp") == o["id"]:
+                        st.session_state.pop("card_bulk_complete_opp", None)
+                    else:
+                        st.session_state["card_bulk_complete_opp"] = o["id"]
+                    st.session_state.pop("card_bc_confirm", None)
+                    st.rerun()
+                if st.session_state.get("card_bulk_complete_opp") == o["id"] and _card_completable:
+                    _cbc_options = {f"[{display_tipo(a['tipo'])}] {a.get('objetivo','')[:60]} — {_fmt_date(a.get('fecha',''))}": a["id"] for a in _card_completable}
+                    _cbc_sel = st.multiselect(
+                        t("bulk.select_placeholder"),
+                        list(_cbc_options.keys()),
+                        default=list(_cbc_options.keys()),
+                        key=f"card_bc_sel_{o['id']}",
+                    )
+                    if _cbc_sel:
+                        if not st.session_state.get("card_bc_confirm"):
+                            if st.button(t("bulk.complete_btn", n=len(_cbc_sel)), key=f"card_bc_go_{o['id']}", use_container_width=True):
+                                st.session_state["card_bc_confirm"] = True
+                                st.rerun()
+                        else:
+                            st.warning(t("bulk.confirm", n=len(_cbc_sel)))
+                            _cbc1, _cbc2, _cbc3 = st.columns([1, 1, 4])
+                            if _cbc1.button(t("msg.confirm_btn"), key=f"card_bc_yes_{o['id']}", use_container_width=True):
+                                _ids = [_cbc_options[k] for k in _cbc_sel]
+                                dal.bulk_complete_activities(_ids)
+                                st.session_state.pop("card_bulk_complete_opp", None)
+                                st.session_state.pop("card_bc_confirm", None)
+                                st.rerun()
+                            if _cbc2.button(t("msg.cancel_btn"), key=f"card_bc_no_{o['id']}", use_container_width=True):
+                                st.session_state.pop("card_bc_confirm", None)
+                                st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         def _opp_sort_key(o):
@@ -2648,6 +2748,37 @@ else:
             m3.metric(t("metrics.sent"), len(df_filtered[df_filtered[t("col.estado_interno")] == "Enviada"]))
             m4.metric(t("metrics.responded"), len(df_filtered[df_filtered[t("col.estado_interno")] == "Respondida"]))
             m5.metric(t("metrics.blocked_expired"), len(df_filtered[df_filtered[t("col.estado")].isin([t("estado.bloqueada"), t("estado.vencida")])]))
+
+            # --- Bulk Complete (activities tab) ---
+            _tab_eligible = [a for a in act_refs if a.get("estado") in ("Pendiente", "Enviada")]
+            if _tab_eligible:
+                with st.expander(t("detail.bulk_complete"), expanded=False):
+                    _tab_bc_options = {}
+                    for a in _tab_eligible:
+                        _opp_data = a.get("opportunity", {}) or {}
+                        _label = f"[{display_tipo(a['tipo'])}] {a.get('objetivo', '')[:60]} — {_opp_data.get('cuenta', '')} — {_fmt_date(a.get('fecha', ''))}"
+                        _tab_bc_options[_label] = a["id"]
+                    _tab_bc_sel = st.multiselect(
+                        t("bulk.select_placeholder"),
+                        list(_tab_bc_options.keys()),
+                        key="tab_bulk_complete_select",
+                    )
+                    if _tab_bc_sel:
+                        if not st.session_state.get("tab_bulk_complete_confirm"):
+                            if st.button(t("bulk.complete_btn", n=len(_tab_bc_sel)), key="tab_bulk_complete_btn", use_container_width=True):
+                                st.session_state["tab_bulk_complete_confirm"] = True
+                                st.rerun()
+                        else:
+                            st.warning(t("bulk.confirm", n=len(_tab_bc_sel)))
+                            _tbc_c1, _tbc_c2, _tbc_c3 = st.columns([1, 1, 4])
+                            if _tbc_c1.button(t("msg.confirm_btn"), key="confirm_tab_bulk_complete", use_container_width=True):
+                                _tbc_ids = [_tab_bc_options[k] for k in _tab_bc_sel]
+                                dal.bulk_complete_activities(_tbc_ids)
+                                st.session_state.pop("tab_bulk_complete_confirm", None)
+                                st.rerun()
+                            if _tbc_c2.button(t("msg.cancel_btn"), key="cancel_tab_bulk_complete", use_container_width=True):
+                                st.session_state.pop("tab_bulk_complete_confirm", None)
+                                st.rerun()
 
             st.divider()
             sorted_indices = df_filtered.sort_values("_sort").index.tolist()

@@ -352,6 +352,17 @@ def move_all_activities(from_opp_id: str, to_opp_id: str) -> int:
         .execute()
     return len(resp.data) if resp.data else 0
 
+def bulk_complete_activities(act_ids: list[str]) -> int:
+    """Marca múltiples actividades como Respondida en una sola operación."""
+    if not act_ids:
+        return 0
+    sb = get_supabase()
+    resp = sb.table("activities") \
+        .update({"estado": "Respondida", "respondida_ts": datetime.now().isoformat()}) \
+        .in_("id", act_ids) \
+        .execute()
+    return len(resp.data) if resp.data else 0
+
 def delete_activity(act_id: str):
     """Elimina una actividad."""
     sb = get_supabase()
