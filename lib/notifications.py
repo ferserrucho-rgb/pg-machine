@@ -24,9 +24,6 @@ def _from_email() -> Email:
 def _app_url() -> str:
     return st.secrets.get("APP_URL", "https://your-app.streamlit.app")
 
-def _supabase_url() -> str:
-    return st.secrets.get("SUPABASE_URL", "")
-
 def send_assignment_notification(activity: dict, assignee: dict, opportunity: dict):
     """
     Envía notificación de asignación a un miembro del equipo.
@@ -42,7 +39,7 @@ def send_assignment_notification(activity: dict, assignee: dict, opportunity: di
     lang = assignee.get("lang", "es")
     nt = lambda key, **kw: _notif_t(key, lang=lang, **kw)
 
-    response_url = f"{_supabase_url()}/functions/v1/handle-response?token={activity.get('response_token', '')}"
+    response_url = f"{_app_url()}/respond?token={activity.get('response_token', '')}"
 
     subject = nt("notif.subject_assignment", tipo=activity.get('tipo', ''), cuenta=opportunity.get('cuenta', ''))
     html_body = f"""

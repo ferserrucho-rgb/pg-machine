@@ -6,7 +6,8 @@ from collections import OrderedDict
 from datetime import datetime, date, timedelta
 
 # --- AUTH GATE (must be before any other UI) ---
-from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_admin, has_control_access, can_see_all_opportunities, logout, get_supabase, ALL_ROLES, ROLE_LABELS
+from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_admin, has_control_access, can_see_all_opportunities, logout, ALL_ROLES, ROLE_LABELS
+from lib.scheduler import run_sla_checks
 from lib import dal
 from lib import notifications
 from lib.i18n import t, get_lang, set_lang, display_estado, db_estado, display_tipo, db_tipo, tipo_selectbox_options, tipo_selectbox_index, estado_selectbox_options, estado_selectbox_index, lang_toggle_html, _at
@@ -15,6 +16,8 @@ st.set_page_config(page_title="PG Machine", layout="wide", initial_sidebar_state
 
 if not require_auth():
     st.stop()
+
+run_sla_checks()
 
 # --- Usuario autenticado ---
 user = get_current_user()
@@ -1140,7 +1143,7 @@ _edit_html = f'<span class="bar-pill pgm-toggle-edit {_edit_cls}">{_edit_lbl}</s
 _lang_html = lang_toggle_html()
 user_bar_html = f'<div class="user-bar"><span class="user-avatar">{user_initials}</span> {user["full_name"]} <span class="user-role">{user_role_label}</span>{_cal_badge_html}{_lang_html}{_scope_toggle_html}{_growth_html}{_q_toggle_html}{_edit_html}</div>'
 
-# --- 2. DATOS DESDE SUPABASE ---
+# --- 2. DATOS ---
 if 'selected_id' not in st.session_state:
     st.session_state.selected_id = None
 
@@ -1311,7 +1314,7 @@ def _safe_dest(val) -> str:
     return "" if s == "[object Object]" else s
 
 def _traffic_light(act):
-    """Calcula semáforo para una actividad (formato Supabase)."""
+    """Calcula semáforo para una actividad."""
     estado = act.get("estado", "Pendiente")
     now = datetime.now()
 
