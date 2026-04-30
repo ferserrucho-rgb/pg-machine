@@ -119,6 +119,8 @@ st.markdown("""
     .act-btn-move:hover { background: #6d28d9; color: white; }
     .act-btn-resend { color: #0369a1; background: #e0f2fe; }
     .act-btn-resend:hover { background: #0369a1; color: white; }
+    .act-btn-revert { color: #d97706; background: #fef3c7; }
+    .act-btn-revert:hover { background: #d97706; color: white; }
     .act-tipo { font-size: 0.65rem; font-weight: 700; color: white; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
     .act-tipo-email { background: #3b82f6; }
     .act-tipo-llamada { background: #f59e0b; }
@@ -541,6 +543,13 @@ components.html("""
             return;
         }
 
+        // 8b. Activity revert (Respondida → Pendiente)
+        if (e.target.closest('.act-btn-revert')) {
+            var hc = e.target.closest('.hist-card');
+            if (hc) { var b = findBtn(hc, 'REVERTIR'); if (b) b.click(); }
+            return;
+        }
+
         // 9. Activity move
         if (e.target.closest('.act-btn-move')) {
             var hc = e.target.closest('.hist-card');
@@ -647,6 +656,7 @@ components.html("""
             if (txt.indexOf('ENVIADO') >= 0) hide = true;
             if (txt.indexOf('RESPONDIDA') >= 0) hide = true;
             if (txt.indexOf('REENVIAR') >= 0) hide = true;
+            if (txt.indexOf('REVERTIR') >= 0) hide = true;
             if (txt.indexOf('EDIT_OPP') >= 0) hide = true;
             if (txt.indexOf('MOVE_') >= 0) hide = true;
             if (txt.indexOf('NEW_ACT') >= 0) hide = true;
@@ -1682,6 +1692,7 @@ with st.sidebar:
                 keys_to_clear += ["sel_all_new", "sel_all_chg"]
                 for k in keys_to_clear:
                     st.session_state.pop(k, None)
+                _invalidate_cache()
                 st.rerun()
             if bc2.button(t("sidebar.cancel"), key="cancel_import", use_container_width=True):
                 keys_to_clear = ["import_nuevas", "import_iguales", "import_con_cambios", "import_analizado"]
@@ -2053,6 +2064,8 @@ if st.session_state.selected_id:
                     estado_btns = f'<span class="act-btn act-btn-send">{send_label}</span>'
                 elif a["estado"] == "Enviada":
                     estado_btns = f'<span class="act-btn act-btn-resp">{t("detail.responded_btn")}</span><span class="act-btn act-btn-resend">{t("detail.resend_btn")}</span>'
+                elif a["estado"] == "Respondida":
+                    estado_btns = f'<span class="act-btn act-btn-revert">{t("detail.revert_btn")}</span>'
                 act_btns = f'<span class="act-actions">{estado_btns}<span class="act-btn act-btn-edit">{t("detail.edit_btn")}</span><span class="act-btn act-btn-move">{t("detail.move_btn")}</span><span class="act-btn act-btn-del">{t("detail.delete_btn")}</span></span>'
 
                 # Build meta-row: assignee first, then → destinatario, then description
@@ -2160,6 +2173,10 @@ if st.session_state.selected_id:
                         if b2.button("🔄 REENVIAR", key=f"re_{aid}", use_container_width=True):
                             dal.update_activity(aid, {"estado": "Pendiente", "enviada_ts": None, "response_deadline": None})
                             st.rerun()
+                elif a["estado"] == "Respondida":
+                    if st.button("⏪ REVERTIR", key=f"rev_{aid}", use_container_width=True):
+                        dal.update_activity(aid, {"estado": "Pendiente", "respondida_ts": None, "feedback": None})
+                        st.rerun()
 
                 # Hidden edit/delete/move triggers (wired via JS from in-card buttons)
                 if st.button("✏️ Editar", key=f"toggle_edit_{aid}"):
