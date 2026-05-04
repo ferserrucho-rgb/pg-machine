@@ -37,7 +37,9 @@ st.markdown("""
     .pgm-loading-text { font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-top: 8px; letter-spacing: 0.05em; }
     @keyframes pgm-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
     section.main > div[style] { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
-    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0 !important; padding-bottom: 3rem !important; }
+    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0.5rem !important; padding-bottom: 3rem !important; }
+    /* Hide Streamlit default header so it doesn't overlap content */
+    [data-testid="stHeader"] { display: none !important; }
     /* Reposition Streamlit Cloud toolbar so it doesn't cover UI elements */
     .stDeployButton { display: none !important; }
     /* Place sidebar toggle on the right side */
