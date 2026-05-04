@@ -86,9 +86,10 @@ def _do_login(email: str, password: str):
     return None
 
 
-def _do_register(email: str, password: str, full_name: str, team_name: str):
+def _do_register(email: str, password: str, full_name: str, team_name: str, phone: str = ""):
     """Registra un nuevo usuario + crea equipo y perfil."""
     email = email.strip().lower()
+    phone = phone.strip()
     try:
         # Check if email already exists
         existing = db.fetch_one("SELECT id FROM profiles WHERE email = %s", (email,))
@@ -105,9 +106,9 @@ def _do_register(email: str, password: str, full_name: str, team_name: str):
         # 2. Create profile (first user = admin)
         pw_hash = _hash_password(password)
         profile = db.execute_returning(
-            """INSERT INTO profiles (team_id, full_name, email, password_hash, role)
-               VALUES (%s, %s, %s, %s, 'admin') RETURNING *""",
-            (str(team_id), full_name, email, pw_hash),
+            """INSERT INTO profiles (team_id, full_name, email, password_hash, role, phone)
+               VALUES (%s, %s, %s, %s, 'admin', %s) RETURNING *""",
+            (str(team_id), full_name, email, pw_hash, phone),
         )
 
         _store_session(profile)
@@ -120,11 +121,12 @@ def _do_register(email: str, password: str, full_name: str, team_name: str):
         return t("auth.register_error", msg=msg)
 
 
-def _do_join_team(email: str, password: str, full_name: str, team_id: str, role: str = "presales"):
+def _do_join_team(email: str, password: str, full_name: str, team_id: str, role: str = "presales", phone: str = ""):
     """Registra un usuario que se une a un equipo existente."""
     if role not in JOINABLE_ROLES:
         role = "presales"
     email = email.strip().lower()
+    phone = phone.strip()
     try:
         # Validate team exists
         team = db.fetch_one("SELECT id FROM teams WHERE id = %s", (team_id,))
@@ -138,9 +140,9 @@ def _do_join_team(email: str, password: str, full_name: str, team_id: str, role:
 
         pw_hash = _hash_password(password)
         profile = db.execute_returning(
-            """INSERT INTO profiles (team_id, full_name, email, password_hash, role)
-               VALUES (%s, %s, %s, %s, %s) RETURNING *""",
-            (team_id, full_name, email, pw_hash, role),
+            """INSERT INTO profiles (team_id, full_name, email, password_hash, role, phone)
+               VALUES (%s, %s, %s, %s, %s, %s) RETURNING *""",
+            (team_id, full_name, email, pw_hash, role, phone),
         )
 
         _store_session(profile)
@@ -261,6 +263,7 @@ def show_auth_page():
                 r_name = st.text_input(t("auth.full_name"), key="reg_name")
                 r_email = st.text_input(t("auth.email"), key="reg_email")
                 r_password = st.text_input(t("auth.password"), type="password", key="reg_password")
+                r_phone = st.text_input(t("auth.phone"), key="reg_phone", help=t("auth.phone_help"))
                 r_team = st.text_input(t("auth.team_name"), key="reg_team")
                 submitted = st.form_submit_button(t("auth.register_btn"), use_container_width=True)
                 if submitted:
@@ -269,7 +272,7 @@ def show_auth_page():
                     elif len(r_password) < 6:
                         st.error(t("auth.pw_min"))
                     else:
-                        err = _do_register(r_email, r_password, r_name, r_team)
+                        err = _do_register(r_email, r_password, r_name, r_team, r_phone)
                         if err:
                             st.error(err)
                         else:
@@ -281,6 +284,7 @@ def show_auth_page():
                 j_name = st.text_input(t("auth.full_name"), key="join_name")
                 j_email = st.text_input(t("auth.email"), key="join_email")
                 j_password = st.text_input(t("auth.password"), type="password", key="join_password")
+                j_phone = st.text_input(t("auth.phone"), key="join_phone", help=t("auth.phone_help"))
                 j_team_id = st.text_input(t("auth.team_id"), key="join_team_id")
                 j_role = st.selectbox(
                     t("auth.role"),
@@ -294,7 +298,7 @@ def show_auth_page():
                     if not all([j_name, j_email, j_password, j_team_id]):
                         st.error(t("auth.fill_all"))
                     else:
-                        err = _do_join_team(j_email, j_password, j_name, j_team_id, j_role)
+                        err = _do_join_team(j_email, j_password, j_name, j_team_id, j_role, j_phone)
                         if err:
                             st.error(err)
                         else:

@@ -5,6 +5,7 @@ import streamlit as st
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
 from lib import dal
+from lib import whatsapp
 from lib.i18n import _notif_t
 
 
@@ -157,13 +158,19 @@ def send_sla_notification(notification: dict):
 
 def process_pending_notifications():
     """
-    Procesa notificaciones pendientes en la cola.
+    Procesa notificaciones pendientes en la cola (email + WhatsApp).
     Llamado desde la Edge Function o manualmente.
     """
     unsent = dal.get_unsent_notifications()
     sent_count = 0
     for notif in unsent:
-        if send_sla_notification(notif):
-            dal.mark_notification_sent(notif["id"])
-            sent_count += 1
+        # Email
+        if not notif.get("sent"):
+            if send_sla_notification(notif):
+                dal.mark_notification_sent(notif["id"])
+                sent_count += 1
+        # WhatsApp
+        if not notif.get("whatsapp_sent"):
+            if whatsapp.send_whatsapp_sla(notif):
+                dal.mark_notification_whatsapp_sent(notif["id"])
     return sent_count

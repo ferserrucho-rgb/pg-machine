@@ -10,6 +10,7 @@ from lib.auth import require_auth, get_current_user, is_admin, is_manager_or_adm
 from lib.scheduler import run_sla_checks
 from lib import dal
 from lib import notifications
+from lib import whatsapp
 from lib.i18n import t, get_lang, set_lang, display_estado, db_estado, display_tipo, db_tipo, tipo_selectbox_options, tipo_selectbox_index, estado_selectbox_options, estado_selectbox_index, lang_toggle_html, _at
 
 st.set_page_config(page_title="PG Machine", layout="wide", initial_sidebar_state="expanded")
@@ -1213,8 +1214,6 @@ _MUTATION_CACHE_MAP = {
     "move_activity": _CACHE_GROUP_ACT,
     "move_all_activities": _CACHE_GROUP_ACT,
     "bulk_complete_activities": _CACHE_GROUP_ACT,
-    "upload_activity_photo": _CACHE_GROUP_ACT,
-    "delete_activity_photo": _CACHE_GROUP_ACT,
     "assign_calendar_event": _CACHE_GROUP_CAL + _CACHE_GROUP_ACT,
     "dismiss_calendar_event": _CACHE_GROUP_CAL,
     "create_calendar_event": _CACHE_GROUP_CAL,
@@ -1322,7 +1321,8 @@ def _traffic_light(act):
         return "🟩", t("estado.respondida")
 
     if estado == "Enviada":
-        enviada_ts = _naive(datetime.fromisoformat(act["enviada_ts"])) if act.get("enviada_ts") else now
+        _ets = act.get("enviada_ts")
+        enviada_ts = _naive(_ets if isinstance(_ets, datetime) else datetime.fromisoformat(str(_ets))) if _ets else now
         sla_dias = act.get("sla_respuesta_dias", 7)
         deadline = enviada_ts + timedelta(days=sla_dias)
         remaining = deadline - now
@@ -1360,7 +1360,8 @@ def _traffic_light(act):
 
     # Fallback from sla_key
     sla_cfg = SLA_OPCIONES.get(act.get("sla_key", ""), {})
-    created = _naive(datetime.fromisoformat(act["created_at"])) if act.get("created_at") else now
+    _cat = act.get("created_at")
+    created = _naive(_cat if isinstance(_cat, datetime) else datetime.fromisoformat(str(_cat))) if _cat else now
     if "horas" in sla_cfg:
         deadline = created + timedelta(hours=sla_cfg["horas"])
     else:
@@ -2371,6 +2372,7 @@ if st.session_state.selected_id:
                     assignee = dal.get_team_member(asignado_a_id)
                     if assignee:
                         notifications.send_assignment_notification(new_act, assignee, opp)
+                        whatsapp.send_whatsapp_assignment(new_act, assignee, opp)
                         dal.create_notification(team_id, new_act["id"], asignado_a_id, "assignment")
                 # Upload attached photos
                 _upload_ok = True
@@ -4240,11 +4242,13 @@ else:
                                 key=f"mr_{m['id']}")
                             m_specialty = mc4.text_input(t("team.specialty"), value=m.get("specialty", ""), key=f"ms_{m['id']}")
                             m_phone = mc5.text_input(t("team.phone"), value=m.get("phone", ""), key=f"mp_{m['id']}")
+                            m_wa_apikey = st.text_input(t("team.whatsapp_apikey"), value=m.get("whatsapp_apikey", ""), key=f"mwa_{m['id']}", help=t("team.whatsapp_help"))
                             m_active = st.checkbox(t("team.active"), value=m["active"], key=f"ma_{m['id']}")
                             if st.form_submit_button(t("form.save")):
                                 dal.update_team_member(m["id"], {
                                     "full_name": m_name, "role": m_role,
                                     "specialty": m_specialty, "phone": m_phone,
+                                    "whatsapp_apikey": m_wa_apikey,
                                     "active": m_active,
                                 })
                                 st.success(t("msg.member_updated"))

@@ -5,6 +5,7 @@ Throttled to run at most every 15 minutes per session.
 import streamlit as st
 from datetime import datetime, timedelta
 from lib import db
+from lib import notifications
 
 
 _THROTTLE_MINUTES = 15
@@ -22,6 +23,7 @@ def run_sla_checks():
         _check_sla_expired()
         _check_blocked()
         _check_sla_warning()
+        notifications.process_pending_notifications()
     except Exception:
         pass  # Don't break the app if SLA checks fail
 

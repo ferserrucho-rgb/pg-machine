@@ -562,16 +562,18 @@ def create_notification(team_id: str, activity_id: str, recipient_id: str, notif
 
 
 def get_unsent_notifications() -> list[dict]:
-    """Obtiene notificaciones no enviadas con datos del destinatario y actividad."""
+    """Obtiene notificaciones no enviadas (email o WhatsApp) con datos del destinatario y actividad."""
     rows = db.fetch_all(
         """SELECT n.*,
-                  p.full_name AS recipient_full_name, p.email AS recipient_email, p.lang AS recipient_lang,
+                  p.full_name AS recipient_full_name, p.email AS recipient_email,
+                  p.lang AS recipient_lang, p.phone AS recipient_phone,
+                  p.whatsapp_apikey AS recipient_whatsapp_apikey,
                   a.tipo AS act_tipo, a.objetivo AS act_objetivo,
                   a.destinatario AS act_destinatario, a.opportunity_id AS act_opp_id
            FROM notifications n
            LEFT JOIN profiles p ON n.recipient_id = p.id
            LEFT JOIN activities a ON n.activity_id = a.id
-           WHERE n.sent = false
+           WHERE n.sent = false OR n.whatsapp_sent = false
            ORDER BY n.created_at""",
     )
     # Reshape into nested dicts matching PostgREST format
@@ -582,6 +584,8 @@ def get_unsent_notifications() -> list[dict]:
             "full_name": r.get("recipient_full_name"),
             "email": r.get("recipient_email"),
             "lang": r.get("recipient_lang", "es"),
+            "phone": r.get("recipient_phone"),
+            "whatsapp_apikey": r.get("recipient_whatsapp_apikey"),
         }
         notif["activity"] = {
             "tipo": r.get("act_tipo"),
@@ -594,9 +598,17 @@ def get_unsent_notifications() -> list[dict]:
 
 
 def mark_notification_sent(notif_id: str):
-    """Marca notificación como enviada."""
+    """Marca notificación como enviada (email)."""
     db.execute(
         "UPDATE notifications SET sent = true, sent_at = %s WHERE id = %s",
+        (datetime.now().isoformat(), notif_id),
+    )
+
+
+def mark_notification_whatsapp_sent(notif_id: str):
+    """Marca notificación como enviada por WhatsApp."""
+    db.execute(
+        "UPDATE notifications SET whatsapp_sent = true, whatsapp_sent_at = %s WHERE id = %s",
         (datetime.now().isoformat(), notif_id),
     )
 
