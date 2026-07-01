@@ -35,19 +35,64 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🎯 White Space Analysis")
-st.markdown("Análisis de cobertura de productos BMC por cliente")
+st.markdown("Análisis de cobertura de productos por cliente - Mercado completo")
 
-# Productos disponibles para BMC
+# Productos del mercado organizados por categoría
+# Basado en líderes con >30% market share en sus categorías (2026)
 PRODUCTOS_BMC = [
-    "Helix ITSM",
-    "Helix ITOM",
-    "Helix Digital Workplace",
-    "Helix Discovery",
-    "TrueSight",
-    "Control-M",
-    "Helix Remedyforce",
-    "AIOps",
-    "Helix Business Workflows"
+    # === ITSM (IT Service Management) ===
+    "ServiceNow ITSM",
+    "BMC Helix ITSM",
+    "Jira Service Management",
+    "Freshservice",
+    "BMC Remedyforce",
+
+    # === ITOM (IT Operations Management) ===
+    "ServiceNow ITOM",
+    "BMC Helix ITOM",
+    "BMC TrueSight",
+    "Splunk ITSI",
+
+    # === APM & Observability (Líderes de mercado) ===
+    "Datadog",  # 51.82% market share
+    "New Relic",  # 24% market share
+    "Dynatrace",
+    "Grafana",
+    "Splunk Observability",
+    "AppDynamics (Cisco)",
+
+    # === Monitoring & Infrastructure ===
+    "Prometheus",
+    "Nagios",
+    "Zabbix",
+    "SolarWinds",
+    "Instana (IBM)",
+    "Elastic Observability",
+
+    # === AIOps & Analytics ===
+    "BMC Helix AIOps",
+    "Moogsoft",
+    "BigPanda",
+
+    # === Automation & Orchestration ===
+    "BMC Control-M",
+    "Ansible (Red Hat)",
+    "ServiceNow Automation",
+
+    # === Cloud Management ===
+    "BMC Helix Cloud Cost",
+    "CloudHealth (VMware)",
+
+    # === Service Desk & Ticketing ===
+    "Jira",
+    "BMC Helix Digital Workplace",
+    "Zendesk",
+    "ServiceNow CSM",
+
+    # === Discovery & CMDB ===
+    "BMC Helix Discovery",
+    "ServiceNow Discovery",
+    "Device42",
 ]
 
 # Tabs principales
