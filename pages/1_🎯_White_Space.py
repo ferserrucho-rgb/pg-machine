@@ -188,11 +188,23 @@ with tab_vista:
                 with col_info:
                     if acc['descripcion']:
                         st.markdown(f"**Descripción:** {acc['descripcion']}")
+
+                    # Información del Partner (a nivel de cuenta)
+                    if acc.get('partner') or acc.get('partner_executive'):
+                        st.markdown("### 🤝 Partner BMC Helix")
+                        partner_info = []
+                        if acc.get('partner'):
+                            partner_info.append(f"**Partner:** {acc['partner']}")
+                        if acc.get('partner_executive'):
+                            partner_info.append(f"**Ejecutivo:** {acc['partner_executive']}")
+                        st.markdown(" • ".join(partner_info))
+                        st.markdown("---")
+
                     st.markdown(f"**Productos activos:** {acc['productos_actuales']} de {acc['productos_totales']}")
 
                     # Grid de productos
                     if acc['productos']:
-                        st.markdown("### Productos")
+                        st.markdown("### Productos del Cliente")
                         productos_html = '<div class="ws-product-grid">'
                         for prod in acc['productos']:
                             badge_class = "ws-product-yes" if prod['tiene'] else "ws-product-no"
@@ -201,18 +213,12 @@ with tab_vista:
                         productos_html += '</div>'
                         st.markdown(productos_html, unsafe_allow_html=True)
 
-                        # Detalles de productos con partner
-                        st.markdown("### Detalles")
-                        for prod in acc['productos']:
-                            if prod['tiene']:
-                                info_parts = [f"**{prod['product']}**"]
-                                if prod['partner']:
-                                    info_parts.append(f"Partner: {prod['partner']}")
-                                if prod['partner_executive']:
-                                    info_parts.append(f"Ejecutivo: {prod['partner_executive']}")
-                                if prod['notas']:
-                                    info_parts.append(f"Notas: {prod['notas']}")
-                                st.markdown(" • ".join(info_parts))
+                        # Notas de productos (sin partner)
+                        productos_con_notas = [p for p in acc['productos'] if p['tiene'] and p.get('notas')]
+                        if productos_con_notas:
+                            st.markdown("### 📝 Notas por Producto")
+                            for prod in productos_con_notas:
+                                st.markdown(f"**{prod['product']}:** {prod['notas']}")
 
                 with col_coverage:
                     st.markdown(f'<div class="ws-coverage {coverage_class}">{coverage}%</div>', unsafe_allow_html=True)
@@ -236,7 +242,14 @@ with tab_gestionar:
             with col2:
                 nuevo_descripcion = st.text_area("Descripción")
 
-            st.markdown("### Productos")
+            st.markdown("### 🤝 Partner BMC Helix (Opcional)")
+            col_p1, col_p2 = st.columns(2)
+            with col_p1:
+                nuevo_partner = st.text_input("Partner", placeholder="Nombre del partner BMC")
+            with col_p2:
+                nuevo_partner_exec = st.text_input("Ejecutivo del Partner", placeholder="Nombre del ejecutivo")
+
+            st.markdown("### Productos del Cliente")
             st.markdown("Selecciona los productos que el cliente **actualmente tiene**:")
 
             productos_seleccionados = {}
@@ -248,34 +261,16 @@ with tab_gestionar:
                         with col:
                             tiene = st.checkbox(producto, key=f"nuevo_{producto}")
                             if tiene:
-                                st.markdown(f"**📝 {producto}**")
-                                partner = st.text_input(
-                                    f"Partner",
-                                    key=f"partner_nuevo_{producto}",
-                                    placeholder="Nombre del partner",
-                                    label_visibility="collapsed"
-                                )
-                                st.caption("Partner")
-                                exec_partner = st.text_input(
-                                    f"Ejecutivo Partner",
-                                    key=f"exec_nuevo_{producto}",
-                                    placeholder="Ejecutivo del partner",
-                                    label_visibility="collapsed"
-                                )
-                                st.caption("Ejecutivo Partner")
                                 notas = st.text_area(
-                                    f"Notas",
+                                    f"Notas de {producto}",
                                     key=f"notas_nuevo_{producto}",
-                                    height=60,
-                                    placeholder="Notas adicionales...",
+                                    height=50,
+                                    placeholder="Información adicional sobre este producto...",
                                     label_visibility="collapsed"
                                 )
-                                st.caption("Notas")
-                                st.markdown("---")
+                                st.caption("Notas opcionales")
                                 productos_seleccionados[producto] = {
                                     "tiene": True,
-                                    "partner": partner,
-                                    "executive": exec_partner,
                                     "notas": notas
                                 }
                             else:
@@ -288,26 +283,24 @@ with tab_gestionar:
                     st.error("El nombre de la cuenta es requerido")
                 else:
                     try:
-                        # Crear cuenta
+                        # Crear cuenta con partner a nivel de cuenta
                         account = db.execute_returning("""
-                            INSERT INTO accounts (team_id, nombre, descripcion, vertical)
-                            VALUES (%s, %s, %s, %s)
+                            INSERT INTO accounts (team_id, nombre, descripcion, vertical, partner, partner_executive)
+                            VALUES (%s, %s, %s, %s, %s, %s)
                             RETURNING id
-                        """, (team_id, nuevo_nombre, nuevo_descripcion, nuevo_vertical))
+                        """, (team_id, nuevo_nombre, nuevo_descripcion, nuevo_vertical, nuevo_partner, nuevo_partner_exec))
 
                         account_id = account["id"]
 
-                        # Insertar productos
+                        # Insertar productos (solo tiene y notas)
                         for producto, data in productos_seleccionados.items():
                             db.execute("""
-                                INSERT INTO account_products (account_id, product_name, tiene, partner, partner_executive, notas)
-                                VALUES (%s, %s, %s, %s, %s, %s)
+                                INSERT INTO account_products (account_id, product_name, tiene, notas)
+                                VALUES (%s, %s, %s, %s)
                             """, (
                                 account_id,
                                 producto,
                                 data["tiene"],
-                                data.get("partner"),
-                                data.get("executive"),
                                 data.get("notas")
                             ))
 
@@ -356,7 +349,14 @@ with tab_gestionar:
                     with col2:
                         edit_descripcion = st.text_area("Descripción", value=cuenta_data["descripcion"] or "")
 
-                    st.markdown("### Productos")
+                    st.markdown("### 🤝 Partner BMC Helix (Opcional)")
+                    col_p1, col_p2 = st.columns(2)
+                    with col_p1:
+                        edit_partner = st.text_input("Partner", value=cuenta_data.get("partner", "") or "", placeholder="Nombre del partner BMC")
+                    with col_p2:
+                        edit_partner_exec = st.text_input("Ejecutivo del Partner", value=cuenta_data.get("partner_executive", "") or "", placeholder="Nombre del ejecutivo")
+
+                    st.markdown("### Productos del Cliente")
 
                     productos_actualizados = {}
                     for i in range(0, len(PRODUCTOS_BMC), 3):
@@ -373,30 +373,17 @@ with tab_gestionar:
                                         key=f"edit_{producto}"
                                     )
                                     if tiene:
-                                        with st.expander(f"📝 Detalles de {producto}", expanded=False):
-                                            partner = st.text_input(
-                                                f"Partner",
-                                                value=prod_actual.get("partner", ""),
-                                                key=f"partner_edit_{producto}",
-                                                placeholder="Nombre del partner"
-                                            )
-                                            exec_partner = st.text_input(
-                                                f"Ejecutivo Partner",
-                                                value=prod_actual.get("partner_executive", ""),
-                                                key=f"exec_edit_{producto}",
-                                                placeholder="Nombre del ejecutivo"
-                                            )
-                                            notas = st.text_area(
-                                                f"Notas",
-                                                value=prod_actual.get("notas", ""),
-                                                key=f"notas_edit_{producto}",
-                                                height=60,
-                                                placeholder="Información adicional..."
-                                            )
+                                        notas = st.text_area(
+                                            f"Notas de {producto}",
+                                            value=prod_actual.get("notas", ""),
+                                            key=f"notas_edit_{producto}",
+                                            height=50,
+                                            placeholder="Información adicional...",
+                                            label_visibility="collapsed"
+                                        )
+                                        st.caption("Notas opcionales")
                                         productos_actualizados[producto] = {
                                             "tiene": True,
-                                            "partner": partner,
-                                            "executive": exec_partner,
                                             "notas": notas
                                         }
                                     else:
@@ -410,31 +397,27 @@ with tab_gestionar:
 
                     if submitted:
                         try:
-                            # Actualizar cuenta
+                            # Actualizar cuenta con partner a nivel de cuenta
                             db.execute("""
                                 UPDATE accounts
-                                SET nombre = %s, descripcion = %s, vertical = %s, updated_at = NOW()
+                                SET nombre = %s, descripcion = %s, vertical = %s, partner = %s, partner_executive = %s, updated_at = NOW()
                                 WHERE id = %s
-                            """, (edit_nombre, edit_descripcion, edit_vertical, cuenta_editar["id"]))
+                            """, (edit_nombre, edit_descripcion, edit_vertical, edit_partner, edit_partner_exec, cuenta_editar["id"]))
 
-                            # Actualizar productos
+                            # Actualizar productos (solo tiene y notas)
                             for producto, data in productos_actualizados.items():
                                 db.execute("""
-                                    INSERT INTO account_products (account_id, product_name, tiene, partner, partner_executive, notas)
-                                    VALUES (%s, %s, %s, %s, %s, %s)
+                                    INSERT INTO account_products (account_id, product_name, tiene, notas)
+                                    VALUES (%s, %s, %s, %s)
                                     ON CONFLICT (account_id, product_name)
                                     DO UPDATE SET
                                         tiene = EXCLUDED.tiene,
-                                        partner = EXCLUDED.partner,
-                                        partner_executive = EXCLUDED.partner_executive,
                                         notas = EXCLUDED.notas,
                                         updated_at = NOW()
                                 """, (
                                     cuenta_editar["id"],
                                     producto,
                                     data["tiene"],
-                                    data.get("partner"),
-                                    data.get("executive"),
                                     data.get("notas")
                                 ))
 
@@ -471,14 +454,16 @@ with tab_importar:
 
             for opp in opps:
                 cuenta_nombre = opp["cuenta"]
+                partner = opp.get("partner")
 
-                # Crear o actualizar cuenta
+                # Crear o actualizar cuenta (incluyendo partner a nivel de cuenta)
                 account = db.execute_returning("""
-                    INSERT INTO accounts (team_id, nombre)
-                    VALUES (%s, %s)
-                    ON CONFLICT (team_id, nombre) DO UPDATE SET updated_at = NOW()
+                    INSERT INTO accounts (team_id, nombre, partner)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (team_id, nombre)
+                    DO UPDATE SET partner = EXCLUDED.partner, updated_at = NOW()
                     RETURNING id
-                """, (team_id, cuenta_nombre))
+                """, (team_id, cuenta_nombre, partner))
 
                 if account:
                     cuentas_creadas += 1
@@ -494,11 +479,11 @@ with tab_importar:
 
                     if producto:
                         db.execute("""
-                            INSERT INTO account_products (account_id, product_name, tiene, partner)
-                            VALUES (%s, %s, true, %s)
+                            INSERT INTO account_products (account_id, product_name, tiene, notas)
+                            VALUES (%s, %s, true, NULL)
                             ON CONFLICT (account_id, product_name)
-                            DO UPDATE SET tiene = true, partner = EXCLUDED.partner, updated_at = NOW()
-                        """, (account["id"], producto, opp["partner"]))
+                            DO UPDATE SET tiene = true, updated_at = NOW()
+                        """, (account["id"], producto))
                         productos_agregados += 1
 
             st.success(f"✅ Sincronización completa: {cuentas_creadas} cuentas procesadas, {productos_agregados} productos actualizados")

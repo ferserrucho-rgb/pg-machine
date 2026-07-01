@@ -24,9 +24,7 @@ NEON_DATABASE_URL = os.environ.get("NEON_DATABASE_URL", "")
 
 # Temporary password hash for migrated users (they must reset on first login)
 TEMP_PASSWORD = "changeme123"
-TEMP_HASH = bcrypt.hashpw(b"$2b$12$TEMPchangeme123placeholder", bcrypt.gensalt()).decode()
-# Use a recognizable prefix so auth.py can detect it
-TEMP_HASH_REAL = bcrypt.hashpw(TEMP_PASSWORD.encode(), b"$2b$12$TEMP000000000000000000").decode()
+TEMP_HASH_REAL = bcrypt.hashpw(TEMP_PASSWORD.encode(), bcrypt.gensalt()).decode()
 
 
 def get_supabase():
