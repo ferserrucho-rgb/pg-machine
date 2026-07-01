@@ -219,15 +219,17 @@ with tab_vista:
     filtro_productos = filtro_itsm + filtro_itom
 
     if filtro_productos:
-        # Query con filtro por productos específicos
+        # Query con filtro por productos específicos usando subquery
         placeholders = ','.join(['%s'] * len(filtro_productos))
         query = f"""
-            SELECT DISTINCT wa.*
-            FROM whitespace_analysis wa
-            JOIN account_products ap ON wa.account_id = ap.account_id
-            WHERE wa.team_id = %s
-            AND ap.tiene = true
-            AND ap.product_name IN ({placeholders})
+            SELECT * FROM whitespace_analysis
+            WHERE team_id = %s
+            AND account_id IN (
+                SELECT DISTINCT account_id
+                FROM account_products
+                WHERE tiene = true
+                AND product_name IN ({placeholders})
+            )
         """
         params = [team_id] + filtro_productos
     else:
