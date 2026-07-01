@@ -95,6 +95,56 @@ PRODUCTOS_BMC = [
     "Device42",
 ]
 
+# Categorización de productos para filtros
+PRODUCTOS_ITSM = [
+    "ServiceNow ITSM",
+    "BMC Helix ITSM",
+    "Jira Service Management",
+    "Freshservice",
+    "BMC Remedyforce",
+    "Jira",
+    "BMC Helix Digital Workplace",
+    "Zendesk",
+    "ServiceNow CSM",
+]
+
+PRODUCTOS_ITOM = [
+    # ITOM
+    "ServiceNow ITOM",
+    "BMC Helix ITOM",
+    "BMC TrueSight",
+    "Splunk ITSI",
+    # APM & Observability
+    "Datadog",
+    "New Relic",
+    "Dynatrace",
+    "Grafana",
+    "Splunk Observability",
+    "AppDynamics (Cisco)",
+    # Monitoring & Infrastructure
+    "Prometheus",
+    "Nagios",
+    "Zabbix",
+    "SolarWinds",
+    "Instana (IBM)",
+    "Elastic Observability",
+    # AIOps & Analytics
+    "BMC Helix AIOps",
+    "Moogsoft",
+    "BigPanda",
+    # Automation & Orchestration
+    "BMC Control-M",
+    "Ansible (Red Hat)",
+    "ServiceNow Automation",
+    # Cloud Management
+    "BMC Helix Cloud Cost",
+    "CloudHealth (VMware)",
+    # Discovery & CMDB
+    "BMC Helix Discovery",
+    "ServiceNow Discovery",
+    "Device42",
+]
+
 # Tabs principales
 tab_vista, tab_gestionar, tab_importar = st.tabs(["📊 Vista General", "✏️ Gestionar Cuentas", "📥 Importar Datos"])
 
@@ -132,7 +182,7 @@ with tab_vista:
 
     st.markdown("---")
 
-    # Filtros
+    # Filtros - Primera fila
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         verticales = db.fetch_all(
@@ -148,12 +198,45 @@ with tab_vista:
     with col_f3:
         filtro_busqueda = st.text_input("🔍 Buscar cuenta")
 
+    # Filtros por productos - Segunda fila
+    st.markdown("##### Filtrar por productos")
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        filtro_itsm = st.multiselect(
+            "🎫 ITSM (Service Management)",
+            options=PRODUCTOS_ITSM,
+            placeholder="Seleccionar productos ITSM..."
+        )
+    with col_p2:
+        filtro_itom = st.multiselect(
+            "📊 ITOM (Observability & Operations)",
+            options=PRODUCTOS_ITOM,
+            placeholder="Seleccionar productos ITOM..."
+        )
+
     # Obtener datos
-    query = """
-        SELECT * FROM whitespace_analysis
-        WHERE team_id = %s
-    """
-    params = [team_id]
+    # Si hay filtros de productos, necesitamos un query diferente
+    filtro_productos = filtro_itsm + filtro_itom
+
+    if filtro_productos:
+        # Query con filtro por productos específicos
+        placeholders = ','.join(['%s'] * len(filtro_productos))
+        query = f"""
+            SELECT DISTINCT wa.*
+            FROM whitespace_analysis wa
+            JOIN account_products ap ON wa.account_id = ap.account_id
+            WHERE wa.team_id = %s
+            AND ap.tiene = true
+            AND ap.product_name IN ({placeholders})
+        """
+        params = [team_id] + filtro_productos
+    else:
+        # Query normal sin filtro de productos
+        query = """
+            SELECT * FROM whitespace_analysis
+            WHERE team_id = %s
+        """
+        params = [team_id]
 
     if filtro_vertical != "Todas":
         query += " AND vertical = %s"
