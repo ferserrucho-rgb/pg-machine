@@ -3294,7 +3294,7 @@ else:
                     _kr_color = {"ganada": "#16a34a", "perdida": "#ef4444", "error": "#64748b", "merged": "#7c3aed"}.get(_kr, "#64748b")
                     _kr_bg = {"ganada": "#f0fdf4", "perdida": "#fef2f2", "error": "#f8fafc", "merged": "#f5f3ff"}.get(_kr, "#f8fafc")
                     _ko_monto = float(ko.get("monto") or 0)
-                    _ko_date = ko.get("killed_at", "")[:10] if ko.get("killed_at") else ""
+                    _ko_date = str(ko.get("killed_at", ""))[:10] if ko.get("killed_at") else ""
                     st.markdown(f'<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:{_kr_bg};border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;font-size:0.78rem;"><span style="font-weight:700;color:#1e293b;flex:1;">{ko.get("proyecto", "")}</span><span style="color:#64748b;font-size:0.7rem;">{ko.get("cuenta", "")}</span><span style="font-weight:800;color:#16a34a;">USD {_ko_monto:,.0f}</span><span style="font-weight:700;color:{_kr_color};background:white;padding:2px 8px;border-radius:10px;font-size:0.65rem;border:1px solid {_kr_color};">{_kr_badge}</span><span style="color:#94a3b8;font-size:0.65rem;">{_ko_date}</span></div>', unsafe_allow_html=True)
             else:
                 st.info(t("perf.no_closed"))
