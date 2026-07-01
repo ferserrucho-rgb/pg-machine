@@ -189,7 +189,7 @@ with tab_vista:
                     if acc['descripcion']:
                         st.markdown(f"**Descripción:** {acc['descripcion']}")
 
-                    # Información del Partner (a nivel de cuenta)
+                    # Información del Partner BMC Helix (a nivel de cuenta)
                     if acc.get('partner') or acc.get('partner_executive'):
                         st.markdown("### 🤝 Partner BMC Helix")
                         partner_info = []
@@ -198,6 +198,18 @@ with tab_vista:
                         if acc.get('partner_executive'):
                             partner_info.append(f"**Ejecutivo:** {acc['partner_executive']}")
                         st.markdown(" • ".join(partner_info))
+
+                    # Información del Partner de Contacto
+                    if acc.get('partner_contacto') or acc.get('ejecutivo_partner_contacto'):
+                        st.markdown("### 🔗 Partner de Contacto")
+                        contacto_info = []
+                        if acc.get('partner_contacto'):
+                            contacto_info.append(f"**Partner:** {acc['partner_contacto']}")
+                        if acc.get('ejecutivo_partner_contacto'):
+                            contacto_info.append(f"**Ejecutivo:** {acc['ejecutivo_partner_contacto']}")
+                        st.markdown(" • ".join(contacto_info))
+
+                    if acc.get('partner') or acc.get('partner_executive') or acc.get('partner_contacto') or acc.get('ejecutivo_partner_contacto'):
                         st.markdown("---")
 
                     st.markdown(f"**Productos activos:** {acc['productos_actuales']} de {acc['productos_totales']}")
@@ -249,6 +261,14 @@ with tab_gestionar:
             with col_p2:
                 nuevo_partner_exec = st.text_input("Ejecutivo del Partner", placeholder="Nombre del ejecutivo")
 
+            st.markdown("### 🔗 Partner de Contacto (Opcional)")
+            st.caption("Partner que tiene contacto en este cliente (vende otros productos)")
+            col_pc1, col_pc2 = st.columns(2)
+            with col_pc1:
+                nuevo_partner_contacto = st.text_input("Partner de Contacto", placeholder="Nombre del partner")
+            with col_pc2:
+                nuevo_partner_contacto_exec = st.text_input("Ejecutivo del Partner de Contacto", placeholder="Nombre del ejecutivo")
+
             st.markdown("### Productos del Cliente")
             st.markdown("Selecciona los productos que el cliente **actualmente tiene**:")
 
@@ -285,10 +305,12 @@ with tab_gestionar:
                     try:
                         # Crear cuenta con partner a nivel de cuenta
                         account = db.execute_returning("""
-                            INSERT INTO accounts (team_id, nombre, descripcion, vertical, partner, partner_executive)
-                            VALUES (%s, %s, %s, %s, %s, %s)
+                            INSERT INTO accounts (team_id, nombre, descripcion, vertical, partner, partner_executive,
+                                                partner_contacto, ejecutivo_partner_contacto)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             RETURNING id
-                        """, (team_id, nuevo_nombre, nuevo_descripcion, nuevo_vertical, nuevo_partner, nuevo_partner_exec))
+                        """, (team_id, nuevo_nombre, nuevo_descripcion, nuevo_vertical, nuevo_partner, nuevo_partner_exec,
+                              nuevo_partner_contacto, nuevo_partner_contacto_exec))
 
                         account_id = account["id"]
 
@@ -356,6 +378,14 @@ with tab_gestionar:
                     with col_p2:
                         edit_partner_exec = st.text_input("Ejecutivo del Partner", value=cuenta_data.get("partner_executive", "") or "", placeholder="Nombre del ejecutivo")
 
+                    st.markdown("### 🔗 Partner de Contacto (Opcional)")
+                    st.caption("Partner que tiene contacto en este cliente (vende otros productos)")
+                    col_pc1, col_pc2 = st.columns(2)
+                    with col_pc1:
+                        edit_partner_contacto = st.text_input("Partner de Contacto", value=cuenta_data.get("partner_contacto", "") or "", placeholder="Nombre del partner")
+                    with col_pc2:
+                        edit_partner_contacto_exec = st.text_input("Ejecutivo del Partner de Contacto", value=cuenta_data.get("ejecutivo_partner_contacto", "") or "", placeholder="Nombre del ejecutivo")
+
                     st.markdown("### Productos del Cliente")
 
                     productos_actualizados = {}
@@ -400,9 +430,11 @@ with tab_gestionar:
                             # Actualizar cuenta con partner a nivel de cuenta
                             db.execute("""
                                 UPDATE accounts
-                                SET nombre = %s, descripcion = %s, vertical = %s, partner = %s, partner_executive = %s, updated_at = NOW()
+                                SET nombre = %s, descripcion = %s, vertical = %s, partner = %s, partner_executive = %s,
+                                    partner_contacto = %s, ejecutivo_partner_contacto = %s, updated_at = NOW()
                                 WHERE id = %s
-                            """, (edit_nombre, edit_descripcion, edit_vertical, edit_partner, edit_partner_exec, cuenta_editar["id"]))
+                            """, (edit_nombre, edit_descripcion, edit_vertical, edit_partner, edit_partner_exec,
+                                  edit_partner_contacto, edit_partner_contacto_exec, cuenta_editar["id"]))
 
                             # Actualizar productos (solo tiene y notas)
                             for producto, data in productos_actualizados.items():
