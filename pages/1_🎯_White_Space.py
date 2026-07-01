@@ -248,9 +248,30 @@ with tab_gestionar:
                         with col:
                             tiene = st.checkbox(producto, key=f"nuevo_{producto}")
                             if tiene:
-                                partner = st.text_input(f"Partner", key=f"partner_nuevo_{producto}")
-                                exec_partner = st.text_input(f"Ejecutivo Partner", key=f"exec_nuevo_{producto}")
-                                notas = st.text_area(f"Notas", key=f"notas_nuevo_{producto}", height=60)
+                                st.markdown(f"**📝 {producto}**")
+                                partner = st.text_input(
+                                    f"Partner",
+                                    key=f"partner_nuevo_{producto}",
+                                    placeholder="Nombre del partner",
+                                    label_visibility="collapsed"
+                                )
+                                st.caption("Partner")
+                                exec_partner = st.text_input(
+                                    f"Ejecutivo Partner",
+                                    key=f"exec_nuevo_{producto}",
+                                    placeholder="Ejecutivo del partner",
+                                    label_visibility="collapsed"
+                                )
+                                st.caption("Ejecutivo Partner")
+                                notas = st.text_area(
+                                    f"Notas",
+                                    key=f"notas_nuevo_{producto}",
+                                    height=60,
+                                    placeholder="Notas adicionales...",
+                                    label_visibility="collapsed"
+                                )
+                                st.caption("Notas")
+                                st.markdown("---")
                                 productos_seleccionados[producto] = {
                                     "tiene": True,
                                     "partner": partner,
@@ -352,22 +373,26 @@ with tab_gestionar:
                                         key=f"edit_{producto}"
                                     )
                                     if tiene:
-                                        partner = st.text_input(
-                                            f"Partner",
-                                            value=prod_actual.get("partner", ""),
-                                            key=f"partner_edit_{producto}"
-                                        )
-                                        exec_partner = st.text_input(
-                                            f"Ejecutivo Partner",
-                                            value=prod_actual.get("partner_executive", ""),
-                                            key=f"exec_edit_{producto}"
-                                        )
-                                        notas = st.text_area(
-                                            f"Notas",
-                                            value=prod_actual.get("notas", ""),
-                                            key=f"notas_edit_{producto}",
-                                            height=60
-                                        )
+                                        with st.expander(f"📝 Detalles de {producto}", expanded=False):
+                                            partner = st.text_input(
+                                                f"Partner",
+                                                value=prod_actual.get("partner", ""),
+                                                key=f"partner_edit_{producto}",
+                                                placeholder="Nombre del partner"
+                                            )
+                                            exec_partner = st.text_input(
+                                                f"Ejecutivo Partner",
+                                                value=prod_actual.get("partner_executive", ""),
+                                                key=f"exec_edit_{producto}",
+                                                placeholder="Nombre del ejecutivo"
+                                            )
+                                            notas = st.text_area(
+                                                f"Notas",
+                                                value=prod_actual.get("notas", ""),
+                                                key=f"notas_edit_{producto}",
+                                                height=60,
+                                                placeholder="Información adicional..."
+                                            )
                                         productos_actualizados[producto] = {
                                             "tiene": True,
                                             "partner": partner,
